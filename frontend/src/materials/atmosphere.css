@@ -1,0 +1,89 @@
+/* ============================================================
+   AROVA · Atmosphere Materials
+   ============================================================ */
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(900px 800px at 88% 62%, var(--rl-near) 0%, transparent 55%),
+    radial-gradient(700px 600px at 18% 30%, var(--rl-far) 0%, transparent 60%),
+    radial-gradient(500px 500px at 50% 100%, var(--rl-edge) 0%, transparent 60%),
+    linear-gradient(180deg, var(--color-pearl-0) 0%, var(--color-pearl-1) 100%);
+  transition: background 2400ms var(--ease-soft);
+}
+
+.fog {
+  position: absolute;
+  border-radius: 50%;
+  background-image: url('../assets/fog.png');
+  background-size: cover;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.fog.a {
+  width: 780px;
+  height: 780px;
+  top: -200px;
+  left: -140px;
+  opacity: 0.4;
+  animation: drift-a 60s var(--ease-soft) infinite alternate;
+}
+
+.fog.b {
+  width: 680px;
+  height: 680px;
+  bottom: -180px;
+  right: -120px;
+  opacity: 0.35;
+  animation: drift-b 72s var(--ease-soft) infinite alternate;
+}
+
+.fog.c {
+  width: 540px;
+  height: 540px;
+  top: 55%;
+  left: 55%;
+  transform: translate(-50%, -50%);
+  opacity: 0.2;
+  animation: drift-c 84s var(--ease-soft) infinite alternate;
+}
+
+@keyframes drift-a {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(50px, 35px) scale(1.08); }
+}
+
+@keyframes drift-b {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-40px, -30px) scale(1.1); }
+}
+
+@keyframes drift-c {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-46%, -54%) scale(1.06); }
+}
+
+.noise-overlay::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: url('../assets/noise.png');
+  background-repeat: repeat;
+  mix-blend-mode: multiply;
+  opacity: 0.15;
+}
+
+.env {
+  position: relative;
+  z-index: 2;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}

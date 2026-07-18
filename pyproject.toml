@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "arova"
+version = "0.1.0"
+description = "A portable cognitive operating runtime platform."
+authors = [
+    {name = "Sarthak Mhaske"}
+]
+dependencies = [
+    "pydantic",
+    "requests",
+    "websockets",
+    "typing_extensions"
+]
+
+[project.optional-dependencies]
+desktop = [
+    "PyGObject"
+]
+
+[project.scripts]
+arovad = "arova.daemon.main:main"
+arova-gui = "arova.desktop.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["arova"]

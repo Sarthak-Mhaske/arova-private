@@ -1,0 +1,44 @@
+/* ============================================================
+   AROVA · Typography
+   ============================================================ */
+
+/* Utility classes for font families */
+.font-sans   { font-family: var(--font-sans); }
+.font-mono   { font-family: var(--font-mono); }
+.font-serif  { font-family: var(--font-serif); }
+
+/* Base type scale */
+.text-label {
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.text-meta {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.text-body {
+  font-size: 16.5px;
+  line-height: 1.7;
+}
+
+.text-lede {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  line-height: 1.32;
+  font-weight: 400;
+  letter-spacing: -0.018em;
+}
+
+.text-surface-title {
+  font-family: var(--font-serif);
+  font-size: 38px;
+  font-weight: 400;
+  letter-spacing: -0.018em;
+  line-height: 1.08;
+}

@@ -1,0 +1,128 @@
+import React, { useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+const MDiv: any = motion.div;
+import { useSurfaceState } from '../../state';
+import { MemorySurface } from './MemorySurface';
+import { TimelineSurface } from './TimelineSurface';
+
+import { CalibrationSurface } from './CalibrationSurface';
+import { EnvironmentSurface } from './EnvironmentSurface';
+import { DiagnosticsSurface } from './DiagnosticsSurface';
+import { ProjectionInspector } from './ProjectionInspector';
+import { ContextSurface } from './ContextSurface';
+import { WorkspaceSurface } from './WorkspaceSurface';
+import { AttentionSurface } from './AttentionSurface';
+import { AgentsSurface } from './AgentsSurface';
+import { PlansSurface } from './PlansSurface';
+import { ThreadsSurface } from './ThreadsSurface';
+import { PlaceholderSurface } from './PlaceholderSurface';
+import { AwarenessSurface } from './AwarenessSurface';
+import { SettingsLayout } from '../../surfaces/settings/SettingsLayout';
+import { sheetEnter, scrimEnter, easeSpring, easeSoft } from '../../motion';
+
+export const EmergentSurface: React.FC = () => {
+  const { activeSurface, closeSurface } = useSurfaceState();
+  const isOpen = activeSurface !== null && activeSurface !== 'environment' && (activeSurface as any) !== 'presence';
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      lastFocusedRef.current = document.activeElement as HTMLElement;
+      
+      const timer = setTimeout(() => {
+        if (surfaceRef.current) {
+          const closeBtn = surfaceRef.current.querySelector('[data-close]') as HTMLElement;
+          if (closeBtn) closeBtn.focus();
+        }
+      }, 200);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          closeSurface();
+          return;
+        }
+        
+        if (e.key === 'Tab' && surfaceRef.current) {
+          const focusables = Array.from(surfaceRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+          if (focusables.length === 0) return;
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    } else {
+      if (lastFocusedRef.current) {
+        lastFocusedRef.current.focus();
+        lastFocusedRef.current = null;
+      }
+    }
+  }, [isOpen, closeSurface]);
+
+  return (
+    <AnimatePresence>
+      {activeSurface && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, pointerEvents: 'none' }}>
+          <MDiv 
+            className="surface-scrim"
+            onClick={() => closeSurface()}
+            variants={scrimEnter}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.52, ease: easeSoft.ease }}
+            style={{ opacity: 1, pointerEvents: 'auto' }}
+          />
+          <MDiv 
+            className="surface-sheet"
+            role="dialog"
+            aria-modal="true"
+            ref={surfaceRef}
+            variants={sheetEnter}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ ...easeSpring }}
+            style={{ 
+              pointerEvents: 'auto', 
+              maxHeight: 'calc(100vh - 140px)', 
+              top: '45%' 
+            }}
+          >
+            {activeSurface === 'threads' && <ThreadsSurface />}
+            {activeSurface === 'memory' && <MemorySurface />}
+            {activeSurface === 'timeline' && <TimelineSurface />}
+            
+            {/* New Placeholder Routes */}
+            {activeSurface === 'cognition' && <PlaceholderSurface title="Cognition Overview" description="This surface will show an overview of Arova's cognitive threads and memory." />}
+            {activeSurface === 'awareness' && <AwarenessSurface />}
+            {activeSurface === 'environment' && <EnvironmentSurface />}
+            {activeSurface === 'context' && <ContextSurface />}
+            {activeSurface === 'workspace' && <WorkspaceSurface />}
+            {activeSurface === 'attention' && <AttentionSurface />}
+            {activeSurface === 'runtime' && <ProjectionInspector />}
+            {activeSurface === 'agents' && <AgentsSurface />}
+            {activeSurface === 'plans' && <PlansSurface />}
+            {activeSurface === 'calibration' && <CalibrationSurface />}
+            {activeSurface === 'diagnostics' && <DiagnosticsSurface />}
+
+            {activeSurface === 'settings' && <SettingsLayout />}
+          </MDiv>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};

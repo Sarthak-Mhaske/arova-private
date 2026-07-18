@@ -1,0 +1,40 @@
+/* ============================================================
+   AROVA · Global Reset
+   ============================================================ */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans, 'Inter', 'SF Pro Display', system-ui, sans-serif);
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+  background: var(--color-pearl-0);
+  position: relative;
+}
+
+::selection {
+  background: rgba(154, 184, 212, 0.3);
+  color: var(--color-ink);
+}
+
+/* Hide scrollbars everywhere */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Reduced motion handled specifically in components */
