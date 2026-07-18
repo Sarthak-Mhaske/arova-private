@@ -3,46 +3,28 @@ import { socket } from '../../runtime/socket';
 
 export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [step, setStep] = useState(1);
-  const [providers, setProviders] = useState<any[]>([]);
-  const [recommendedStyle, setRecommendedStyle] = useState('hybrid');
-  
-  const [presenceStyle, setPresenceStyle] = useState('hybrid');
-  const [intelligenceSource, setIntelligenceSource] = useState('configure_later');
+  const [intelligenceSource, setIntelligenceSource] = useState('groq');
   const [apiKey, setApiKey] = useState('');
   const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
-  
-  const [workspaceAwareness, setWorkspaceAwareness] = useState(true);
-  const [memoryTier, setMemoryTier] = useState('conversations');
-  
   const [testResult, setTestResult] = useState<{ success: boolean; latency_ms?: number; error?: string } | null>(null);
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     const handleEvent = (event: any) => {
       const { type, payload } = event.detail;
-      if (type === 'provider.discovery') {
-        setProviders(payload.providers || []);
-        if (payload.recommended_presence_style) {
-          setRecommendedStyle(payload.recommended_presence_style);
-          setPresenceStyle(payload.recommended_presence_style);
-        }
-      } else if (type === 'provider.test_result') {
+      if (type === 'provider.test_result') {
         setTesting(false);
         setTestResult(payload.result);
       }
     };
     
     window.addEventListener('runtime_event', handleEvent);
-    
-    // Request discovery
     setTimeout(() => {
       socket.sendEvent({ type: 'provider.discovery_request' });
     }, 500);
 
     return () => window.removeEventListener('runtime_event', handleEvent);
   }, []);
-
-  const handleNext = () => setStep(s => s + 1);
 
   const testConnection = () => {
     setTesting(true);
@@ -57,7 +39,6 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   };
 
   const handleComplete = () => {
-    // Generate config updates
     const providersConfig: any = {};
     if (intelligenceSource === 'groq' && testResult?.success) {
       providersConfig.groq = { api_keys: [apiKey] };
@@ -68,14 +49,14 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     }
 
     const appConfig = {
-      presence_style: presenceStyle,
+      presence_style: 'hybrid',
       privacy: {
-        workspace_awareness: workspaceAwareness,
-        memory_enabled: memoryTier !== 'temporary',
+        workspace_awareness: true,
+        memory_enabled: true,
         crash_recovery: true
       },
       runtime: {
-        continuity_decay: memoryTier === 'deep' ? 'slow' : 'standard'
+        continuity_decay: 'standard'
       }
     };
 
@@ -88,249 +69,137 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     onComplete();
   };
 
-  const selectedProviderConfigured = providers.find(p => p.id === intelligenceSource)?.configured;
-
   return (
-    <div style={{ padding: '3rem', maxWidth: '650px', margin: '4rem auto', background: '#111', color: '#fff', fontFamily: 'sans-serif', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+    <div style={{ padding: '3rem', maxWidth: '580px', margin: '4rem auto', background: '#111', color: '#fff', fontFamily: 'sans-serif', borderRadius: '16px', border: '1px solid #282838', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
       {step === 1 && (
         <div style={{ textAlign: 'center' }}>
-          <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>Welcome to Arova</h1>
-          <p style={{ color: '#aaa', fontSize: '1.2rem', lineHeight: '1.5' }}>
-            A cognitive operating system that helps maintain<br/>continuity across your work, thoughts, and projects.
+          <div style={{ fontSize: '13px', color: '#a881ff', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '12px' }}>
+            Phase 0 — Design Partner Edition
+          </div>
+          <h1 style={{ fontSize: '2.4rem', marginBottom: '1rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Welcome to Arova</h1>
+          <p style={{ color: '#aaa', fontSize: '1.15rem', lineHeight: '1.6', margin: '0 auto 2.5rem', maxWidth: '440px' }}>
+            <strong>Never lose your train of thought again.</strong><br/>
+            Arova remembers what you were doing, why you were doing it, and your settled decisions across projects.
           </p>
-          <button onClick={handleNext} style={{ marginTop: '3rem', padding: '12px 30px', background: '#fff', color: '#000', border: 'none', borderRadius: '8px', fontSize: '1.1rem', cursor: 'pointer' }}>Continue</button>
+          <button onClick={() => setStep(2)} style={{ padding: '14px 36px', background: 'linear-gradient(135deg, #a881ff 0%, #7e52f5 100%)', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 20px rgba(126, 82, 245, 0.4)', transition: 'all 0.2s ease' }}>
+            Get Started →
+          </button>
         </div>
       )}
 
       {step === 2 && (
         <div>
-          <h2>Choose Presence Style</h2>
-          <p style={{ color: '#aaa', marginBottom: '2rem' }}>How should Arova process cognition?</p>
-          
+          <div style={{ fontSize: '12px', color: '#a881ff', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '6px' }}>Step 1 of 2</div>
+          <h2 style={{ fontSize: '1.8rem', margin: '0 0 0.5rem 0' }}>Choose AI Provider</h2>
+          <p style={{ color: '#aaa', marginBottom: '1.8rem', fontSize: '0.95rem' }}>Select the intelligence engine that will synthesize your workspace understanding.</p>
+
           {[
-            { id: 'instant', title: 'Instant', desc: 'Fastest responses using cloud intelligence.' },
-            { id: 'hybrid', title: 'Hybrid', desc: 'Balanced local and cloud intelligence.' },
-            { id: 'local', title: 'Local', desc: 'Runs entirely on your device. Maximum privacy.' }
+            { id: 'groq', title: 'Groq (Recommended)', desc: 'Ultra-fast cloud inference (<1s synthesis).' },
+            { id: 'openai', title: 'OpenAI', desc: 'Industry-standard reasoning and trajectory analysis.' },
+            { id: 'ollama', title: 'Ollama (Local)', desc: 'Runs entirely on your device with local models.' },
+            { id: 'configure_later', title: 'Configure Later', desc: 'Enter Arova directly without AI synthesis.' }
           ].map(opt => (
             <div 
               key={opt.id}
-              onClick={() => setPresenceStyle(opt.id)}
+              onClick={() => {
+                setIntelligenceSource(opt.id);
+                setTestResult(null);
+              }}
               style={{ 
-                background: '#222', padding: '1.2rem', marginBottom: '1rem', borderRadius: '8px', cursor: 'pointer',
-                border: presenceStyle === opt.id ? '2px solid #5a5' : '1px solid #333'
+                background: intelligenceSource === opt.id ? 'rgba(168, 129, 255, 0.12)' : '#1a1a22',
+                padding: '1.1rem', marginBottom: '0.8rem', borderRadius: '10px', cursor: 'pointer',
+                border: intelligenceSource === opt.id ? '2px solid #a881ff' : '1px solid #2a2a36',
+                transition: 'all 0.2s ease'
               }}
             >
-              <h3 style={{ margin: 0, display: 'flex', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem', color: '#fff' }}>
                 {opt.title}
-                {recommendedStyle === opt.id && <span style={{ fontSize: '0.8rem', color: '#5a5', padding: '2px 8px', background: '#131', borderRadius: '4px' }}>Recommended</span>}
+                {intelligenceSource === opt.id && <span style={{ fontSize: '0.8rem', color: '#a881ff', fontWeight: 600 }}>Selected</span>}
               </h3>
-              <p style={{ color: '#aaa', margin: '8px 0 0 0' }}>{opt.desc}</p>
+              <p style={{ color: '#99a', margin: '6px 0 0 0', fontSize: '0.88rem' }}>{opt.desc}</p>
             </div>
           ))}
-          
-          <button onClick={handleNext} style={{ marginTop: '2rem', padding: '10px 24px', background: '#fff', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Continue</button>
-        </div>
-      )}
 
-      {step === 3 && (
-        <div>
-          <h2>Choose Intelligence Source</h2>
-          <p style={{ color: '#aaa', marginBottom: '2rem' }}>Arova needs an intelligence engine to power its presence.</p>
-
-          {[
-            { id: 'groq', title: 'Groq (Recommended)', desc: 'Fast cloud inference. Data leaves your device.', cost: 'Determined by your Groq account usage.' },
-            { id: 'openai', title: 'OpenAI', desc: 'Advanced reasoning. Data leaves your device.', cost: 'Determined by your OpenAI account usage.' },
-            { id: 'ollama', title: 'Ollama', desc: 'Runs locally. Requires local hardware resources.', cost: 'No API charges.' },
-            { id: 'configure_later', title: 'Configure Later', desc: 'Use Arova without AI responses for now.', cost: 'Free.' }
-          ].filter(opt => {
-            if (presenceStyle === 'local') return ['ollama', 'configure_later'].includes(opt.id);
-            if (presenceStyle === 'instant') return ['groq', 'openai', 'configure_later'].includes(opt.id);
-            return true;
-          }).map(opt => {
-            const disc = providers.find(p => p.id === opt.id);
-            return (
-              <div 
-                key={opt.id}
-                onClick={() => setIntelligenceSource(opt.id)}
-                style={{ 
-                  background: '#222', padding: '1.2rem', marginBottom: '1rem', borderRadius: '8px', cursor: 'pointer',
-                  border: intelligenceSource === opt.id ? '2px solid #5a5' : '1px solid #333'
-                }}
-              >
-                <h3 style={{ margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  {opt.title}
-                  {disc?.available && <span style={{ fontSize: '0.8rem', color: '#5a5' }}>✓ Ready</span>}
-                </h3>
-                <p style={{ color: '#aaa', margin: '8px 0 4px 0' }}>{opt.desc}</p>
-                <p style={{ color: '#888', margin: 0, fontSize: '0.85rem' }}>Cost: {opt.cost}</p>
-              </div>
-            );
-          })}
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-            <button onClick={() => setStep(2)} style={{ padding: '10px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Back</button>
-            <button onClick={() => {
-              if (intelligenceSource === 'configure_later') setStep(5); // Skip setup
-              else if (selectedProviderConfigured) setStep(5); // Skip setup if already configured
-              else setStep(4);
-            }} style={{ padding: '10px 24px', background: '#fff', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Continue</button>
-          </div>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div>
-          <h2>Connect {intelligenceSource === 'groq' ? 'Groq' : intelligenceSource === 'openai' ? 'OpenAI' : 'Ollama'}</h2>
-          
-          <div style={{ marginTop: '2rem' }}>
-            {intelligenceSource === 'ollama' ? (
-              <>
-                <label style={{ display: 'block', color: '#aaa', marginBottom: '0.5rem' }}>Ollama Host URL</label>
-                <input 
-                  type="text" 
-                  value={ollamaHost} 
-                  onChange={e => setOllamaHost(e.target.value)}
-                  style={{ width: '100%', padding: '12px', background: '#222', color: '#fff', border: '1px solid #444', borderRadius: '6px', marginBottom: '1rem' }}
-                />
-              </>
-            ) : (
-              <>
-                <label style={{ display: 'block', color: '#aaa', marginBottom: '0.5rem' }}>API Key</label>
-                <input 
-                  type="password" 
-                  value={apiKey} 
-                  onChange={e => { setApiKey(e.target.value); setTestResult(null); }}
-                  placeholder="Paste your API key here..."
-                  style={{ width: '100%', padding: '12px', background: '#222', color: '#fff', border: '1px solid #444', borderRadius: '6px', marginBottom: '1rem' }}
-                />
-                <p style={{ fontSize: '0.9rem', color: '#888' }}>
-                  Don't have a key?{' '}
-                  <a href={intelligenceSource === 'groq' ? 'https://console.groq.com' : 'https://platform.openai.com'} target="_blank" style={{ color: '#5a5', textDecoration: 'none' }}>
-                    Get a free API key →
-                  </a>
-                </p>
-              </>
-            )}
-
-            <div style={{ marginTop: '2rem', padding: '1rem', background: '#1a1a1a', borderRadius: '8px' }}>
-              <button 
-                onClick={testConnection} 
-                disabled={testing || (!apiKey && intelligenceSource !== 'ollama')}
-                style={{ padding: '8px 16px', background: '#333', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', opacity: testing ? 0.5 : 1 }}
-              >
-                {testing ? 'Testing...' : 'Test Connection'}
-              </button>
-              
-              {testResult && (
-                <div style={{ marginTop: '1rem', color: testResult.success ? '#5a5' : '#a55' }}>
-                  {testResult.success ? `✓ Connected (Latency: ${testResult.latency_ms}ms)` : `✗ ${testResult.error}`}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '3rem' }}>
-            <button onClick={() => setStep(3)} style={{ padding: '10px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Back</button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '2.2rem' }}>
+            <button onClick={() => setStep(1)} style={{ padding: '12px 24px', background: '#222', color: '#ccc', border: '1px solid #333', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}>Back</button>
             <button 
-              onClick={handleNext} 
-              disabled={!testResult?.success}
-              style={{ padding: '10px 24px', background: testResult?.success ? '#fff' : '#444', color: testResult?.success ? '#000' : '#888', border: 'none', borderRadius: '6px', cursor: testResult?.success ? 'pointer' : 'not-allowed' }}
+              onClick={() => {
+                if (intelligenceSource === 'configure_later') {
+                  handleComplete();
+                } else {
+                  setStep(3);
+                }
+              }} 
+              style={{ flex: 1, padding: '12px 24px', background: '#fff', color: '#000', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
             >
-              Continue
+              Continue →
             </button>
           </div>
         </div>
       )}
 
-      {step === 5 && (
+      {step === 3 && (
         <div>
-          <h2>Workspace Awareness</h2>
-          <p style={{ color: '#aaa', marginBottom: '2rem' }}>Allow Arova to understand which applications you are using to improve continuity. All analysis remains local to your device.</p>
-          
-          {[
-            { id: true, title: 'Enable', desc: 'Arova will sense context automatically.' },
-            { id: false, title: 'Disable', desc: 'Arova will only know what you explicitly tell it.' }
-          ].map(opt => (
-            <div 
-              key={opt.id ? 'yes' : 'no'}
-              onClick={() => setWorkspaceAwareness(opt.id)}
-              style={{ 
-                background: '#222', padding: '1.2rem', marginBottom: '1rem', borderRadius: '8px', cursor: 'pointer',
-                border: workspaceAwareness === opt.id ? '2px solid #5a5' : '1px solid #333'
-              }}
-            >
-              <h3 style={{ margin: 0 }}>{opt.title}</h3>
-              <p style={{ color: '#aaa', margin: '8px 0 0 0' }}>{opt.desc}</p>
-            </div>
-          ))}
+          <div style={{ fontSize: '12px', color: '#a881ff', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '6px' }}>Step 2 of 2</div>
+          <h2 style={{ fontSize: '1.8rem', margin: '0 0 0.5rem 0' }}>Connect {intelligenceSource === 'groq' ? 'Groq' : intelligenceSource === 'openai' ? 'OpenAI' : 'Ollama'}</h2>
+          <p style={{ color: '#aaa', marginBottom: '1.8rem', fontSize: '0.95rem' }}>Verify your credentials to initialize persistent working memory.</p>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '3rem' }}>
-            <button onClick={() => setStep(selectedProviderConfigured || intelligenceSource === 'configure_later' ? 3 : 4)} style={{ padding: '10px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Back</button>
-            <button onClick={handleNext} style={{ padding: '10px 24px', background: '#fff', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Continue</button>
-          </div>
-        </div>
-      )}
+          <div style={{ marginTop: '1.5rem' }}>
+            {intelligenceSource === 'ollama' ? (
+              <>
+                <label style={{ display: 'block', color: '#ccc', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>Ollama Host URL</label>
+                <input 
+                  type="text" 
+                  value={ollamaHost} 
+                  onChange={e => { setOllamaHost(e.target.value); setTestResult(null); }}
+                  style={{ width: '100%', padding: '12px', background: '#1a1a22', color: '#fff', border: '1px solid #3a3a46', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                />
+              </>
+            ) : (
+              <>
+                <label style={{ display: 'block', color: '#ccc', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>API Key</label>
+                <input 
+                  type="password" 
+                  value={apiKey} 
+                  onChange={e => { setApiKey(e.target.value); setTestResult(null); }}
+                  placeholder="Paste your secret key..."
+                  style={{ width: '100%', padding: '12px', background: '#1a1a22', color: '#fff', border: '1px solid #3a3a46', borderRadius: '8px', marginBottom: '0.8rem', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                />
+                <p style={{ fontSize: '0.85rem', color: '#888', margin: 0 }}>
+                  Don't have a key?{' '}
+                  <a href={intelligenceSource === 'groq' ? 'https://console.groq.com/keys' : 'https://platform.openai.com/api-keys'} target="_blank" rel="noreferrer" style={{ color: '#a881ff', textDecoration: 'none' }}>
+                    Get one free in 30 seconds →
+                  </a>
+                </p>
+              </>
+            )}
 
-      {step === 6 && (
-        <div>
-          <h2>Memory & Continuity</h2>
-          <p style={{ color: '#aaa', marginBottom: '2rem' }}>How should Arova remember you?</p>
-          
-          {[
-            { id: 'temporary', title: 'Temporary', desc: 'Nothing persists after closing Arova.' },
-            { id: 'conversations', title: 'Remember Conversations', desc: 'Threads persist across sessions.' },
-            { id: 'deep', title: 'Long-Term Presence', desc: 'Threads and memories persist over time.' }
-          ].map(opt => (
-            <div 
-              key={opt.id}
-              onClick={() => setMemoryTier(opt.id)}
-              style={{ 
-                background: '#222', padding: '1.2rem', marginBottom: '1rem', borderRadius: '8px', cursor: 'pointer',
-                border: memoryTier === opt.id ? '2px solid #5a5' : '1px solid #333'
-              }}
-            >
-              <h3 style={{ margin: 0 }}>{opt.title}</h3>
-              <p style={{ color: '#aaa', margin: '8px 0 0 0' }}>{opt.desc}</p>
-            </div>
-          ))}
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '3rem' }}>
-            <button onClick={() => setStep(5)} style={{ padding: '10px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Back</button>
-            <button onClick={handleNext} style={{ padding: '10px 24px', background: '#fff', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Continue</button>
-          </div>
-        </div>
-      )}
-
-      {step === 7 && (
-        <div>
-          <h2 style={{ fontSize: '2.5rem', marginBottom: '2rem', textAlign: 'center' }}>Arova is Ready</h2>
-          
-          <div style={{ background: '#1a1a1a', padding: '2rem', borderRadius: '12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div style={{ marginTop: '1.8rem', padding: '1.2rem', background: '#17171e', borderRadius: '10px', border: '1px solid #252530', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ color: '#888', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Presence Style</div>
-                <div style={{ fontSize: '1.2rem', marginTop: '0.5rem', textTransform: 'capitalize' }}>{presenceStyle}</div>
-              </div>
-              <div>
-                <div style={{ color: '#888', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Intelligence</div>
-                <div style={{ fontSize: '1.2rem', marginTop: '0.5rem', textTransform: 'capitalize' }}>{intelligenceSource === 'configure_later' ? 'None (Configure Later)' : intelligenceSource}</div>
-              </div>
-              <div>
-                <div style={{ color: '#888', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Workspace Awareness</div>
-                <div style={{ fontSize: '1.2rem', marginTop: '0.5rem' }}>{workspaceAwareness ? 'Enabled' : 'Disabled'}</div>
-              </div>
-              <div>
-                <div style={{ color: '#888', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Memory</div>
-                <div style={{ fontSize: '1.2rem', marginTop: '0.5rem' }}>
-                  {memoryTier === 'temporary' ? 'Temporary' : memoryTier === 'conversations' ? 'Remember Conversations' : 'Long-Term Presence'}
+                <div style={{ fontSize: '0.9rem', color: '#fff', fontWeight: 500 }}>Connection Status</div>
+                <div style={{ fontSize: '0.85rem', color: testResult?.success ? '#4ade80' : testResult?.error ? '#f87171' : '#888', marginTop: '2px' }}>
+                  {testing ? 'Testing connection...' : testResult?.success ? `✓ Verified (${testResult.latency_ms}ms response)` : testResult?.error ? `✗ ${testResult.error}` : 'Not tested yet'}
                 </div>
               </div>
+              <button 
+                onClick={testConnection} 
+                disabled={testing || (!apiKey && intelligenceSource !== 'ollama')}
+                style={{ padding: '8px 16px', background: '#2a2a38', color: '#fff', border: '1px solid #3a3a4a', borderRadius: '6px', cursor: testing ? 'wait' : 'pointer', fontWeight: 500, fontSize: '0.85rem' }}
+              >
+                {testing ? 'Checking...' : 'Test Connection'}
+              </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '3rem', justifyContent: 'center' }}>
-            <button onClick={() => setStep(6)} style={{ padding: '12px 30px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.1rem', cursor: 'pointer' }}>Back</button>
-            <button onClick={handleComplete} style={{ padding: '12px 30px', background: '#5a5', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold' }}>Enter Arova</button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
+            <button onClick={() => setStep(2)} style={{ padding: '12px 24px', background: '#222', color: '#ccc', border: '1px solid #333', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}>Back</button>
+            <button 
+              onClick={handleComplete} 
+              disabled={!testResult?.success && intelligenceSource !== 'ollama'}
+              style={{ flex: 1, padding: '12px 24px', background: testResult?.success || intelligenceSource === 'ollama' ? 'linear-gradient(135deg, #a881ff 0%, #7e52f5 100%)' : '#262633', color: testResult?.success || intelligenceSource === 'ollama' ? '#fff' : '#666', border: 'none', borderRadius: '8px', cursor: testResult?.success || intelligenceSource === 'ollama' ? 'pointer' : 'not-allowed', fontWeight: 600, boxShadow: testResult?.success ? '0 4px 15px rgba(126, 82, 245, 0.4)' : 'none' }}
+            >
+              Enter Arova →
+            </button>
           </div>
         </div>
       )}

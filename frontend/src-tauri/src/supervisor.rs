@@ -53,14 +53,29 @@ impl SupervisorState {
                     break;
                 }
 
-                // Attempt to spawn python -m arova.daemon.main or standalone arovad executable
-                // In packaged builds, this checks for bundled arovad binary first, then falls back to python runtime
-                let mut cmd = if std::path::Path::new("./arovad").exists() {
-                    Command::new("./arovad")
+                // Resolve bundled binary or python runtime
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+                let bundled_arovad = exe_dir.join("arovad");
+                let resource_arovad = exe_dir.join("resources").join("arovad");
+                let resource_py_dir = exe_dir.join("resources");
+
+                let mut cmd = if bundled_arovad.exists() {
+                    Command::new(bundled_arovad)
+                } else if resource_arovad.exists() {
+                    Command::new(resource_arovad)
                 } else if std::path::Path::new("/opt/arova/arovad").exists() {
                     Command::new("/opt/arova/arovad")
                 } else {
                     let mut c = Command::new("python");
+                    // If running from bundled resources directory where arova/ exists inside resources/
+                    if resource_py_dir.join("arova").exists() {
+                        c.env("PYTHONPATH", &resource_py_dir);
+                        c.current_dir(&resource_py_dir);
+                    }
                     c.args(&["-m", "arova.daemon.main"]);
                     c
                 };
