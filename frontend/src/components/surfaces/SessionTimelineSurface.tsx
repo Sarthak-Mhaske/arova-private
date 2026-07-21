@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { SurfaceHeader, EmptyState, LoadingState } from '../ui/CoherenceComponents';
+import { SurfaceHeader, LoadingState } from '../ui/CoherenceComponents';
 import { socket } from '../../runtime/socket';
 import { useSurfaceState } from '../../state';
 
@@ -68,8 +68,8 @@ export const SessionTimelineSurface: React.FC = () => {
     <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <SurfaceHeader 
-          title="Session Timeline — Canonical Nervous System" 
-          sub="Chronological event stream captured by Phase 6 activity adapters (`VS Code -> Terminal -> Browser -> Git`)" 
+          title="Diagnostics: Raw Activity Stream" 
+          sub="Real-time telemetry captured across your active development tools (`VS Code · Terminal · Browser · Git`)" 
         />
         <button
           onClick={() => openSurface('timeline')}
@@ -88,7 +88,7 @@ export const SessionTimelineSurface: React.FC = () => {
             gap: '6px'
           }}
         >
-          <span>← Back to Cognitive Timeline</span>
+          <span>← Back to Narrative Timeline</span>
         </button>
       </div>
       
@@ -119,12 +119,50 @@ export const SessionTimelineSurface: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <LoadingState message="Connecting to Canonical Activity Capture Engine..." />
+        <LoadingState message="Connecting to Activity Capture Engine..." />
       ) : canonicalEvents.length === 0 ? (
-        <EmptyState 
-          title="No Activity Stream Events Yet" 
-          description="As soon as you interact with VS Code, Terminal, Chrome, or Git, canonical events will appear here in real time."
-        />
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px dashed rgba(255, 255, 255, 0.1)',
+          borderRadius: '16px',
+          padding: '36px',
+          maxWidth: '680px',
+          margin: '0 auto',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '18px', fontWeight: 600, color: '#fff', marginBottom: '12px' }}>
+            No Activity Stream Events Yet
+          </div>
+          <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: '1.6', marginBottom: '24px' }}>
+            Arova passively captures developer activity to automatically understand your working context without manual note-taking:
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', textAlign: 'left', width: '100%', marginBottom: '24px' }}>
+            <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '10px', padding: '12px' }}>
+              <div style={{ color: '#3b82f6', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>VS CODE</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Tracks active file tabs, code switches, and debugger events via the Arova extension.</div>
+            </div>
+            <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '12px' }}>
+              <div style={{ color: '#10b981', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>TERMINAL</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Logs commands and exit statuses via shell hooks (`~/.bashrc` or `~/.zshrc`).</div>
+            </div>
+            <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '10px', padding: '12px' }}>
+              <div style={{ color: '#a855f7', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>BROWSER</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Monitors active documentation domains (`http/https`) when browser extension is connected.</div>
+            </div>
+            <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '10px', padding: '12px' }}>
+              <div style={{ color: '#f59e0b', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>GIT & OS</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Captures branch switches, commit operations, and window focus shifts.</div>
+            </div>
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)' }}>
+            As soon as activity occurs or plugins post telemetry to `/tmp/arova.sock`, real-time events will stream here automatically.
+          </div>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: '12px', flex: 1 }}>
           {filteredEvents.map((event, index) => {

@@ -171,7 +171,9 @@ class EnvironmentRestorationEngine:
                 ))
 
         # 4. Process Browser / URL items
-        restore_chrome = options.get("restore_chrome", False)
+        # 4. Process Browser / URL items
+        restore_all = options.get("restore_all", False)
+        restore_chrome = options.get("restore_chrome", False) or options.get("restore_browsers", False) or restore_all
         selected_urls = options.get("selected_urls", [])
 
         url_items = [r for r in self.resource_registry.all_resources() if r.type == "url"]
@@ -179,10 +181,18 @@ class EnvironmentRestorationEngine:
             if isinstance(v, dict) and (v.get("type") in ["url", "browser"] or str(k).startswith("http")):
                 url_items.append(self.resource_registry.register_url(k, title=v.get("summary")))
 
+        if hasattr(workspace, "interpretation") and getattr(workspace.interpretation, "browser_domains", None):
+            for domain in workspace.interpretation.browser_domains:
+                d_url = f"https://{domain}" if not domain.startswith("http") else domain
+                url_items.append(self.resource_registry.register_url(d_url, title=domain))
+
         for u_item in url_items:
             if not u_item.url:
                 continue
-            is_selected = restore_chrome or (u_item.url in selected_urls) or (u_item.display_name in selected_urls)
+            is_selected = restore_chrome or (u_item.url in selected_urls) or (u_item.display_name in selected_urls) or (u_item.resource_id in selected_urls)
+            if not options or (len(options) == 1 and "selected_urls" in options and not selected_urls) or options.get("restore_defaults", False):
+                is_selected = True
+
             if is_selected:
                 url_intent = RestoreIntent("webpage", Capability.OPEN_URL, resource_url=u_item.url)
                 res = self.capability_registry.execute(Capability.OPEN_URL, url_intent)

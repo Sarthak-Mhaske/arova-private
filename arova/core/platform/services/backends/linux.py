@@ -275,7 +275,22 @@ class LinuxPlatformLauncher(PlatformLauncher):
         intent = RestoreIntent("webpage", Capability.OPEN_URL, resource_url=url)
         browser = app or self.catalog.get_default_browser()
 
-        # Standard cross-platform documentation opening via webbrowser.open
+        # 1. If we have a concrete browser executable, launch it directly via subprocess
+        if browser and browser.executable and shutil.which(browser.executable):
+            try:
+                proc = subprocess.Popen([browser.executable, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return LaunchResult(intent, True, browser.name, f"Opened browser tab for {url} in {browser.name}", pid=proc.pid)
+            except Exception as e:
+                logger.warning(f"Failed to launch browser executable {browser.executable}: {e}")
+
+        # 2. Try direct xdg-open subprocess call
+        try:
+            proc = subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return LaunchResult(intent, True, "System Default (xdg-open)", f"Opened browser tab for {url} via xdg-open", pid=proc.pid)
+        except Exception as e:
+            logger.warning(f"Failed to launch via xdg-open: {e}")
+
+        # 3. Fallback to webbrowser.open
         try:
             webbrowser.open(url)
             app_name = browser.name if browser else "System Browser"
