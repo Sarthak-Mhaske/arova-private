@@ -20,3 +20,15 @@ cd "$(dirname "$0")/.."
 
 echo "[build_arovad] Build complete! Checking dist/arovad..."
 ls -lh dist/arovad
+
+# Copy to frontend/src-tauri/resources (untracked by git)
+mkdir -p frontend/src-tauri/resources
+cp -f dist/arovad frontend/src-tauri/resources/arovad
+
+# Update any existing target bundles so they immediately use the new binary
+for target_bin in $(find frontend/src-tauri/target -name arovad 2>/dev/null); do
+  echo "[build_arovad] Updating target bundle binary: $target_bin"
+  cp -f dist/arovad "$target_bin"
+done
+
+echo "[build_arovad] All arovad binaries updated successfully!"

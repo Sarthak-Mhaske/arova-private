@@ -96,7 +96,15 @@ impl SupervisorState {
                     c.env("TMPDIR", "/var/tmp");
                     c
                 } else {
-                    let mut c = Command::new("python");
+                    let venv_py = exe_dir.join("../lib/Arova/_up_/_up_/venv/bin/python");
+                    let py_bin = if venv_py.exists() {
+                        venv_py.to_string_lossy().to_string()
+                    } else if std::path::Path::new("./venv/bin/python").exists() {
+                        "./venv/bin/python".to_string()
+                    } else {
+                        "python3".to_string()
+                    };
+                    let mut c = Command::new(py_bin);
                     c.env_remove("PYTHONHOME");
                     c.env("TMPDIR", "/var/tmp");
                     let py_dir = if resource_py_dir.join("arova").exists() {
