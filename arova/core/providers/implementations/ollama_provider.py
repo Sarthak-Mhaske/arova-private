@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Set, AsyncGenerator
 from arova.core.providers.base import CognitiveProvider
 from arova.core.providers.capabilities import Capability
 from arova.core.models.adapters.ollama import OllamaAdapter
+from arova.core.models.registry import get_model_registry, ArovaCapability, QualityTier
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +15,9 @@ class OllamaProvider(CognitiveProvider):
     Maximum privacy — never leaves the machine.
     """
 
-    def __init__(self, host: str = "http://localhost:11434", default_model: str = "llama3"):
+    def __init__(self, host: str = "http://localhost:11434", default_model: str = ""):
         super().__init__()
         self._adapter = OllamaAdapter(host=host)
-        self._default_model = default_model
 
     @property
     def name(self) -> str:
@@ -29,7 +29,9 @@ class OllamaProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 512) -> str:
-        model = model or self._default_model
+        if not model:
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.CHEAP, provider_id="ollama")
+            model = candidate.id
         t0 = time.time()
         try:
             result = await self._adapter.invoke_structured(messages, system_prompt, model, max_tokens)
@@ -44,7 +46,9 @@ class OllamaProvider(CognitiveProvider):
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 512) -> AsyncGenerator[str, None]:
-        model = model or self._default_model
+        if not model:
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.CHEAP, provider_id="ollama")
+            model = candidate.id
         t0 = time.time()
         try:
             async for chunk in self._adapter.invoke_stream(messages, system_prompt, model, max_tokens):
@@ -58,10 +62,11 @@ class OllamaProvider(CognitiveProvider):
     async def embed(self, text: str) -> List[float]:
         """Use Ollama's embedding endpoint."""
         import requests
+        candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_EMBEDDING, QualityTier.CHEAP, provider_id="ollama")
         try:
             resp = requests.post(
                 f"{self._adapter.host}/api/embeddings",
-                json={"model": self._default_model, "prompt": text},
+                json={"model": candidate.id, "prompt": text},
                 timeout=10.0
             )
             resp.raise_for_status()

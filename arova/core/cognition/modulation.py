@@ -1,7 +1,10 @@
 import logging
 from dataclasses import dataclass
 from typing import Dict, Any
-
+from arova.core.cognition.constants import (
+    DEFAULT_INTERRUPTION_SENSITIVITY, DEFAULT_AMBIENT_DENSITY,
+    LOW_AMBIENT_DENSITY, HIGH_AMBIENT_DENSITY
+)
 from arova.core.environment.trajectory import AttentionTrajectory
 
 logger = logging.getLogger(__name__)
@@ -25,8 +28,8 @@ class PresenceModulator:
             verbosity="normal",
             cadence="normal",
             emotional_temperature="neutral",
-            interruption_sensitivity=0.5,
-            ambient_density=0.5
+            interruption_sensitivity=DEFAULT_INTERRUPTION_SENSITIVITY,
+            ambient_density=DEFAULT_AMBIENT_DENSITY
         )
         
     def modulate(self, trajectory: AttentionTrajectory, graph_derived: Dict[str, Any]) -> PresenceProfile:
@@ -39,8 +42,8 @@ class PresenceModulator:
         verbosity = "normal"
         cadence = "normal"
         emotional = "neutral"
-        sensitivity = 0.5
-        density = 0.5
+        sensitivity = DEFAULT_INTERRUPTION_SENSITIVITY
+        density = DEFAULT_AMBIENT_DENSITY
         
         # Modulation rules
         if probs.get("deep_work", 0) > 0.6:
@@ -48,13 +51,13 @@ class PresenceModulator:
             cadence = "soft"
             emotional = "clinical"
             sensitivity = 0.9 # Yield easily to not interrupt flow
-            density = 0.2     # Reduce visual noise
+            density = LOW_AMBIENT_DENSITY     # Reduce visual noise
         elif probs.get("fragmented", 0) > 0.6:
             verbosity = "normal"
             cadence = "calming"
             emotional = "warm"
             sensitivity = 0.6
-            density = 0.8     # Show ambient signals to try to anchor attention
+            density = HIGH_AMBIENT_DENSITY     # Show ambient signals to try to anchor attention
         elif probs.get("recovering", 0) > 0.4:
             verbosity = "concise"
             cadence = "encouraging"

@@ -21,8 +21,8 @@ def _load_raw() -> list[dict[str, Any]]:
             with open(_PLANS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data if isinstance(data, list) else []
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to load raw plans from {_PLANS_FILE}: {e}")
     return []
 
 def _save_raw(plans: list[dict[str, Any]]) -> None:

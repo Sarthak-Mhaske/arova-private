@@ -30,29 +30,34 @@ class ExecutionView(Gtk.Box):
         self.scene.set_vexpand(True)
         self.append(self.scene)
         
-        # Test Graph
-        self._build_test_graph()
-        
-    def _build_test_graph(self):
-        # We simulate a cognitive DAG
-        node_plan = DAGNode("PLAN", "idle")
-        node_plan.x.target = 200
-        node_plan.y.target = 50
-        
-        node_auth = DAGNode("AUTH", "paused")
-        node_auth.x.target = 350
-        node_auth.y.target = 150
-        
-        node_exec = DAGNode("EXEC", "active")
-        node_exec.x.target = 500
-        node_exec.y.target = 250
-        
-        edge1 = SplineEdge(node_plan, node_auth)
-        edge2 = SplineEdge(node_auth, node_exec)
-        
-        # Root nodes
-        self.scene.add_node(edge1)
-        self.scene.add_node(edge2)
-        self.scene.add_node(node_plan)
-        self.scene.add_node(node_auth)
-        self.scene.add_node(node_exec)
+        # Real event binding (no simulated test graphs in production)
+        self.scheduler.bind("DAG_EXECUTION_STATE", self._on_dag_state)
+        self.scheduler.bind("COGNITIVE_STREAM_STATE", self._on_cognition_stream)
+
+    def _on_dag_state(self, event: dict):
+        payload = event.get("payload", {}) if "payload" in event else event
+        self.scene.clear()
+        nodes = payload.get("nodes", [])
+        edges = payload.get("edges", [])
+        node_map = {}
+        for n in nodes:
+            node_obj = DAGNode(n.get("name", "NODE"), n.get("status", "idle"))
+            node_obj.x.target = n.get("x", 100)
+            node_obj.y.target = n.get("y", 100)
+            self.scene.add_node(node_obj)
+            node_map[n.get("id")] = node_obj
+        for e in edges:
+            src = node_map.get(e.get("source"))
+            dst = node_map.get(e.get("target"))
+            if src and dst:
+                self.scene.add_node(SplineEdge(src, dst))
+
+    def _on_cognition_stream(self, event: dict):
+        payload = event.get("payload", {}) if "payload" in event else event
+        # Dynamically update DAG node statuses if provided in stream
+        step = payload.get("step")
+        if step:
+            node_obj = DAGNode(step, "active")
+            node_obj.x.target = 250
+            node_obj.y.target = 150
+            self.scene.add_node(node_obj)

@@ -12,7 +12,7 @@ import { ThreadsSurface } from './components/surfaces/ThreadsSurface';
 import { CursorBleed } from './components/effects/CursorBleed';
 import { MemoryConsentPopup } from './components/effects/MemoryConsentPopup';
 import { PersonalMemoryPolicyDialog } from './components/effects/PersonalMemoryPolicyDialog';
-import { useCognitionState, useEnvironmentState, usePresenceState } from './state';
+import { useCognitionState, useEnvironmentState, usePresenceState, useSurfaceState } from './state';
 import { fetchStreamItems, fetchAwareness } from './ipc';
 
 const DEMO_MODE = false;
@@ -92,6 +92,30 @@ function App() {
       events.forEach(evt => document.removeEventListener(evt, resetRest));
       if (restTimer) clearTimeout(restTimer);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'Space' || e.key === ' ')) {
+        e.preventDefault();
+        const state = useSurfaceState.getState();
+        if (state.activeSurface === 'command_palette') {
+          state.closeSurface();
+        } else {
+          state.openSurface('command_palette');
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.code === 'KeyD' || e.key.toLowerCase() === 'd')) {
+        e.preventDefault();
+        const state = useSurfaceState.getState();
+        if (state.activeSurface === 'developer_mode') {
+          state.closeSurface();
+        } else {
+          state.openSurface('developer_mode');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
   useEffect(() => {

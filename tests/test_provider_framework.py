@@ -25,7 +25,7 @@ class MockWindowBackend(WindowingBackend):
     async def subscribe_events(self):
         pass
 
-async def test_provider_framework():
+async def _test_provider_framework():
     print("\n--- TEST 1: Initialization & Registration ---")
     awareness_mgr = AwarenessManager()
     provider_mgr = ProviderManager(awareness_mgr)
@@ -75,5 +75,8 @@ async def test_provider_framework():
     
     print("\n✅ All Rigid Backend Tests Passed.")
 
+def test_provider_framework():
+    asyncio.run(_test_provider_framework())
+
 if __name__ == "__main__":
-    asyncio.run(test_provider_framework())
+    test_provider_framework()

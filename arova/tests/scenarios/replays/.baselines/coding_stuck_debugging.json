@@ -1,0 +1,45 @@
+{
+  "scenario_id": "coding/stuck_debugging",
+  "scenario_name": "Stuck Debugging Repetitive Errors",
+  "persona": "Developer",
+  "schema_version": "2.0",
+  "satisfaction": {
+    "rating": "UNRATED",
+    "reason": "N/A"
+  },
+  "events_count": 3,
+  "workspaces_built": [
+    "Arova Architecture & Development (Exploring)"
+  ],
+  "decision_timeline": [],
+  "observed_facts": [
+    "aiohttp",
+    "ModuleNotFoundError"
+  ],
+  "missed_facts": [],
+  "expected_facts": [
+    "aiohttp",
+    "ModuleNotFoundError"
+  ],
+  "false_positives": 0,
+  "selected_model_id": "qwen-2.5-32b",
+  "selection_reasons": [
+    "Optimized for deep reasoning / complex inference",
+    "Guaranteed JSON structured output",
+    "Premium depth and reasoning fidelity"
+  ],
+  "expected_capability": "reasoning",
+  "expected_quality": "premium",
+  "fidelity_pct": 100,
+  "mistakes": {
+    "missed_facts": [],
+    "false_assumptions": [],
+    "wrong_workspace": []
+  },
+  "diff_lines": [
+    "+ resolved workspace drift"
+  ],
+  "recovery_target_msg": "Target Benchmark: Context recovery reduced from 11.0 min to 2.1 min (estimated).",
+  "passed": true,
+  "duration_ms": 31.9
+}

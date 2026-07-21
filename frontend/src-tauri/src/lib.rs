@@ -31,6 +31,15 @@ fn export_debug_report() -> String {
     }
 }
 
+#[tauri::command]
+fn log_from_frontend(msg: String) {
+    println!("[FRONTEND JS] {}", msg);
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("/home/sarthak/arova/frontend_js.log") {
+        use std::io::Write;
+        let _ = writeln!(file, "[FRONTEND JS] {}", msg);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -45,7 +54,8 @@ pub fn run() {
             greet,
             get_supervisor_status,
             restart_daemon,
-            export_debug_report
+            export_debug_report,
+            log_from_frontend
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

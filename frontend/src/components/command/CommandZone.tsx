@@ -52,11 +52,7 @@ export const CommandZone: React.FC = () => {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVal = e.target.value;
-    if (val === '' && newVal.length > 0) {
-       fireInterrupt();
-    }
-    setVal(newVal);
+    setVal(e.target.value);
   };
 
   return (

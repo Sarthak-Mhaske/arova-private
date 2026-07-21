@@ -7,25 +7,25 @@ export const DiagnosticsSurface: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simulated loading to enforce Completion Rule
     const t = setTimeout(() => setIsLoading(false), 800);
 
-    const interval = setInterval(() => {
-      socket.sendEvent({ type: 'diagnostics.poll' });
-    }, 1000);
+    // Initial event-driven fetch (`P0-4`)
+    socket.sendEvent({ type: 'diagnostics.poll' });
     
-    const handleSync = (e: Event) => {
+    const handleEvents = (e: Event) => {
       const ev = e as CustomEvent;
-      if (ev.detail.type === 'diagnostics.sync') {
+      if (ev.detail?.type === 'diagnostics.sync') {
         setDiag(ev.detail.data);
+      } else if (ev.detail?.type === 'workspace.sync' || ev.detail?.type === 'turn.complete') {
+        // Repoll diagnostics on state changes rather than tight interval loops (`P0-4`)
+        socket.sendEvent({ type: 'diagnostics.poll' });
       }
     };
     
-    window.addEventListener('arova-event', handleSync);
+    window.addEventListener('arova-event', handleEvents);
     return () => {
       clearTimeout(t);
-      clearInterval(interval);
-      window.removeEventListener('arova-event', handleSync);
+      window.removeEventListener('arova-event', handleEvents);
     };
   }, []);
 

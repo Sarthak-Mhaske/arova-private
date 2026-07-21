@@ -3,6 +3,10 @@ import uuid
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from arova.core.cognition.constants import (
+    PRESSURE_COMPOUND_RATE, NOVELTY_DECAY_RATE, PRESSURE_DISSIPATION_RATE,
+    MIN_COGNITIVE_PRESSURE_THRESHOLD, FOREGROUND_SURFACING_THRESHOLD, BACKGROUND_SURFACING_THRESHOLD
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +54,10 @@ class CognitivePriorityEngine:
         if similar:
             # Increase recurrence and pressure
             similar.recurrence_count += 1
-            similar.cognitive_pressure += (signal.priority * 0.2) # Pressure compounds
+            similar.cognitive_pressure += (signal.priority * PRESSURE_COMPOUND_RATE) # Pressure compounds
             similar.confidence = max(similar.confidence, signal.confidence)
             similar.last_surface_time = time.time()
-            similar.novelty_score *= 0.8 # Decays novelty
+            similar.novelty_score *= NOVELTY_DECAY_RATE # Decays novelty
             logger.debug(f"PriorityEngine: Reinforced signal {similar.semantic_type}. Pressure: {similar.cognitive_pressure:.2f}")
         else:
             # New signal
@@ -75,7 +79,7 @@ class CognitivePriorityEngine:
         candidates = []
         for sig in self._active_signals.values():
             # Basic thresholding (can be more complex)
-            threshold = 0.5 if sig.visibility == "foreground" else 0.3
+            threshold = FOREGROUND_SURFACING_THRESHOLD if sig.visibility == "foreground" else BACKGROUND_SURFACING_THRESHOLD
             if sig.cognitive_pressure * sig.confidence > threshold:
                 candidates.append(sig)
 
@@ -112,7 +116,7 @@ class CognitivePriorityEngine:
             self._surface_history.append(sig)
             
             # Reduce pressure heavily after surfacing, but maybe don't delete if it's persistent
-            sig.cognitive_pressure *= 0.2 
+            sig.cognitive_pressure *= PRESSURE_DISSIPATION_RATE 
             
         # Keep history bounded
         if len(self._surface_history) > 100:
@@ -127,7 +131,7 @@ class CognitivePriorityEngine:
             # Decay pressure over time
             sig.cognitive_pressure -= sig.decay_rate * (elapsed / 60.0)
             
-            if sig.cognitive_pressure <= 0.05:
+            if sig.cognitive_pressure <= MIN_COGNITIVE_PRESSURE_THRESHOLD:
                 to_remove.append(sig_id)
                 self._suppress(sig, "pressure_decay")
                 

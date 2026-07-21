@@ -102,5 +102,5 @@ class RuntimeStore:
         for old_file in files[5:]:
             try:
                 os.remove(old_file)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug(f"Could not remove old generation file {old_file}: {e}")

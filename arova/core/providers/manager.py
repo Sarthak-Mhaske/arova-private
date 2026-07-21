@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from typing import Dict, Optional, List
 from arova.core.providers.base import CognitiveProvider
@@ -33,9 +34,9 @@ class ProviderManager:
             del self._providers[k]
         logger.info(f"ProviderManager: Cleared {stale} before re-discovery.")
 
-        # Groq
+        # 1. Groq
         groq_keys = providers_cfg.get("groq", {}).get("api_keys", [])
-        groq_keys = [k for k in groq_keys if k]  # strip empty strings
+        groq_keys = [k for k in groq_keys if k]
         if not groq_keys:
             env_key = os.environ.get("GROQ_API_KEY", "").strip()
             if env_key:
@@ -44,25 +45,67 @@ class ProviderManager:
             from arova.core.providers.implementations.groq_provider import GroqProvider
             self._providers["groq"] = GroqProvider(api_key=groq_keys[0])
             logger.info("ProviderManager: Registered Groq provider.")
-        else:
-            logger.warning("ProviderManager: No Groq key found. Groq not registered.")
 
-        # OpenAI
+        # 2. OpenAI
         oai_keys = providers_cfg.get("openai", {}).get("api_keys", [])
-        oai_keys = [k for k in oai_keys if k]  # strip empty strings
+        oai_keys = [k for k in oai_keys if k]
         if not oai_keys:
             env_key = os.environ.get("OPENAI_API_KEY", "").strip()
             if env_key:
                 oai_keys = [env_key]
         if oai_keys:
-            logger.info("ProviderManager: OpenAI key detected (provider stub registered).")
+            from arova.core.providers.implementations.openai_provider import OpenAIProvider
+            self._providers["openai"] = OpenAIProvider(api_key=oai_keys[0])
+            logger.info("ProviderManager: Registered OpenAI provider.")
 
-        # Ollama
+        # 3. Ollama
         ollama_host = providers_cfg.get("ollama", {}).get("host", "http://localhost:11434")
         from arova.core.providers.implementations.ollama_provider import OllamaProvider
         self._providers["ollama"] = OllamaProvider(host=ollama_host)
         logger.info(f"ProviderManager: Registered Ollama at {ollama_host}.")
-        
+
+        # 3b. LM Studio
+        lmstudio_host = providers_cfg.get("lmstudio", {}).get("host", "http://localhost:1234")
+        from arova.core.providers.implementations.lmstudio_provider import LMStudioProvider
+        self._providers["lmstudio"] = LMStudioProvider(host=lmstudio_host)
+        logger.info(f"ProviderManager: Registered LM Studio at {lmstudio_host}.")
+
+        # 4. Anthropic
+        ant_keys = providers_cfg.get("anthropic", {}).get("api_keys", [])
+        ant_keys = [k for k in ant_keys if k]
+        if not ant_keys:
+            env_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+            if env_key:
+                ant_keys = [env_key]
+        if ant_keys:
+            from arova.core.providers.implementations.anthropic_provider import AnthropicProvider
+            self._providers["anthropic"] = AnthropicProvider(api_key=ant_keys[0])
+            logger.info("ProviderManager: Registered Anthropic provider.")
+
+        # 5. Google Gemini
+        gem_keys = providers_cfg.get("gemini", {}).get("api_keys", [])
+        gem_keys = [k for k in gem_keys if k]
+        if not gem_keys:
+            env_key = os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip()
+            if env_key:
+                gem_keys = [env_key]
+        if gem_keys:
+            from arova.core.providers.implementations.gemini_provider import GeminiProvider
+            self._providers["gemini"] = GeminiProvider(api_key=gem_keys[0])
+            logger.info("ProviderManager: Registered Google Gemini provider.")
+
+        # 6. OpenRouter
+        or_keys = providers_cfg.get("openrouter", {}).get("api_keys", [])
+        or_keys = [k for k in or_keys if k]
+        if not or_keys:
+            env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+            if env_key:
+                or_keys = [env_key]
+        if or_keys:
+            from arova.core.providers.implementations.openrouter_provider import OpenRouterProvider
+            self._providers["openrouter"] = OpenRouterProvider(api_key=or_keys[0])
+            logger.info("ProviderManager: Registered OpenRouter provider.")
+
         active = [k for k in self._providers if k != "mock"]
         logger.info(f"ProviderManager: Active providers after reload: {active}")
 
@@ -93,4 +136,81 @@ class ProviderManager:
         return dict(self._providers)
 
     def get_health_summary(self) -> Dict[str, dict]:
-        return {name: p.health.to_dict() for name, p in self._providers.items() if name != "mock"}
+        summary = {}
+        for name, p in self._providers.items():
+            if name == "mock":
+                continue
+            h_dict = p.health.to_dict()
+            h_dict["advertised_capabilities"] = [cap.value for cap in p.advertised_capabilities.to_set()]
+            summary[name] = h_dict
+        return summary
+
+    async def test_all_providers(self) -> Dict[str, dict]:
+        """
+        One-click verification probe across all registered non-mock providers.
+        Sends a minimal probe/health check to verify live authentication, latency, and advertised capabilities.
+        """
+        results = {}
+        for name, provider in self._providers.items():
+            if name == "mock":
+                continue
+            try:
+                import time as _time
+                start_ts = _time.time()
+                health_res = await provider.health_check()
+                latency = round((_time.time() - start_ts) * 1000, 1)
+                caps = provider.advertised_capabilities
+                caps_dict = {
+                    "chat": caps.chat,
+                    "reasoning": caps.reasoning,
+                    "vision": caps.vision,
+                    "embeddings": caps.embeddings,
+                    "streaming": caps.streaming,
+                    "json_mode": caps.json_mode,
+                    "tool_use": caps.tool_use
+                }
+                if health_res.available:
+                    results[name] = {
+                        "status": "ok",
+                        "authentication": True,
+                        "available": True,
+                        "availability_pct": health_res.availability_pct,
+                        "latency_ms": latency if health_res.latency_ms <= 0 else health_res.latency_ms,
+                        "tags": provider.profile.tags,
+                        "capabilities": caps_dict,
+                        "message": f"✓ {name} (latency: {latency} ms)"
+                    }
+                else:
+                    fail_reason = health_res.status if health_res.status != "ok" else (health_res.last_error or "unreachable / offline")
+                    results[name] = {
+                        "status": fail_reason,
+                        "authentication": "401" not in fail_reason and "Invalid" not in fail_reason,
+                        "available": False,
+                        "availability_pct": health_res.availability_pct,
+                        "latency_ms": 0.0,
+                        "tags": provider.profile.tags,
+                        "capabilities": caps_dict,
+                        "message": f"✗ {name}: {fail_reason}"
+                    }
+            except Exception as e:
+                provider.health.record_failure(str(e))
+                caps = provider.advertised_capabilities
+                results[name] = {
+                    "status": f"error: {str(e)[:40]}",
+                    "authentication": False,
+                    "available": False,
+                    "availability_pct": provider.health.availability_pct,
+                    "latency_ms": 0.0,
+                    "tags": provider.profile.tags,
+                    "capabilities": {
+                        "chat": caps.chat,
+                        "reasoning": caps.reasoning,
+                        "vision": caps.vision,
+                        "embeddings": caps.embeddings,
+                        "streaming": caps.streaming,
+                        "json_mode": caps.json_mode,
+                        "tool_use": caps.tool_use
+                    },
+                    "message": f"✗ {name}: {str(e)[:40]}"
+                }
+        return results

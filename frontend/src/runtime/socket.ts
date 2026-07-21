@@ -1,32 +1,49 @@
 import { routeEvent } from './eventRouter';
+import { invoke } from '@tauri-apps/api/core';
+
+function feLog(msg: string) {
+  console.log(msg);
+  try {
+    invoke('log_from_frontend', { msg }).catch(() => {});
+  } catch (e) {}
+}
 
 class RuntimeSocket {
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private backoff = 1000;
-  private readonly maxBackoff = 30000;
+  private backoff = 400;
+  private readonly maxBackoff = 2500;
   private isIntentionalDisconnect = false;
+  private hasEverConnected = false;
 
   public connected = false;
 
-  public connect(url: string = 'ws://localhost:8765') {
+  public connect(url: string = 'ws://127.0.0.1:8765') {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
     this.isIntentionalDisconnect = false;
-    console.log(`[runtime] Connecting to ${url}...`);
+    feLog(`[runtime] Connecting to ${url}...`);
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
-      console.log('[runtime] Connected to daemon.');
+      feLog('[runtime] Connected to daemon on ' + url);
       this.connected = true;
-      this.backoff = 1000;
+      this.hasEverConnected = true;
+      this.backoff = 400;
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
       }
       
+      routeEvent({
+        v: 1,
+        type: 'runtime.status',
+        status: 'connected',
+        source: 'local_socket'
+      });
+
       // Request session history to hydrate the UI
       this.sendEvent({ type: 'session.sync_request' });
       this.sendEvent({ type: 'awareness.get_request' });
@@ -43,20 +60,20 @@ class RuntimeSocket {
         }
         routeEvent(payload);
       } catch (err) {
-        console.error('[runtime] Failed to parse incoming message:', err);
+        feLog('[runtime] Failed to parse incoming message: ' + String(err));
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
       this.connected = false;
       this.stopPing();
-      console.log('[runtime] Disconnected from daemon.');
+      feLog(`[runtime] Disconnected from daemon (code: ${event.code}, reason: ${event.reason}). Reconnecting...`);
       
-      // Emit a local synthetic event to tell the UI the backend is gone
+      // Emit seamless reconnecting state so the UI never shows a crash
       routeEvent({
         v: 1,
         type: 'runtime.status',
-        status: 'disconnected',
+        status: 'reconnecting',
         source: 'local_socket'
       });
 
@@ -66,7 +83,7 @@ class RuntimeSocket {
     };
 
     this.ws.onerror = (err) => {
-      console.error('[runtime] WebSocket error:', err);
+      feLog('[runtime] WebSocket onerror fired: ' + String(err));
       // onclose will be called automatically
     };
   }
@@ -89,12 +106,13 @@ class RuntimeSocket {
   private scheduleReconnect(url: string) {
     if (this.reconnectTimer) return;
     
-    console.log(`[runtime] Reconnecting in ${this.backoff}ms...`);
+    const delay = this.hasEverConnected ? this.backoff : 400;
+    feLog(`[runtime] Reconnecting in ${delay}ms...`);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.backoff = Math.min(this.backoff * 1.5, this.maxBackoff);
       this.connect(url);
-    }, this.backoff);
+    }, delay);
   }
 
   public disconnect() {
@@ -107,10 +125,10 @@ class RuntimeSocket {
 
   public sendEvent(payload: Record<string, any>) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log(`[runtime] WebSocket.send() executing for: ${payload.type}`, payload);
+      feLog(`[runtime] WebSocket.send() executing for: ${payload.type}`);
       this.ws.send(JSON.stringify(payload));
     } else {
-      console.warn(`[runtime] Cannot send event ${payload.type}, socket readyState is ${this.ws?.readyState}`, payload);
+      feLog(`[runtime] Cannot send event ${payload.type}, socket readyState is ${this.ws?.readyState}`);
     }
   }
 }

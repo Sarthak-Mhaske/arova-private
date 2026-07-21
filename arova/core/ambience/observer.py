@@ -26,13 +26,28 @@ class AmbientObserver:
     def start(self):
         if not self._running:
             self._running = True
-            self._task = asyncio.create_task(self._poll_loop())
-            logging.info("AmbientObserver started.")
+            if getattr(self.provider, "is_event_driven", lambda: False)():
+                logging.info("AmbientObserver: Operating system event source detected; operating event-driven without polling loop (P0-4).")
+                if hasattr(self.provider, "subscribe"):
+                    self.provider.subscribe(self._on_provider_context)
+            else:
+                logging.info("AmbientObserver: Operating system provides no reliable event source; starting debounced poll loop.")
+                self._task = asyncio.create_task(self._poll_loop())
             
     def stop(self):
         self._running = False
         if self._task:
             self._task.cancel()
+
+    def _on_provider_context(self, new_ctx: AmbientContext):
+        if new_ctx != self.current_context:
+            self.current_context = new_ctx
+            self.event_bus.emit("ambience", "CONTEXT_CHANGED", StateEvent(
+                state="CONTEXT_CHANGED",
+                message="Ambient context stabilized (event-driven)",
+                snapshot=new_ctx.__dict__
+            ))
+            logging.info("AmbientObserver: Context stabilized and updated from OS event stream.")
             
     async def _poll_loop(self):
         while self._running:

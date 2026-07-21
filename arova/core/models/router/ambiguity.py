@@ -6,6 +6,7 @@ from arova.core.cognition.situation import CognitiveSituation
 from arova.core.models.router.schema import CapabilityVector
 from arova.core.providers.capabilities import Capability
 from arova.core.providers.manager import ProviderManager
+from arova.core.models.registry import get_model_registry, ArovaCapability, QualityTier
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,6 @@ class AmbiguityRouterLLM:
         
         # Priority fallback chain
         self.router_fallback_chain = ["openai", "groq", "ollama"]
-        
-        # Models for each provider that guarantee JSON structured output
-        self.router_models = {
-            "openai": "gpt-4o-mini",
-            "groq": "llama3-8b-8192",
-            "ollama": "llama3" # Assuming llama3 locally
-        }
 
     async def resolve(self, situation: CognitiveSituation, current_vector: CapabilityVector) -> CapabilityVector:
         if current_vector.confidence >= 0.65:
@@ -48,15 +42,10 @@ Situation:
 Return EXACTLY valid JSON mapping capabilities to float boosts. Example:
 {{
     "chat": 0.1,
-    "reasoning": 0.8,
-    "tool_execution": -0.5,
-    "memory_recall": 0.2
+    "reasoning": 0.5
 }}"""
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": situation.prompt}
-        ]
+        messages = [{"role": "user", "content": "Score boosts for situation."}]
 
         boosts = {}
         success = False
@@ -67,13 +56,14 @@ Return EXACTLY valid JSON mapping capabilities to float boosts. Example:
             if not provider or not provider.is_healthy():
                 continue
                 
-            model_name = self.router_models.get(provider_name)
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_AMBIGUITY_ROUTING, QualityTier.CHEAP, provider_id=provider_name)
+            model_name = candidate.id
             try:
                 attempted_providers.append(provider_name)
-                logger.info(f"AmbiguityRouterLLM: Attempting resolution via {provider_name} ({model_name})")
+                logger.info(f"AmbiguityRouterLLM: Attempting resolution via {provider_name} ({model_name} - {candidate.selection_reason})")
                 
-                # We request REASONING capability to bypass fast-chat restrictions on some providers if needed
-                response = await provider.generate(messages, model_name=model_name, max_tokens=150)
+                # We request generate using the resolved model
+                response = await provider.generate(messages, system_prompt=system_prompt, model=model_name, max_tokens=150)
                 
                 text = response.strip()
                 if text.startswith("```json"): text = text[7:]

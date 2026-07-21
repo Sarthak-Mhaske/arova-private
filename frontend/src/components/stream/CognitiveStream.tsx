@@ -1,13 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { useCognitionState } from '../../state';
+import { useCognitionState, useAwarenessState } from '../../state';
 import { Surfacing } from './Surfacing';
 import { UserSaid } from './UserSaid';
 import { CognitionEvents } from './CognitionEvents';
 import { MemoryGhost } from './MemoryGhost';
+import { ContinueCard } from '../surfaces/ContinueCard';
 
 export const CognitiveStream: React.FC = () => {
   const { items } = useCognitionState();
+  const { activeWorkspace } = useAwarenessState();
   const streamRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -39,6 +41,9 @@ export const CognitiveStream: React.FC = () => {
       <div className="stream" id="stream" ref={streamRef} style={{ overflowAnchor: 'none' }}>
         <div className="stream-inner" ref={innerRef} style={{ gap: 0 }}>
            <AnimatePresence>
+            <div style={{ marginBottom: items.length > 0 ? '56px' : '0' }}>
+              <ContinueCard workspace={activeWorkspace} />
+            </div>
             {items.map((item, idx) => {
               const prev = idx > 0 ? items[idx - 1] : null;
               let marginTop = 48; // Default rhythmic spacing

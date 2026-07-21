@@ -14,9 +14,8 @@ def test_universal_stuckness_developer_error_loop():
         
     bus.subscribe("cognition", "surfacing_push", on_surfacing)
     wm = WorkspaceManager(event_bus=bus)
-    active = wm.get_active_workspace()
     
-    # Simulate repeated file visits with error signature
+    # Simulate repeated file visits with error signature -> naturally emerges workspace (`P0-2`)
     for i in range(5):
         wm.ingest_fragment({
             "source_identity": "/home/sarthak/arova/arova/core/memory/memory_policy.py",
@@ -25,6 +24,8 @@ def test_universal_stuckness_developer_error_loop():
         })
         
     time.sleep(0.15)
+    active = wm.get_active_workspace()
+    assert active is not None
     assert active.interpretation.stuckness_score >= 75.0
     assert len(emitted_surfacing) == 1
     surfacing = emitted_surfacing[0]
@@ -36,9 +37,10 @@ def test_universal_stuckness_developer_error_loop():
 
 def test_universal_stuckness_writer_rewrite_loop():
     wm = WorkspaceManager()
+    ws = CognitiveWorkspace(title="Novel Chapter 4", domain_type="writing")
+    wm._workspaces[ws.workspace_id] = ws
+    wm._active_workspace_id = ws.workspace_id
     active = wm.get_active_workspace()
-    active.title = "Novel Chapter 4"
-    active.domain_type = "writing"
     
     # Simulate repeated visits to same paragraph with rewrite loops
     for i in range(6):
@@ -66,6 +68,9 @@ def test_time_to_productivity_telemetry():
     bus.subscribe("telemetry", "time_to_productivity", on_kpi)
     bus.subscribe("telemetry", "context_recovery_saved", on_saved)
     wm = WorkspaceManager(event_bus=bus)
+    ws = CognitiveWorkspace(title="KPI Verification WS", domain_type="engineering")
+    wm._workspaces[ws.workspace_id] = ws
+    wm._active_workspace_id = ws.workspace_id
     active = wm.get_active_workspace()
     
     # 1. User clicks resume

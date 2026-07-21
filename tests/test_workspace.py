@@ -73,17 +73,19 @@ def test_workspace_serialization():
 def test_workspace_manager_initialization_and_emergence():
     wm = WorkspaceManager()
     active = wm.get_active_workspace()
-    assert active is not None
-    assert active.title == "Arova Development"
-    assert active.understanding.confidence.score == 97
+    assert active is None, "Clean boot must start with 0 workspaces (P0-2)"
 
-    # Simulate fragment ingestion
+    # Simulate fragment ingestion -> organic emergence
     wm.ingest_fragment({
         "source_identity": "/home/sarthak/arova/arova/core/cognition/workspace.py",
         "provider_id": "WindowObserverProvider",
         "activity_summary": "Editing workspace classes"
     })
     
+    active = wm.get_active_workspace()
+    assert active is not None
+    assert active.title == "Arova Architecture & Development"
+    assert active.domain_type == "engineering"
     assert "/home/sarthak/arova/arova/core/cognition/workspace.py" in active.reality.resources
     assert active.reality.last_accessed_at > 0
 
@@ -103,3 +105,59 @@ def test_store_safe_save_with_dicts_or_snapshots(tmp_path):
     
     # Also verify saving a dictionary directly doesn't crash
     store.save(snapshot.to_dict())
+
+
+def test_deterministic_crash_recovery(tmp_path):
+    """P0-6 & P0-9: Verify strict v4 hydration and save() -> crash -> hydrate() idempotency."""
+    store = RuntimeStore()
+    store.storage_dir = tmp_path
+    
+    wm = WorkspaceManager()
+    ws = CognitiveWorkspace(title="Recovery Verification WS", domain_type="engineering")
+    ws.understanding.confidence_layer.repository.score = 100
+    ws.understanding.confidence_layer.resources.score = 68
+    wm._workspaces[ws.workspace_id] = ws
+    wm._active_workspace_id = ws.workspace_id
+    
+    snapshot = RuntimeSnapshot()
+    snapshot.hot_state.active_workspace_id = ws.workspace_id
+    snapshot.hot_state.workspaces = {ws.workspace_id: ws.to_dict()}
+    snapshot.hot_state.recent_turns = [{"role": "user", "content": "hello arova"}]
+    
+    # Save snapshot transactionally
+    store.save(snapshot)
+    
+    # Simulate process crash & reboot with new store pointed to tmp_path
+    rebooted_store = RuntimeStore()
+    rebooted_store.storage_dir = tmp_path
+    hydrated_snap = rebooted_store.hydrate()
+    
+    assert hydrated_snap.schema_version == 4
+    assert hydrated_snap.hot_state.active_workspace_id == ws.workspace_id
+    assert ws.workspace_id in hydrated_snap.hot_state.workspaces
+    
+    hydrated_ws = CognitiveWorkspace.from_dict(hydrated_snap.hot_state.workspaces[ws.workspace_id])
+    assert hydrated_ws.title == "Recovery Verification WS"
+    assert hydrated_ws.understanding.confidence_layer.repository.score == 100
+    assert hydrated_ws.understanding.confidence_layer.resources.score == 68
+    assert hydrated_snap.hot_state.recent_turns == [{"role": "user", "content": "hello arova"}]
+
+def test_workspace_delta_changes_serialization():
+    ws = CognitiveWorkspace(workspace_id="ws_delta", title="Delta Test WS")
+    ws.understanding.delta_changes = [
+        "Tests now pass",
+        "Switched from Redis to SQLite",
+        "Remaining blocker is daemon restart persistence"
+    ]
+    data = ws.to_dict()
+    assert data["understanding"]["delta_changes"] == [
+        "Tests now pass",
+        "Switched from Redis to SQLite",
+        "Remaining blocker is daemon restart persistence"
+    ]
+    hydrated = CognitiveWorkspace.from_dict(data)
+    assert hydrated.understanding.delta_changes == [
+        "Tests now pass",
+        "Switched from Redis to SQLite",
+        "Remaining blocker is daemon restart persistence"
+    ]

@@ -31,7 +31,7 @@ export const AdvancedRouting: React.FC = () => {
   };
 
   const capabilities = [
-    { id: 'chat', label: 'Chat' },
+    { id: 'chat', label: 'Assistant' },
     { id: 'reasoning', label: 'Reasoning' },
     { id: 'embeddings', label: 'Embeddings' },
     { id: 'summarization', label: 'Summarization' },

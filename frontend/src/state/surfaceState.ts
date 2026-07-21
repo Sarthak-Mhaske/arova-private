@@ -6,6 +6,9 @@ export type SurfaceType =
   | 'environment' | 'context' | 'workspace' | 'attention' | 'awareness'
   | 'runtime' | 'agents' | 'calibration' | 'diagnostics'
   | 'settings' 
+  | 'command_palette'
+  | 'session_timeline'
+  | 'developer_mode'
   | null;
 
 interface SurfaceState {

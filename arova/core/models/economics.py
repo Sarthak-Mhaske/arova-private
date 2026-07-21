@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 from arova.core.models.profiles import CognitiveProfile
+from arova.core.models.registry import get_model_registry
 
 @dataclass
 class CognitiveCost:
@@ -12,23 +13,22 @@ class CognitiveBudgetEngine:
     Evaluates the 'cost' of a reasoning cycle and enforces budget limits.
     """
     def __init__(self):
-        # Very rough mock economics
-        # Local inference costs 0 virtual cents, but has higher latency on low-end hardware.
-        # Cloud inference has actual token costs.
-        self.pricing_table = {
-            "llama3-8b-8192": {"cost_per_1k_tokens": 0.05, "base_latency": 400},
-            "llama3-70b-8192": {"cost_per_1k_tokens": 0.59, "base_latency": 800},
-            "ollama-llama3-8b": {"cost_per_1k_tokens": 0.0, "base_latency": 1500}
-        }
+        pass
         
     def estimate_cost(self, model_name: str, max_tokens: int) -> CognitiveCost:
-        rates = self.pricing_table.get(model_name)
-        if not rates:
-            # Fallback
-            return CognitiveCost(virtual_cents=0.1, latency_ms_estimate=1000)
+        # Check all candidates across registry to find this model's cost and latency
+        registry = get_model_registry()
+        found_cost = 0.1
+        found_latency = 1000.0
+        for prov_candidates in registry._candidates.values():
+            for c in prov_candidates:
+                if c.id == model_name:
+                    found_cost = c.cost_per_1k_tokens
+                    found_latency = float(c.latency_ms)
+                    break
             
-        cost = (max_tokens / 1000) * rates["cost_per_1k_tokens"]
-        return CognitiveCost(virtual_cents=cost, latency_ms_estimate=rates["base_latency"])
+        cost = (max_tokens / 1000) * found_cost
+        return CognitiveCost(virtual_cents=cost, latency_ms_estimate=found_latency)
         
     def is_within_budget(self, profile: CognitiveProfile, cost: CognitiveCost) -> bool:
         """

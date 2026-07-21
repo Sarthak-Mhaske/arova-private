@@ -21,6 +21,18 @@ class ArovaViewModel:
         self.scheduler = scheduler
         self._reader = None
         self._writer = None
+        self.scheduler.send_callback = self._send_payload
+
+    def _send_payload(self, payload: dict):
+        if self._writer:
+            try:
+                data = (json.dumps(payload) + "\n").encode('utf-8')
+                self._writer.write(data)
+                asyncio.create_task(self._writer.drain())
+            except Exception as e:
+                logging.error(f"Failed to send IPC payload: {e}")
+        else:
+            logging.warning("ArovaViewModel: IPC writer not connected.")
 
     async def connect_and_listen(self):
         try:
@@ -35,8 +47,8 @@ class ArovaViewModel:
                 try:
                     payload = json.loads(line.decode('utf-8'))
                     self.scheduler.dispatch_ipc_event(payload)
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as e:
+                    logging.warning(f"Received malformed JSON payload over IPC socket: {e}")
         except Exception as e:
             logging.error(f"Failed to connect: {e}")
             self.scheduler.dispatch_ipc_event({"event_type": "CONNECTION_STATUS", "status": "disconnected", "error": str(e)})

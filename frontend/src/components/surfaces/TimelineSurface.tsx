@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SurfaceHeader, EmptyState, LoadingState } from '../ui/CoherenceComponents';
 import { socket } from '../../runtime/socket';
+import { useSurfaceState } from '../../state';
 
 interface TimelineEvent {
   id: string;
@@ -15,6 +16,7 @@ interface TimelineEvent {
 }
 
 export const TimelineSurface: React.FC = () => {
+  const { openSurface } = useSurfaceState();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [importantOnly, setImportantOnly] = useState(false);
@@ -68,10 +70,32 @@ export const TimelineSurface: React.FC = () => {
 
   return (
     <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <SurfaceHeader 
-        title="Cognitive Timeline" 
-        sub="Transparent view of Arova's internal cognition and state transitions" 
-      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <SurfaceHeader 
+          title="Cognitive Timeline" 
+          sub="Transparent view of Arova's internal cognition and state transitions" 
+        />
+        <button
+          onClick={() => openSurface('session_timeline')}
+          style={{
+            background: 'linear-gradient(135deg, rgba(168, 129, 255, 0.2) 0%, rgba(126, 82, 245, 0.2) 100%)',
+            border: '1px solid rgba(168, 129, 255, 0.4)',
+            color: '#c4a6ff',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <span>⚡ View Canonical Activity Stream (Phase 6)</span>
+          <span>→</span>
+        </button>
+      </div>
       
       <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
         <label style={{ color: 'var(--ink-1)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>

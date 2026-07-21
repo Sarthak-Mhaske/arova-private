@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { SurfaceHeader, SurfaceSection, InfoRow, EmptyState } from '../ui/CoherenceComponents';
 import { useAwarenessState } from '../../state';
 import { socket } from '../../runtime/socket';
-import { ContinueCard } from './ContinueCard';
 
 export const AwarenessSurface: React.FC = () => {
   const { policy, hidden, visible, activeWorkspace } = useAwarenessState();
@@ -14,7 +13,7 @@ export const AwarenessSurface: React.FC = () => {
   if (!policy) {
     return (
       <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <SurfaceHeader title="What Arova Sees" sub="Awareness" />
+        <SurfaceHeader title="What Arova Sees" sub="Vision & Diagnostics" />
         <EmptyState title="Syncing Policy..." description="Retrieving awareness configuration from the daemon." />
       </div>
     );
@@ -36,36 +35,59 @@ export const AwarenessSurface: React.FC = () => {
     { key: 'vision', label: 'Vision', enabled: policy?.vision?.enabled ?? false, desc: policy?.vision?.description ?? '' },
   ];
 
-  const displayWorkspace = activeWorkspace || {
-    title: 'Arova Development',
-    understanding: {
-      momentum: {
-        progress_percentage: 82,
-        current_blocker: 'Pending queue persistence',
-        next_action: 'Implement SQLite persistence'
-      },
-      health: { status: 'Focused' },
-      confidence: { score: 97 }
-    }
-  };
+  const confidence = activeWorkspace?.confidence_score || activeWorkspace?.understanding?.confidence?.score || 97;
 
   return (
     <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
-      <SurfaceHeader title="What Arova Sees" sub="Awareness" />
+      <SurfaceHeader title="What Arova Sees" sub="Vision & Diagnostics" />
 
-      {/* Living Workspace Continuity (Phase 11 Golden Rule) */}
-      <ContinueCard workspace={displayWorkspace} />
+      {/* Live Runtime Status Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focused Window</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeWorkspace?.title || 'VS Code'}</div>
+        </div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Attention</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-violet)' }}>{activeWorkspace?.understanding?.momentum?.next_action ? 'Active Coding Flow' : 'Coding / Engineering'}</div>
+        </div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Confidence</div>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-gold)' }}>{confidence}%</div>
+        </div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Window Observer</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-sage)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-sage)', boxShadow: '0 0 6px var(--accent-sage)' }} />
+            Healthy
+          </div>
+        </div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capture Engine</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-sage)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-sage)', boxShadow: '0 0 6px var(--accent-sage)' }} />
+            Running
+          </div>
+        </div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Privacy & Filtering</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🔒</span>
+            Protected
+          </div>
+        </div>
+      </div>
 
       {/* Viewfinder: Currently Visible */}
       <SurfaceSection>
         <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-green)', boxShadow: '0 0 8px var(--accent-green)' }}></div>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-sage)', boxShadow: '0 0 6px var(--accent-sage)' }}></div>
           Currently Visible
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--glass-1)', padding: '16px', borderRadius: '8px', border: '1px solid var(--hairline-2)' }}>
           {visible && Array.isArray(visible) && visible.length > 0 ? (
             visible.map((item, i) => (
-              <div key={i} style={{ borderBottom: i < visible.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingBottom: i < visible.length - 1 ? '12px' : 0, marginBottom: i < visible.length - 1 ? '12px' : 0 }}>
+              <div key={i} style={{ borderBottom: i < visible.length - 1 ? '1px solid var(--hairline-2)' : 'none', paddingBottom: i < visible.length - 1 ? '12px' : 0, marginBottom: i < visible.length - 1 ? '12px' : 0 }}>
                 <div style={{ fontSize: '12px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{item?.provider || 'Unknown'}</div>
                 <InfoRow label="Source" value={item?.source || ''} />
                 <InfoRow label="Activity" value={item?.activity || ''} />

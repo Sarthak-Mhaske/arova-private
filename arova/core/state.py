@@ -24,7 +24,7 @@ class RuntimeProjectionCache:
         self._execution_state = "COMPLETED"
         self._authoritative_turn_id: Optional[str] = None
         self._turns: Dict[str, ConversationTurnDTO] = {}
-        self._legacy_history: List[Dict[str, Any]] = [] # Temporary compatibility
+        self._legacy_history: List[Dict[str, Any]] = []
         
         # Subscribe to runtime facts
         self._event_bus.subscribe("state", "STATE_CHANGED", self._on_voice_state)

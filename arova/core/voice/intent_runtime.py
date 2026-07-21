@@ -128,7 +128,24 @@ class IntentRuntime:
         if hasattr(self._session, "_memory_runtime") and self._session._memory_runtime:
             memory_context = await self._session._memory_runtime.recall_context()
             
-        sys_prompt = f"{base_prompt}\n\n{memory_context}" if memory_context else base_prompt        
+        workspace_summary = ""
+        workspace_manager = getattr(self, '_workspace_manager', None) or getattr(self._session, 'workspace_manager', None) or getattr(self._context_synthesizer, 'workspace_manager', None)
+        if workspace_manager:
+            active_ws = workspace_manager.get_active_workspace()
+            if active_ws and hasattr(active_ws, 'get_workspace_summary_prompt'):
+                workspace_summary = active_ws.get_workspace_summary_prompt()
+
+        # Combine layers with Layer 2 (Active Workspace) taking precedence over Layer 1 (Identity)
+        prompt_parts = [base_prompt]
+        if workspace_summary:
+            prompt_parts.append(workspace_summary)
+        elif getattr(self._session, '_system_prompt', None):
+            prompt_parts.append(f"=== Active Context ===\n{self._session._system_prompt}")
+            
+        if memory_context:
+            prompt_parts.append(f"=== Long-Term User Profile & Identity (Layer 1) ===\n{memory_context}")
+            
+        sys_prompt = "\n\n".join(prompt_parts)        
         # Stream chunks directly to TTS Runtime (Phase 7.5 streaming TTS)
         logging.info(f"IntentRuntime: Emitting stream start for {turn_id}")
         self._event_bus.emit("voice", "TEXT_STREAM_STARTED", {

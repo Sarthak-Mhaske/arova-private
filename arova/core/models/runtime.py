@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 import requests
 from arova.core.config.loader import pick_groq_api_key
 from arova.core.models.schema import ReasoningDepth, ReasoningBudget, ModelCapabilityProfile
+from arova.core.models.registry import get_model_registry, ArovaCapability, QualityTier
 
 class ModelRuntime:
     """
@@ -12,26 +13,13 @@ class ModelRuntime:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.api_key = pick_groq_api_key(config)
-        
-        # Profile registry (mock configuration for now)
-        self.profiles = {
-            "llama3-8b-8192": ModelCapabilityProfile(
-                model_name="llama3-8b-8192",
-                supports_fast_reasoning=True,
-                supports_deep_planning=False
-            ),
-            "llama3-70b-8192": ModelCapabilityProfile(
-                model_name="llama3-70b-8192",
-                supports_fast_reasoning=True,
-                supports_deep_planning=True,
-                supports_reflection=True
-            )
-        }
 
     def _select_model(self, depth: ReasoningDepth) -> str:
         if depth in (ReasoningDepth.DEEP, ReasoningDepth.REFLECTIVE):
-            return "llama3-70b-8192"
-        return "llama3-8b-8192"
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_REASONING, QualityTier.PREMIUM)
+        else:
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED)
+        return candidate.id
 
     async def invoke_structured(self, 
                                 messages: List[Dict[str, Any]], 

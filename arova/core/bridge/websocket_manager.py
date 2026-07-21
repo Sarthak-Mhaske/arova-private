@@ -15,7 +15,7 @@ class WebSocketClient:
         self.id = id(websocket)
 
 class WebSocketManager:
-    def __init__(self, host: str = "localhost", port: int = 8765):
+    def __init__(self, host: str = "127.0.0.1", port: int = 8765):
         self.host = host
         self.port = port
         self.clients: Dict[int, WebSocketClient] = {}
@@ -83,7 +83,7 @@ class WebSocketManager:
                 except Exception as e:
                     logger.error(f"Error processing message from client {client.id}: {e}")
         except websockets.exceptions.ConnectionClosed:
-            pass
+            logger.debug(f"Connection closed for client {client.id}")
         finally:
             sender_task.cancel()
             await self._cleanup_client(client)

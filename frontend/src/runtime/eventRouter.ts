@@ -59,11 +59,12 @@ export function routeEvent(event: any) {
 
     case 'runtime.status':
       if (event.status === 'connected') {
-        // Wake the UI up
         useOrbState.getState().setMode('idle');
         console.log('[runtime] Backend is connected and active.');
+      } else if (event.status === 'reconnecting') {
+        useOrbState.getState().setMode('reconnecting');
+        console.log('[runtime] Backend reconnecting...');
       } else if (event.status === 'disconnected') {
-        // Fallback UI indication
         useOrbState.getState().setMode('disconnected');
         console.log('[runtime] Backend disconnected. UI is dormant.');
       }
@@ -133,6 +134,9 @@ export function routeEvent(event: any) {
         }
         if (Array.isArray(event.projection.stream_items)) {
           useCognitionState.getState().setItems(event.projection.stream_items);
+        }
+        if (Array.isArray(event.projection.visible_threads)) {
+          useCognitionState.getState().setThreads(event.projection.visible_threads);
         }
         if (event.projection.room_state) {
           useEnvironmentState.getState().setRoomState(event.projection.room_state);

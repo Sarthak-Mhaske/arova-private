@@ -1,0 +1,44 @@
+{
+  "scenario_id": "research/read_20_papers",
+  "scenario_name": "Intensive Literature Review (Attention & Memory Architecture)",
+  "persona": "Researcher",
+  "schema_version": "2.0",
+  "satisfaction": {
+    "rating": "UNRATED",
+    "reason": "N/A"
+  },
+  "events_count": 3,
+  "workspaces_built": [
+    "Literature Review: Attention & Memory (Exploring)"
+  ],
+  "decision_timeline": [],
+  "observed_facts": [
+    "Attention Is All You Need",
+    "Transformer",
+    "working memory"
+  ],
+  "missed_facts": [],
+  "expected_facts": [
+    "Attention Is All You Need",
+    "Transformer",
+    "working memory"
+  ],
+  "false_positives": 0,
+  "selected_model_id": "llama-3.3-70b-versatile",
+  "selection_reasons": [
+    "Ultra-fast response latency (~420ms)",
+    "High throughput conversational engine"
+  ],
+  "expected_capability": "summarize",
+  "expected_quality": "balanced",
+  "fidelity_pct": 100,
+  "mistakes": {
+    "missed_facts": [],
+    "false_assumptions": [],
+    "wrong_workspace": []
+  },
+  "diff_lines": [],
+  "recovery_target_msg": "Target Benchmark: Context recovery reduced from 11.5 min to 1.8 min (backed by 3 structured resources & continue card).",
+  "passed": true,
+  "duration_ms": 31.8
+}

@@ -15,7 +15,7 @@ class RuntimeEventMapper:
         }
 
     @classmethod
-    def map_internal_event(cls, internal_type: str, payload: dict) -> Optional[dict]:
+    def map_internal_event(cls, internal_type: str, payload: dict, topic: str = "") -> Optional[dict]:
         """
         Maps an internal EventBus event to the stable external WebSocket protocol.
         Returns the external event dictionary, or None if the event shouldn't be broadcast.
@@ -107,6 +107,16 @@ class RuntimeEventMapper:
         elif internal_type == "PROJECTION_UPDATED":
             event = cls._base_event("projection.updated", "runtime_projector")
             event["projection"] = payload
+
+        elif internal_type == "EVENT_INGESTED" and topic == "capture":
+            event = cls._base_event("capture.event_ingested", "activity_capture")
+            event["event"] = payload
+
+        elif internal_type == "sync" and topic == "workspace":
+            event = cls._base_event("workspace.sync", "workspace_manager")
+            event["active_workspace_id"] = payload.get("active_workspace_id")
+            event["active_workspace"] = payload.get("active_workspace")
+            event["workspaces"] = payload.get("workspaces", [])
 
         elif internal_type == "MEMORY_SAVED":
             event = cls._base_event("memory.saved", "memory_runtime")

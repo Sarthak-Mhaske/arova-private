@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::process::Command;
+use std::io::Write;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,32 +54,97 @@ impl SupervisorState {
                     break;
                 }
 
-                // Resolve bundled binary or python runtime
+                // Resolve bundled binary or python runtime across Deb, RPM, AppImage, and local dev
                 let exe_dir = std::env::current_exe()
                     .ok()
                     .and_then(|p| p.parent().map(|p| p.to_path_buf()))
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-                let bundled_arovad = exe_dir.join("arovad");
-                let resource_arovad = exe_dir.join("resources").join("arovad");
+                let candidate_paths = vec![
+                    exe_dir.join("arovad"),
+                    exe_dir.join("resources").join("arovad"),
+                    exe_dir.join("../lib/Arova/resources/arovad"),
+                    exe_dir.join("../lib/Arova/_up_/_up_/dist/arovad"),
+                    exe_dir.join("../../dist/arovad"),
+                    std::path::PathBuf::from("/usr/lib/Arova/resources/arovad"),
+                    std::path::PathBuf::from("/usr/lib/Arova/_up_/_up_/dist/arovad"),
+                    std::path::PathBuf::from("/usr/lib/arova/resources/arovad"),
+                    std::path::PathBuf::from("/opt/arova/arovad"),
+                ];
+
+                let found_binary = candidate_paths.into_iter().find(|p| p.exists());
                 let resource_py_dir = exe_dir.join("resources");
 
-                let mut cmd = if bundled_arovad.exists() {
-                    Command::new(bundled_arovad)
-                } else if resource_arovad.exists() {
-                    Command::new(resource_arovad)
-                } else if std::path::Path::new("/opt/arova/arovad").exists() {
-                    Command::new("/opt/arova/arovad")
+                // Clean up any stale PyInstaller temp folders before launching daemon to prevent tmpfs quota exhaustion
+                for dir_path in &["/tmp", "/var/tmp"] {
+                    if let Ok(entries) = std::fs::read_dir(dir_path) {
+                        for entry in entries.flatten() {
+                            if let Some(name) = entry.file_name().to_str() {
+                                if name.starts_with("_MEI") {
+                                    let _ = std::fs::remove_dir_all(entry.path());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut cmd = if let Some(bin_path) = found_binary {
+                    let mut c = Command::new(bin_path);
+                    // PyInstaller standalone binaries crash with "No module named 'encodings'" if PYTHONHOME or incompatible PYTHONPATH is inherited from AppRun/AppImage
+                    c.env_remove("PYTHONHOME");
+                    c.env_remove("PYTHONPATH");
+                    c.env("TMPDIR", "/var/tmp");
+                    c
                 } else {
                     let mut c = Command::new("python");
-                    // If running from bundled resources directory where arova/ exists inside resources/
-                    if resource_py_dir.join("arova").exists() {
-                        c.env("PYTHONPATH", &resource_py_dir);
-                        c.current_dir(&resource_py_dir);
+                    c.env_remove("PYTHONHOME");
+                    c.env("TMPDIR", "/var/tmp");
+                    let py_dir = if resource_py_dir.join("arova").exists() {
+                        resource_py_dir
+                    } else {
+                        exe_dir.join("../lib/Arova/_up_/_up_")
+                    };
+                    if py_dir.join("arova").exists() {
+                        c.env("PYTHONPATH", &py_dir);
+                        c.current_dir(&py_dir);
                     }
                     c.args(&["-m", "arova.daemon.main"]);
                     c
                 };
+
+                if let Ok(addr) = "127.0.0.1:8765".parse() {
+                    let probe = |addr: &std::net::SocketAddr| -> bool {
+                        if let Ok(mut s) = std::net::TcpStream::connect_timeout(addr, Duration::from_millis(250)) {
+                            let _ = s.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nConnection: close\r\n\r\n");
+                            return true;
+                        }
+                        false
+                    };
+                    if probe(&addr) {
+                        {
+                            let mut st = status.lock().unwrap();
+                            st.is_running = true;
+                            st.safe_mode = false;
+                        }
+                        loop {
+                            {
+                                let stop = stop_signal.lock().unwrap();
+                                if *stop {
+                                    break;
+                                }
+                            }
+                            if !probe(&addr) {
+                                break;
+                            }
+                            thread::sleep(Duration::from_secs(5));
+                        }
+                        continue;
+                    }
+                }
+
+                if crash_counter > 5 {
+                    cmd.arg("--safe-mode");
+                }
 
                 match cmd.spawn() {
                     Ok(mut child) => {

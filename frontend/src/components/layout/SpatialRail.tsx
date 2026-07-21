@@ -84,13 +84,13 @@ const RailGlyph: React.FC<{ surface: SurfaceType; label: string; icon: React.Rea
   );
 };
 
-const AccordionGroup: React.FC<{ group: RailGroupData; isRailHovered: boolean }> = ({ group, isRailHovered }) => {
+const AccordionGroup: React.FC<{ group: RailGroupData }> = ({ group }) => {
   const [isExpanded, setIsExpanded] = useState(() => {
     const saved = localStorage.getItem(`arova_rail_${group.id}`);
     return saved === 'true';
   });
 
-  const { activeSurface, openSurface } = useSurfaceState();
+  const { activeSurface } = useSurfaceState();
 
   useEffect(() => {
     localStorage.setItem(`arova_rail_${group.id}`, String(isExpanded));
@@ -99,9 +99,6 @@ const AccordionGroup: React.FC<{ group: RailGroupData; isRailHovered: boolean }>
   const handleGroupClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsExpanded(!isExpanded);
-    if (activeSurface !== group.id) {
-      openSurface(group.id);
-    }
   };
 
   const isGroupActive = activeSurface === group.id || group.items.some(i => i.id === activeSurface);
@@ -118,7 +115,7 @@ const AccordionGroup: React.FC<{ group: RailGroupData; isRailHovered: boolean }>
       </button>
 
       <AnimatePresence initial={false}>
-        {isExpanded && isRailHovered && (
+        {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -148,7 +145,6 @@ const AccordionGroup: React.FC<{ group: RailGroupData; isRailHovered: boolean }>
 
 export const SpatialRail: React.FC = () => {
   const { activeSurface } = useSurfaceState();
-  const [isRailHovered, setIsRailHovered] = useState(false);
 
   return (
     <>
@@ -156,8 +152,6 @@ export const SpatialRail: React.FC = () => {
       <nav 
         className="rail" 
         id="rail"
-        onMouseEnter={() => setIsRailHovered(true)}
-        onMouseLeave={() => setIsRailHovered(false)}
       >
         <div className="rail-brand" style={{ position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) scale(0.13)', pointerEvents: 'none' }}>
@@ -176,7 +170,7 @@ export const SpatialRail: React.FC = () => {
       <div className="rail-divider"></div>
 
       {GROUPS.map(group => (
-        <AccordionGroup key={group.id} group={group} isRailHovered={isRailHovered} />
+        <AccordionGroup key={group.id} group={group} />
       ))}
 
       <div className="rail-divider"></div>

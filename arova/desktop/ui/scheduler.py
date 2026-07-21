@@ -14,11 +14,18 @@ class UIScheduler:
         self._scheduled = False
         self._coalesce_keys = set()
         self._handlers = {} # event_type -> list of callbacks
+        self.send_callback = None
 
     def bind(self, event_type: str, callback):
         if event_type not in self._handlers:
             self._handlers[event_type] = []
         self._handlers[event_type].append(callback)
+
+    def send_ipc_payload(self, payload: dict):
+        if self.send_callback:
+            self.send_callback(payload)
+        else:
+            logging.warning("UIScheduler: No IPC send_callback bound for outgoing payload.")
 
     def dispatch_ipc_event(self, event: dict):
         """Called from background IPC thread."""

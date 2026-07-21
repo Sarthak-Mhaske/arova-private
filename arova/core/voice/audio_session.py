@@ -43,17 +43,22 @@ class MicrophoneSession:
             return True
             
     def unsubscribe(self, name: str):
+        should_stop = False
         with self._lock:
             if name in self._subscribers:
                 del self._subscribers[name]
             if not self._subscribers and self._is_capturing:
-                self._stop_capture()
+                should_stop = True
+        if should_stop:
+            self._stop_capture()
                 
     def _start_capture(self):
         self._is_capturing = True
         self._capture_generation_id += 1
         
         def audio_callback(indata, frames, time, status):
+            if not self._is_capturing:
+                return
             if status:
                 logging.warning(f"Microphone status: {status}")
             # indata is numpy array, we want raw bytes for webrtcvad/stt
@@ -77,16 +82,29 @@ class MicrophoneSession:
             self._is_capturing = False
         
     def _stop_capture(self):
-        self._is_capturing = False
-        if hasattr(self, '_stream') and self._stream:
-            self._stream.stop()
-            self._stream.close()
+        stream_to_close = None
+        with self._lock:
+            if not self._is_capturing and not getattr(self, '_stream', None):
+                return
+            self._is_capturing = False
+            stream_to_close = getattr(self, '_stream', None)
             self._stream = None
+            
+        if stream_to_close:
+            try:
+                stream_to_close.stop()
+                stream_to_close.close()
+            except Exception as e:
+                logging.error(f"Error stopping audio capture stream: {e}")
         logging.info("MicrophoneSession: hardware capture stopped.")
         
     def push_chunk(self, chunk: bytes, sample_rate: int):
         """Called by the physical capture thread to fan-out to subscribers."""
+        if not self._is_capturing:
+            return
         with self._lock:
+            if not self._is_capturing or not self._subscribers:
+                return
             # Sort by priority descending
             subs = sorted(self._subscribers.values(), key=lambda x: x["priority"], reverse=True)
             for sub in subs:

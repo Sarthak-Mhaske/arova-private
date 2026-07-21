@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Set, AsyncGenerator
 from arova.core.providers.base import CognitiveProvider
 from arova.core.providers.capabilities import Capability
 from arova.core.models.adapters.groq import GroqAdapter
+from arova.core.models.registry import get_model_registry, ArovaCapability, QualityTier
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,6 @@ class GroqProvider(CognitiveProvider):
     def __init__(self, api_key: str):
         super().__init__()
         self._adapter = GroqAdapter(api_key=api_key)
-        self._default_model = "llama-3.3-70b-versatile"
-        self._fast_model = "llama-3.1-8b-instant"
 
     @property
     def name(self) -> str:
@@ -30,13 +29,14 @@ class GroqProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 512) -> str:
-        model = model or self._default_model
+        if not model:
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED, provider_id="groq")
+            model = candidate.id
         t0 = time.time()
         try:
             result = await self._adapter.invoke_structured(messages, system_prompt, model, max_tokens)
             latency = (time.time() - t0) * 1000
             self.health.record_success(latency)
-            # invoke_structured returns a dict, but for raw generation we want text
             if isinstance(result, dict):
                 return result.get("content", result.get("error", str(result)))
             return str(result)
@@ -46,7 +46,9 @@ class GroqProvider(CognitiveProvider):
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 512) -> AsyncGenerator[str, None]:
-        model = model or self._default_model
+        if not model:
+            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED, provider_id="groq")
+            model = candidate.id
         t0 = time.time()
         try:
             async for chunk in self._adapter.invoke_stream(messages, system_prompt, model, max_tokens):

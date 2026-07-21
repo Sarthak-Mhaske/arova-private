@@ -1,0 +1,42 @@
+{
+  "scenario_id": "capabilities/resume_workspace_test",
+  "scenario_name": "Capability Test: State Reconstruction across Boot",
+  "persona": "System Test",
+  "schema_version": "2.0",
+  "satisfaction": {
+    "rating": "UNRATED",
+    "reason": "N/A"
+  },
+  "events_count": 1,
+  "workspaces_built": [
+    "Arova Development: memory_policy.py (Exploring)"
+  ],
+  "decision_timeline": [],
+  "observed_facts": [
+    "memory_policy.py",
+    "privacy boundaries"
+  ],
+  "missed_facts": [],
+  "expected_facts": [
+    "memory_policy.py",
+    "privacy boundaries"
+  ],
+  "false_positives": 0,
+  "selected_model_id": "llama-3.3-70b-versatile",
+  "selection_reasons": [
+    "Large context window (131072 tokens)",
+    "Precise structured state reconstruction"
+  ],
+  "expected_capability": "resume_workspace",
+  "expected_quality": "balanced",
+  "fidelity_pct": 100,
+  "mistakes": {
+    "missed_facts": [],
+    "false_assumptions": [],
+    "wrong_workspace": []
+  },
+  "diff_lines": [],
+  "recovery_target_msg": "Target Benchmark: Context recovery reduced from 11.0 min to 2.1 min (estimated).",
+  "passed": true,
+  "duration_ms": 10.4
+}

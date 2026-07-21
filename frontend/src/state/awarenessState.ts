@@ -19,10 +19,13 @@ interface AwarenessState {
   hidden: string[];
   visible: Array<{ provider: string, activity: string, source: string, confidence: number }>;
   activeWorkspace: any | null;
+  continueCardDismissed: boolean;
   setPolicy: (policy: AwarenessPolicy) => void;
   setHidden: (hidden: string[]) => void;
   setVisible: (visible: any[]) => void;
   setActiveWorkspace: (ws: any | null) => void;
+  dismissContinueCard: () => void;
+  resetContinueCard: () => void;
 }
 
 export const useAwarenessState = create<AwarenessState>((set) => ({
@@ -30,8 +33,11 @@ export const useAwarenessState = create<AwarenessState>((set) => ({
   hidden: [],
   visible: [],
   activeWorkspace: null,
+  continueCardDismissed: false,
   setPolicy: (policy) => set({ policy }),
   setHidden: (hidden) => set({ hidden }),
   setVisible: (visible) => set({ visible }),
   setActiveWorkspace: (activeWorkspace) => set({ activeWorkspace }),
+  dismissContinueCard: () => set({ continueCardDismissed: true }),
+  resetContinueCard: () => set({ continueCardDismissed: false }),
 }));

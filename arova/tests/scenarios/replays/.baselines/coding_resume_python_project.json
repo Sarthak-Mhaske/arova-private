@@ -1,0 +1,44 @@
+{
+  "scenario_id": "coding/resume_python_project",
+  "scenario_name": "Resume Python Project (VSCode)",
+  "persona": "Developer",
+  "schema_version": "2.0",
+  "satisfaction": {
+    "rating": "UNRATED",
+    "reason": "N/A"
+  },
+  "events_count": 3,
+  "workspaces_built": [
+    "Arova Architecture & Development (Exploring)"
+  ],
+  "decision_timeline": [],
+  "observed_facts": [
+    "Arova",
+    "SQLite persistence",
+    "Workspace"
+  ],
+  "missed_facts": [],
+  "expected_facts": [
+    "Arova",
+    "SQLite persistence",
+    "Workspace"
+  ],
+  "false_positives": 0,
+  "selected_model_id": "llama-3.3-70b-versatile",
+  "selection_reasons": [
+    "Large context window (131072 tokens)",
+    "Precise structured state reconstruction"
+  ],
+  "expected_capability": "resume_workspace",
+  "expected_quality": "balanced",
+  "fidelity_pct": 100,
+  "mistakes": {
+    "missed_facts": [],
+    "false_assumptions": [],
+    "wrong_workspace": []
+  },
+  "diff_lines": [],
+  "recovery_target_msg": "Target Benchmark: Context recovery reduced from 11.5 min to 1.8 min (backed by 3 structured resources & continue card).",
+  "passed": true,
+  "duration_ms": 32.4
+}

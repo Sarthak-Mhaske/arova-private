@@ -1,0 +1,67 @@
+{
+  "scenario_id": "replays/developer/developer_resume",
+  "scenario_name": "Developer Workday Replay (VSCode, Groq Docs, Decisions & Questions)",
+  "persona": "Developer (Replay)",
+  "schema_version": "2.0",
+  "satisfaction": {
+    "rating": "PERFECT",
+    "reason": "Correctly identified SQLite persistence blocker and rejected Redis assumption."
+  },
+  "events_count": 8,
+  "workspaces_built": [
+    "Arova Architecture & Development (Exploring)"
+  ],
+  "decision_timeline": [
+    {
+      "timestamp": "10:00",
+      "title": "Decision: I rejected Redis because...",
+      "content": "I rejected Redis because we need zero-dependency local SQLite persistence on Linux."
+    },
+    {
+      "timestamp": "10:00",
+      "title": "Question: Need to investigate approval queue...",
+      "content": "Need to investigate approval queue persistence across daemon restarts."
+    },
+    {
+      "timestamp": "10:00",
+      "title": "Decision: SQLite is enough for approval queues.",
+      "content": "SQLite is enough for approval queues; no background worker required."
+    },
+    {
+      "timestamp": "10:00",
+      "title": "Resolved: Approval queue persistence question resolved.",
+      "content": "Approval queue persistence question resolved via local SQLite schema."
+    }
+  ],
+  "observed_facts": [
+    "runtime.py",
+    "Groq API Documentation",
+    "SQLite persistence",
+    "rejected Redis"
+  ],
+  "missed_facts": [],
+  "expected_facts": [
+    "runtime.py",
+    "Groq API Documentation",
+    "SQLite persistence",
+    "rejected Redis"
+  ],
+  "false_positives": 0,
+  "selected_model_id": "llama-3.3-70b-versatile",
+  "selection_reasons": [
+    "Large context window (131072 tokens)",
+    "Precise structured state reconstruction"
+  ],
+  "expected_capability": "resume_workspace",
+  "expected_quality": "balanced",
+  "fidelity_pct": 100,
+  "mistakes": {
+    "missed_facts": [],
+    "false_assumptions": [],
+    "wrong_workspace": []
+  },
+  "diff_lines": [],
+  "recovery_target_msg": "Target Benchmark: Context recovery reduced from 11.5 min to 1.8 min (backed by 8 structured resources & continue card).",
+  "passed": true,
+  "duration_ms": 83.7
+}

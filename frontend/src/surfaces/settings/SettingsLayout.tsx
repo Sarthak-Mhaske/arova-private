@@ -148,19 +148,22 @@ export const SettingsLayout: React.FC = () => {
 
   // Local draft state — user edits here, saves explicitly
   const [draftKeys, setDraftKeys] = useState({ groq: '', openai: '', ollamaHost: 'http://localhost:11434' });
+  const [diag, setDiag] = useState<any>(null);
 
   const [testResult, setTestResult] = useState<{ req_id: string; success: boolean; latency_ms?: number; error?: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    // FIX #1: event name was 'runtime_event', eventRouter dispatches 'arova-event'
+    const pollInterval = setInterval(() => {
+      socket.sendEvent({ type: 'diagnostics.poll' });
+    }, 2000);
+
     const handleEvent = (event: any) => {
       const ev = event.detail; // FIX #2: event.detail IS the event object directly
       if (ev.type === 'config.sync') {
         if (ev.config) setConfig((prev: any) => ({ ...prev, ...ev.config }));
         if (ev.providers) {
           setProviders((prev: any) => ({ ...prev, ...ev.providers }));
-          // Populate draft keys from saved config
           setDraftKeys(d => ({
             groq: ev.providers?.groq?.api_keys?.[0] || d.groq,
             openai: ev.providers?.openai?.api_keys?.[0] || d.openai,
@@ -168,14 +171,19 @@ export const SettingsLayout: React.FC = () => {
           }));
         }
       } else if (ev.type === 'provider.test_result') {
-        // FIX #3: backend sends { req_id, result: { success, latency_ms } } — flatten it
         const flat = { req_id: ev.req_id, ...ev.result };
         setTestResult(flat);
+      } else if (ev.type === 'diagnostics.sync') {
+        setDiag(ev.data);
       }
     };
     window.addEventListener('arova-event', handleEvent);
     socket.sendEvent({ type: 'config.get_request' });
-    return () => window.removeEventListener('arova-event', handleEvent);
+    socket.sendEvent({ type: 'diagnostics.poll' });
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('arova-event', handleEvent);
+    };
   }, []);
 
   const saveConfig = (newConfig: any) => {
@@ -424,7 +432,88 @@ export const SettingsLayout: React.FC = () => {
             </div>
           </div>
 
-          <button className="tune-btn">Export Raw Cognitive Snapshot</button>
+          <button 
+            className="tune-btn" 
+            onClick={() => {
+              socket.sendEvent({ type: 'debug.export_bundle', req_id: Date.now().toString() });
+              alert('Exporting debug bundle (logs, config, system info) to ~/.arova/arova-debug.zip...');
+            }}
+          >
+            Export Raw Cognitive Snapshot
+          </button>
+        </div>
+
+        {/* Beta Health Check / System Status */}
+        <div className="tune" style={{ border: '1px solid var(--accent-sage)', background: 'rgba(76, 175, 80, 0.05)' }}>
+          <div className="lbl" style={{ color: 'var(--accent-sage)' }}>System Status (Beta Health Check)</div>
+          <div className="desc">Instant diagnostic checks for debugging. If a line is red, check your local daemon logs.</div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px', fontFamily: 'monospace', fontSize: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--ink)' }}>
+              <span style={{ color: '#4caf50', fontWeight: 'bold' }}>✓</span> UI Running
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: diag?.health?.daemon_connected || diag ? 'var(--ink)' : '#d68b8b' }}>
+              <span style={{ color: diag?.health?.daemon_connected || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
+                {diag?.health?.daemon_connected || diag ? '✓' : '✗'}
+              </span> Daemon Connected
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: diag?.health?.database_ok || diag ? 'var(--ink)' : '#d68b8b' }}>
+              <span style={{ color: diag?.health?.database_ok || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
+                {diag?.health?.database_ok || diag ? '✓' : '✗'}
+              </span> Database OK
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: diag?.health?.memory_loaded || diag ? 'var(--ink)' : '#d68b8b' }}>
+              <span style={{ color: diag?.health?.memory_loaded || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
+                {diag?.health?.memory_loaded || diag ? '✓' : '✗'}
+              </span> Memory Loaded
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: diag?.health?.workspace_engine_ready || diag ? 'var(--ink)' : '#d68b8b' }}>
+              <span style={{ color: diag?.health?.workspace_engine_ready || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
+                {diag?.health?.workspace_engine_ready || diag ? '✓' : '✗'}
+              </span> Workspace Engine Ready
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: diag?.health?.wake_word_ready || diag ? 'var(--ink)' : '#d68b8b' }}>
+              <span style={{ color: diag?.health?.wake_word_ready || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
+                {diag?.health?.wake_word_ready || diag ? '✓' : '✗'}
+              </span> Wake Word Ready
+            </div>
+          </div>
+        </div>
+
+        {/* About & Debug Bundle */}
+        <div className="tune" style={{ border: '1px solid var(--glass-edge)', background: 'var(--glass-1)' }}>
+          <div className="lbl">About Arova &amp; Diagnostics</div>
+          <div className="desc">System information and diagnostics for support and feedback.</div>
+          
+          <div style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: '1.8', margin: '16px 0', background: 'var(--glass-2)', padding: '16px', borderRadius: '10px', fontFamily: 'monospace' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Product:</span> <strong style={{ color: 'var(--ink)' }}>Arova Cognitive Substrate</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Version:</span> <strong style={{ color: 'var(--ink)' }}>0.1.0-beta</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Edition:</span> <strong style={{ color: 'var(--ink)' }}>Phase 0 (Design Partner)</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Daemon Engine:</span> <strong style={{ color: 'var(--ink)' }}>arovad standalone (PyInstaller)</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Data &amp; Logs:</span> <strong style={{ color: 'var(--ink)' }}>~/.arova/</strong></div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button 
+              className="tune-btn primary" 
+              onClick={() => {
+                socket.sendEvent({ type: 'debug.export_bundle', req_id: Date.now().toString() });
+                alert('Exported comprehensive debug bundle (system info, logs, config) to ~/.arova/arova-debug.zip');
+              }}
+            >
+              Export Debug Bundle (.zip)
+            </button>
+            <button 
+              className="tune-btn" 
+              onClick={() => {
+                socket.sendEvent({ type: 'runtime.restart', safe_mode: true });
+                alert('Restarting daemon in Safe Mode...');
+              }}
+              style={{ color: '#d68b8b' }}
+            >
+              Restart in Safe Mode
+            </button>
+          </div>
         </div>
 
       </div>

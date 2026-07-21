@@ -1,0 +1,96 @@
+{
+  "schema_version": "2.0",
+  "scenario_id": "replays/developer/developer_resume",
+  "name": "Developer Workday Replay (VSCode, Groq Docs, Decisions & Questions)",
+  "persona": "Developer (Replay)",
+  "recorded_at": "2026-07-19T10:34:00",
+  "satisfaction": {
+    "rating": "PERFECT",
+    "reason": "Correctly identified SQLite persistence blocker and rejected Redis assumption."
+  },
+  "events": [
+    {
+      "timestamp": "10:30:00",
+      "elapsed_seconds": 0.0,
+      "app_name": "vscode",
+      "window_title": "runtime.py - Arova - Visual Studio Code",
+      "content_snippet": "class ModelRuntime: def _select_model(self, depth): # routing abstraction",
+      "duration_s": 120.0,
+      "tags": ["coding", "python"]
+    },
+    {
+      "timestamp": "10:32:00",
+      "elapsed_seconds": 120.0,
+      "app_name": "chrome",
+      "window_title": "Groq API Documentation - Model Catalog",
+      "content_snippet": "Capabilities and context window tokens for fast chat and reasoning models.",
+      "duration_s": 180.0,
+      "tags": ["documentation"]
+    },
+    {
+      "timestamp": "10:34:00",
+      "elapsed_seconds": 240.0,
+      "app_name": "arova_cognition",
+      "window_title": "Decision: I rejected Redis because...",
+      "content_snippet": "I rejected Redis because we need zero-dependency local SQLite persistence on Linux.",
+      "duration_s": 15.0,
+      "tags": ["decision"]
+    },
+    {
+      "timestamp": "10:42:00",
+      "elapsed_seconds": 270.0,
+      "app_name": "arova_cognition",
+      "window_title": "Question: Need to investigate approval queue...",
+      "content_snippet": "Need to investigate approval queue persistence across daemon restarts.",
+      "duration_s": 15.0,
+      "tags": ["question"]
+    },
+    {
+      "timestamp": "11:02:00",
+      "elapsed_seconds": 300.0,
+      "app_name": "arova_cognition",
+      "window_title": "Decision: SQLite is enough for approval queues.",
+      "content_snippet": "SQLite is enough for approval queues; no background worker required.",
+      "duration_s": 15.0,
+      "tags": ["decision"]
+    },
+    {
+      "timestamp": "11:14:00",
+      "elapsed_seconds": 330.0,
+      "app_name": "arova_cognition",
+      "window_title": "Resolved: Approval queue persistence question resolved.",
+      "content_snippet": "Approval queue persistence question resolved via local SQLite schema.",
+      "duration_s": 15.0,
+      "tags": ["resolved"]
+    },
+    {
+      "timestamp": "11:15:00",
+      "elapsed_seconds": 345.0,
+      "app_name": "terminal",
+      "window_title": "bash - pytest arova/tests/",
+      "content_snippet": "8 passed in 0.39s. All tests clean.",
+      "duration_s": 60.0,
+      "tags": ["terminal", "test"]
+    },
+    {
+      "timestamp": "11:16:00",
+      "elapsed_seconds": 405.0,
+      "app_name": "vscode",
+      "window_title": "workspace.py - Arova - Visual Studio Code",
+      "content_snippet": "class WorkspaceManager: def process_context(self): # Blocker: SQLite persistence",
+      "duration_s": 240.0,
+      "tags": ["coding", "python"]
+    }
+  ],
+  "expected_outcome": {
+    "expected_workspace_keyword": "Arova",
+    "expected_facts": [
+      "runtime.py",
+      "Groq API Documentation",
+      "SQLite persistence",
+      "rejected Redis"
+    ],
+    "expected_capability": "AROVA_CAPABILITY_RESUME_WORKSPACE",
+    "expected_quality": "BALANCED"
+  }
+}

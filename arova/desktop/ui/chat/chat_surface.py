@@ -205,22 +205,10 @@ class ChatSurface(Gtk.Box):
         msg = Message(role=MessageRole.USER, content=text)
         self._add_message(msg)
         
-        # TODO: Send to daemon over IPC
-        # For now, simulate a response
-        GLib.timeout_add(500, self._simulate_response, text)
-    
-    def _simulate_response(self, user_text: str):
-        """Placeholder until IPC is wired. Shows streaming simulation."""
-        # Add cognition step
-        cog = Message(role=MessageRole.COGNITION, content="Evaluating context...")
-        self._add_message(cog)
-        
-        # Simulate streamed assistant response
-        response = f"I understand you said: **\"{user_text}\"**\n\nI'm currently running in *preview mode* without the daemon connected. Once connected, I'll:\n\n1. Route your query through the **orchestrator**\n2. Execute any necessary `tools`\n3. Stream the response in real-time\n\n```python\n# Future: IPC integration\nawait daemon.send(user_text)\n```\n\n> This is a static preview of the chat surface."
-        
-        msg = Message(role=MessageRole.ASSISTANT, content=response)
-        self._add_message(msg)
-        return False
+        if self.scheduler and hasattr(self.scheduler, "send_ipc_payload"):
+            self.scheduler.send_ipc_payload({"event_type": "USER_MESSAGE", "payload": {"text": text}})
+        else:
+            self._add_message(Message(role=MessageRole.SYSTEM, content="Offline: Arova daemon (`/tmp/arova.sock`) is not connected. Please ensure the daemon is running to process queries."))
     
     def _add_message(self, message: Message):
         self._messages.append(message)

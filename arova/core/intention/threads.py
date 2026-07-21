@@ -217,15 +217,31 @@ class ThreadManager:
             thread.last_updated = time.time()
             
     def _take_snapshot(self, thread: CognitiveThread):
-        """Take a snapshot of the thread's cognitive state before it goes dormant."""
-        # In reality, this would query the ContextSynthesizer or LLM to summarize
-        # For now, we create a placeholder snapshot
+        """Take a snapshot of the thread's cognitive state before it goes dormant (`P1 & P2`)."""
+        summary_text = f"Cognitive thread '{thread.title}' tracked across {len(thread.turn_ids)} turns."
+        questions = []
+        workspace_title = "active"
+        
+        if hasattr(self.session_manager, "_warm_context"):
+            for turn in reversed(self.session_manager._warm_context):
+                if turn.turn_id in thread.turn_ids or not thread.turn_ids:
+                    if "?" in turn.user_transcript:
+                        questions.append(turn.user_transcript)
+                    if not questions and turn.user_transcript:
+                        summary_text = f"Recent topic: {turn.user_transcript[:120]}..."
+                    break
+                    
+        if hasattr(self.session_manager, "runtime") and getattr(self.session_manager.runtime, "workspace_manager", None):
+            active_ws = self.session_manager.runtime.workspace_manager.get_active_workspace()
+            if active_ws:
+                workspace_title = active_ws.title
+
         thread.continuity_snapshot = ContinuitySnapshot(
-            summary=f"You were working on {thread.title}.",
-            unresolved_questions=[f"Determine next steps for {thread.title}."],
-            why_it_matters="Maintains contextual continuity for this task.",
-            active_pressures=0.5,
-            environment_context={"workspace": "unknown"}
+            summary=summary_text,
+            unresolved_questions=questions[:3] if questions else [f"Resume work on {thread.title}."],
+            why_it_matters=f"Maintains contextual continuity across {len(thread.turn_ids)} turns for {thread.title}.",
+            active_pressures=min(1.0, 0.3 + (len(thread.turn_ids) * 0.1)),
+            environment_context={"workspace": workspace_title, "turn_count": len(thread.turn_ids)}
         )
         
     def get_threads_by_state(self, state: ThreadState) -> List[CognitiveThread]:

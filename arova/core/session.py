@@ -235,8 +235,8 @@ class ConversationSession:
         if hasattr(self, '_persist_callback') and self._persist_callback:
             try:
                 self._persist_callback()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.error(f"Failed to persist session history: {e}")
         
     def to_dict(self) -> dict:
         return {

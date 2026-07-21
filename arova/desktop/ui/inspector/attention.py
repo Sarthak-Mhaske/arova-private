@@ -5,9 +5,8 @@ from gi.repository import Gtk
 class AttentionView(Gtk.Box):
     """
     Attention Observatory.
-    Plots focus_depth, interruption_rate, and cognitive_momentum over time.
-    For this phase, we use simple numeric readouts and progress bars to 
-    simulate graphing (a true Cairo line graph can be added to RenderNode later).
+    Plots focus_depth, interruption_rate, and cognitive_momentum over time
+    using live readouts and progress bars bound to ATTENTION_STATE_CHANGED events.
     """
     def __init__(self, scheduler):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)

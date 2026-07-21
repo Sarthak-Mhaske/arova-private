@@ -116,6 +116,9 @@ class ConfidenceLayer:
     goal: ItemConfidence = field(default_factory=lambda: ItemConfidence(80, ["Observed consistent activity"]))
     blocker: ItemConfidence = field(default_factory=lambda: ItemConfidence(70, ["Heuristic error analysis"]))
     next_action: ItemConfidence = field(default_factory=lambda: ItemConfidence(75, ["Trajectory inference"]))
+    repository: ItemConfidence = field(default_factory=lambda: ItemConfidence(100, ["Git repository root path discovered"]))
+    decisions: ItemConfidence = field(default_factory=lambda: ItemConfidence(95, ["Recorded during cognitive reflect turn"]))
+    resources: ItemConfidence = field(default_factory=lambda: ItemConfidence(65, ["Inferred from active window history"]))
     overall: WorkspaceConfidence = field(default_factory=WorkspaceConfidence)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -123,19 +126,28 @@ class ConfidenceLayer:
             "goal": self.goal.to_dict(),
             "blocker": self.blocker.to_dict(),
             "next_action": self.next_action.to_dict(),
+            "repository": self.repository.to_dict(),
+            "decisions": self.decisions.to_dict(),
+            "resources": self.resources.to_dict(),
             "overall": self.overall.to_dict()
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ConfidenceLayer':
         obj = cls()
-        if "goal" in data:
+        if "goal" in data and isinstance(data["goal"], dict):
             obj.goal = ItemConfidence.from_dict(data["goal"])
-        if "blocker" in data:
+        if "blocker" in data and isinstance(data["blocker"], dict):
             obj.blocker = ItemConfidence.from_dict(data["blocker"])
-        if "next_action" in data:
+        if "next_action" in data and isinstance(data["next_action"], dict):
             obj.next_action = ItemConfidence.from_dict(data["next_action"])
-        if "overall" in data:
+        if "repository" in data and isinstance(data["repository"], dict):
+            obj.repository = ItemConfidence.from_dict(data["repository"])
+        if "decisions" in data and isinstance(data["decisions"], dict):
+            obj.decisions = ItemConfidence.from_dict(data["decisions"])
+        if "resources" in data and isinstance(data["resources"], dict):
+            obj.resources = ItemConfidence.from_dict(data["resources"])
+        if "overall" in data and isinstance(data["overall"], dict):
             obj.overall = WorkspaceConfidence.from_dict(data["overall"])
         return obj
 
@@ -152,8 +164,11 @@ class UnderstandingLayer:
     confidence_layer: ConfidenceLayer = field(default_factory=ConfidenceLayer)
     decisions: List[str] = field(default_factory=list)
     open_questions: List[str] = field(default_factory=list)
+    story_narrative: List[str] = field(default_factory=list)
+    explainability_reasons: List[str] = field(default_factory=list)
     state_summary: str = "Active trajectory progression"
     what_changed: str = "Initial workspace observations established."
+    delta_changes: List[str] = field(default_factory=list)
     trajectory_story: str = "Trajectory is developing through steady focus and activity."
     last_synthesized_at: float = field(default_factory=time.time)
 
@@ -171,6 +186,7 @@ class UnderstandingLayer:
         health_data = data.pop("health", {})
         confidence_data = data.pop("confidence", {})
         confidence_layer_data = data.pop("confidence_layer", {})
+        delta_changes_data = data.pop("delta_changes", [])
         
         obj = cls(**data)
         if isinstance(momentum_data, dict):
@@ -192,6 +208,9 @@ class UnderstandingLayer:
             obj.confidence_layer = ConfidenceLayer.from_dict(confidence_layer_data)
         elif isinstance(confidence_layer_data, ConfidenceLayer):
             obj.confidence_layer = confidence_layer_data
+
+        if isinstance(delta_changes_data, list):
+            obj.delta_changes = delta_changes_data
 
         return obj
 
@@ -295,6 +314,42 @@ class CognitiveWorkspace:
             "blocker_status": m.current_blocker if m.current_blocker else "Resolved / None",
             "next_action": m.next_action
         }
+
+    def get_workspace_summary_prompt(self) -> str:
+        """
+        Formats a compact, high-priority summary of the active workspace for the LLM.
+        Provides top-of-mind context about decisions, blockers, and next actions so the LLM
+        answers from the workspace rather than generic profile identity.
+        """
+        u = self.understanding
+        m = u.momentum
+        
+        decisions_str = "\n".join([f"• {d}" for d in u.decisions[:5]]) if u.decisions else "• None recorded yet"
+        questions_str = "\n".join([f"• {q}" for q in u.open_questions[:3]]) if u.open_questions else "• None open"
+        resources_str = "\n".join([f"• {name} ({res.get('identity', name)})" for name, res in self.reality.resources.items()]) if self.reality.resources else "• Active working files"
+        
+        return (
+            f"=== Active Workspace Context (High Priority) ===\n"
+            f"Project: {self.title}\n"
+            f"Domain: {self.domain_type}\n"
+            f"Goal / Trajectory: {m.goal}\n"
+            f"Status: {u.health.status} ({m.progress_percentage}% complete)\n\n"
+            f"What recently changed / finished:\n"
+            f"- {u.what_changed or 'Ongoing trajectory progression'}\n\n"
+            f"Current blocker:\n"
+            f"- {m.current_blocker or 'None'}\n\n"
+            f"Important decisions (already settled):\n"
+            f"{decisions_str}\n\n"
+            f"Open questions:\n"
+            f"{questions_str}\n\n"
+            f"Prepared resources:\n"
+            f"{resources_str}\n\n"
+            f"Next action:\n"
+            f"- {m.next_action or 'Continue with current development flow'}\n"
+            f"================================================\n"
+            f"Instruction: When answering questions like 'What was I doing?', 'Why did we decide X?', "
+            f"or 'What is next?', ALWAYS prioritize this Active Workspace Context over general identity or assumptions."
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {

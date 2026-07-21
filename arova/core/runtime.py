@@ -22,7 +22,7 @@ from arova.core.capabilities.runtime import CapabilityRuntime
 from arova.core.capabilities.builtins import register_builtins
 from arova.core.platform.system.executor import SystemExecutionLayer
 from arova.core.memory.runtime import MemoryRuntime
-from arova.core.ambience.provider import PollingProvider
+from arova.core.ambience.provider import LiveOSAmbientProvider, PollingProvider
 from arova.core.ambience.observer import AmbientObserver
 from arova.core.policy.runtime import PolicyRuntime
 from arova.core.automation.runtime import AutomationRuntime
@@ -93,7 +93,7 @@ class RuntimeContainer:
         
         # Workspace Manager (Phase 11 Long-Lived Workspaces)
         from arova.core.cognition.workspace_manager import WorkspaceManager
-        self.workspace_manager = WorkspaceManager(event_bus=self.event_bus, orchestrator=self.model_orchestrator)
+        self.workspace_manager = WorkspaceManager(event_bus=self.event_bus, orchestrator=None)
         if hasattr(self.runtime_snapshot.hot_state, 'workspaces') and self.runtime_snapshot.hot_state.workspaces:
             from arova.core.cognition.workspace import CognitiveWorkspace
             for wid, w_dict in self.runtime_snapshot.hot_state.workspaces.items():
@@ -103,6 +103,19 @@ class RuntimeContainer:
         
         # State and Session
         self.session = ConversationSession()
+        self.session.workspace_manager = self.workspace_manager
+        
+        # Phase 6 Core Product Engines (`ActivityCaptureEngine`, `SearchIndex`, `KPITelemetryCollector`)
+        from arova.core.cognition.search_index import SearchIndex
+        from arova.core.capture.engine import ActivityCaptureEngine
+        from arova.core.telemetry.kpi_metrics import KPITelemetryCollector
+        self.search_index = SearchIndex()
+        self.capture_engine = ActivityCaptureEngine(event_bus=self.event_bus)
+        self.capture_engine.workspace_manager = self.workspace_manager
+        self.capture_engine.timeline_engine = self.timeline
+        self.capture_engine.subscribe(lambda evt: self.search_index.index_canonical_event(evt))
+        self.workspace_manager.search_index = self.search_index
+        self.kpi_collector = KPITelemetryCollector(event_bus=self.event_bus)
         
         # Attach EventBus to the ThreadManager for action handling
         self.session.thread_manager.event_bus = self.event_bus
@@ -158,7 +171,7 @@ class RuntimeContainer:
             loop = asyncio.get_running_loop()
             loop.create_task(register_builtins(self.capability_registry))
         except RuntimeError:
-            pass # No loop running yet, that's fine
+            logging.debug("No running asyncio event loop during capability builtin registration; deferred.")
 
         self.memory_runtime = MemoryRuntime(event_bus=self.event_bus, config=self.config)
         # Pass memory runtime to session to delegate archiving
@@ -171,12 +184,12 @@ class RuntimeContainer:
             loop.create_task(self.timeline.initialize())
             loop.create_task(self.memory_runtime.initialize())
         except RuntimeError:
-            pass
+            logging.debug("No running asyncio event loop during timeline/memory initialization; deferred.")
             
         self.policy_runtime = PolicyRuntime(event_bus=self.event_bus, registry=self.capability_registry)
         self.automation_runtime = AutomationRuntime(event_bus=self.event_bus)
         
-        self.ambient_provider = PollingProvider()
+        self.ambient_provider = LiveOSAmbientProvider()
         self.ambient_observer = AmbientObserver(event_bus=self.event_bus, provider=self.ambient_provider, stability_window_seconds=2.0)
         self.ambient_observer.start()
         
@@ -231,7 +244,7 @@ class RuntimeContainer:
             loop.create_task(self.window_backend.subscribe_events())
             loop.create_task(self.environment_graph.start_decay_loop())
         except RuntimeError:
-            pass
+            logging.debug("No running asyncio event loop during window/environment graph loop startup; deferred.")
         
         # Cognition Layer (Phase 7 / 12A + Synthesis)
         from arova.core.models.profiles import CognitiveProfile
@@ -287,7 +300,7 @@ class RuntimeContainer:
             loop = asyncio.get_running_loop()
             loop.create_task(_decay_loops())
         except RuntimeError:
-            pass
+            logging.debug("No running asyncio event loop during decay loops initialization; deferred.")
             
         # Wire Memory and Intent events into Priority Engine
         def _feed_priority(payload, visibility="ambient"):
@@ -332,6 +345,9 @@ class RuntimeContainer:
         self.event_bus.subscribe("intention", "CONTINUITY_RESONANCE_SPIKE", lambda p: _feed_priority(p, "ambient"))
         
         self.model_runtime = ModelOrchestrator(config=self.config, active_profile=CognitiveProfile.BALANCED, event_bus=self.event_bus)
+        self.model_orchestrator = self.model_runtime
+        if hasattr(self, 'workspace_manager') and self.workspace_manager:
+            self.workspace_manager.orchestrator = self.model_runtime
         self.memory_runtime.set_orchestrator(self.model_runtime)
         
         from arova.core.timeline.momentum import CapsuleGenerator, MomentumTracker
@@ -362,6 +378,7 @@ class RuntimeContainer:
             context_synthesizer=self.context_synthesizer,
             planner=self.cognitive_planner
         )
+        self.intent_runtime._workspace_manager = self.workspace_manager
     
         self.tts_runtime = TTSRuntime(event_bus=self.event_bus, config=self.config, 
                                       cancellation=self.cancellation, audio_manager=self.audio_session)

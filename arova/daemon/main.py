@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import logging
 import uuid
 import time
@@ -15,7 +16,7 @@ class ArovaDaemon:
     def __init__(self):
         self.runtime = None
         self.transport = UnixSocketTransport("/tmp/arova.sock")
-        self.ws_manager = WebSocketManager(host="localhost", port=8765)
+        self.ws_manager = WebSocketManager(host="127.0.0.1", port=8765)
 
     async def _on_client_message(self, client_id: str, payload: dict):
         import json
@@ -120,6 +121,40 @@ class ArovaDaemon:
                     "messages": history
                 })
                 self.runtime.session.thread_manager._sync()
+        elif payload.get("type") == "awareness.get_request":
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                active_ws = self.runtime.workspace_manager.get_active_workspace()
+                active_ws_payload = None
+                if active_ws:
+                    active_ws_payload = {
+                        "id": active_ws.workspace_id,
+                        "title": active_ws.title,
+                        "context": getattr(active_ws, "active_context", {})
+                    }
+                self.ws_manager.broadcast({
+                    "v": 1,
+                    "type": "awareness.sync",
+                    "policy": getattr(self.runtime, "routing_policy", "instant"),
+                    "hidden": [],
+                    "visible": [],
+                    "active_workspace": active_ws_payload
+                })
+        elif payload.get("type") == "momentum.get_latest":
+            latest_item = None
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                active_ws = self.runtime.workspace_manager.get_active_workspace()
+                if active_ws and hasattr(active_ws, 'understanding') and active_ws.understanding:
+                    latest_item = {
+                        "kind": "momentum",
+                        "title": active_ws.title,
+                        "next_action": getattr(active_ws.understanding.momentum, "next_action", ""),
+                        "current_blocker": getattr(active_ws.understanding.momentum, "current_blocker", "")
+                    }
+            self.ws_manager.broadcast({
+                "v": 1,
+                "type": "momentum.latest_capsule",
+                "item": latest_item
+            })
         elif payload.get("type") == "provider.discovery_request":
             from arova.core.config.discovery import ProviderDiscovery
             asyncio.create_task(self._handle_discovery())
@@ -164,27 +199,85 @@ class ArovaDaemon:
         elif payload.get("type") in ["workspace.get_request", "workspace.sync_request"]:
             if hasattr(self.runtime, 'workspace_manager'):
                 self.runtime.workspace_manager.sync_to_bus()
+        elif payload.get("type") == "workspace.get_continue_context":
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                wid = payload.get("workspace_id")
+                ctx = self.runtime.workspace_manager.get_continue_context(wid)
+                self.ws_manager.broadcast({
+                    "v": 1,
+                    "type": "workspace.continue_context",
+                    "context": ctx
+                })
         elif payload.get("type") == "workspace.switch":
             if hasattr(self.runtime, 'workspace_manager'):
                 wid = payload.get("workspace_id")
                 if wid:
                     self.runtime.workspace_manager.set_active_workspace(wid)
         elif payload.get("type") == "workspace.continue":
-            if hasattr(self.runtime, 'workspace_manager'):
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                wid = payload.get("workspace_id")
+                restore_options = payload.get("options", {})
+                if wid:
+                    self.runtime.workspace_manager.set_active_workspace(wid)
                 active_ws = self.runtime.workspace_manager.get_active_workspace()
-                title = active_ws.title if active_ws else "Arova Development"
-                self.ws_manager.broadcast({
-                    "type": "cognition.surfacing_push",
-                    "item": {
-                        "type": "surfacing",
-                        "from": "System",
-                        "paragraphs": [
-                            f"<strong>Continuing: {title}</strong>",
-                            "Cognitive context and living momentum are ready."
-                        ],
-                        "actions": []
-                    }
-                })
+                if active_ws:
+                    title = active_ws.title
+                    # 1. Restore Environment & emit telemetry
+                    self.runtime.workspace_manager.restore_environment(active_ws, restore_options)
+                    
+                    # 2. Prime Cognitive State (Layer 2 Active Workspace Context)
+                    summary_prompt = active_ws.get_workspace_summary_prompt() if hasattr(active_ws, 'get_workspace_summary_prompt') else ""
+                    if hasattr(self.runtime, 'session') and self.runtime.session:
+                        self.runtime.session.set_system_prompt(summary_prompt)
+                        
+                        # 3. Proactive Welcome Back message with Delta narrative (`What just changed`)
+                        decisions_summary = active_ws.understanding.decisions[0] if active_ws.understanding.decisions else "continue this project"
+                        next_step_summary = active_ws.understanding.momentum.next_action or "exploring current signals"
+                        delta_items = getattr(active_ws.understanding, "delta_changes", [])
+                        if delta_items:
+                            delta_lines = "\n".join(f"• {item}" for item in delta_items)
+                            welcome_msg = (
+                                f"Welcome back. I've restored your {title} workspace.\n\n"
+                                f"Since you left:\n"
+                                f"{delta_lines}\n\n"
+                                f"Next expected action: {next_step_summary}."
+                            )
+                        elif getattr(active_ws.understanding, "what_changed", "") and active_ws.understanding.what_changed != "Initial workspace observations established.":
+                            welcome_msg = (
+                                f"Welcome back. I've restored your {title} workspace.\n\n"
+                                f"Since you left:\n"
+                                f"• {active_ws.understanding.what_changed}\n"
+                                f"• Yesterday you decided to: {decisions_summary}\n\n"
+                                f"Next expected action: {next_step_summary}."
+                            )
+                        else:
+                            welcome_msg = (
+                                f"Welcome back. I've restored your {title} workspace. "
+                                f"Yesterday you decided to: {decisions_summary}, "
+                                f"and your next step is: {next_step_summary}. Ready to continue?"
+                            )
+                        self.runtime.session.add_assistant_message(welcome_msg)
+                        
+                        # 4. Sync updated chat feed immediately to frontend
+                        history = [dict(msg) for msg in self.runtime.session._legacy_messages]
+                        self.ws_manager.broadcast({
+                            "type": "session.sync",
+                            "messages": history
+                        })
+                    
+                    # 5. Visual confirmation toast
+                    self.ws_manager.broadcast({
+                        "type": "cognition.surfacing_push",
+                        "item": {
+                            "type": "surfacing",
+                            "from": "System",
+                            "paragraphs": [
+                                f"<strong>Restored: {title}</strong>",
+                                f"Primed active AI context & prepared {len(active_ws.reality.resources)} working resources."
+                            ],
+                            "actions": []
+                        }
+                    })
         elif payload.get("type") == "awareness.get_request":
             if self.runtime and self.runtime.awareness_manager:
                 hidden = self.runtime.awareness_manager.get_currently_hidden()
@@ -219,6 +312,60 @@ class ArovaDaemon:
                     "visible": visible,
                     "active_workspace": active_ws
                 })
+        elif payload.get("type") == "dogfooding.get_dashboard":
+            metrics = self.runtime.kpi_collector.get_dogfooding_dashboard_summary() if hasattr(self.runtime, 'kpi_collector') and self.runtime.kpi_collector else {}
+            self.ws_manager.broadcast({
+                "type": "dogfooding.dashboard",
+                "metrics": metrics
+            })
+        elif payload.get("type") == "dogfooding.get_debug_state":
+            captured_events = [e.to_dict() for e in self.runtime.capture_engine._recent_events[-50:]] if hasattr(self.runtime, 'capture_engine') and self.runtime.capture_engine else []
+            active_ws = self.runtime.workspace_manager.get_active_workspace() if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager else None
+            active_ws_dict = active_ws.to_dict() if active_ws else {}
+            why_chose = active_ws.understanding.explainability_reasons if active_ws and hasattr(active_ws.understanding, 'explainability_reasons') else ["Most active repository activity", "Unresolved blocker observed"]
+            search_items = [item.to_dict() for item in self.runtime.search_index.get_all_items()[:50]] if hasattr(self.runtime, 'search_index') and self.runtime.search_index else []
+            resources = [r.to_dict() for r in self.runtime.workspace_manager.restoration_engine.resource_registry.all_resources()] if hasattr(self.runtime, 'workspace_manager') and hasattr(self.runtime.workspace_manager, 'restoration_engine') else []
+            restore_plan = active_ws_dict.get("last_restore_outcomes", {}) if active_ws_dict else {}
+            traffic = {"active_subscribers": len(self.runtime.event_bus._subscribers) if hasattr(self.runtime, 'event_bus') and hasattr(self.runtime.event_bus, '_subscribers') else 0}
+            metrics = self.runtime.kpi_collector.get_dogfooding_dashboard_summary() if hasattr(self.runtime, 'kpi_collector') and self.runtime.kpi_collector else {}
+            self.ws_manager.broadcast({
+                "type": "dogfooding.debug_state",
+                "state": {
+                    "captured_events": captured_events,
+                    "active_workspace": active_ws_dict,
+                    "why_chose_workspace": why_chose,
+                    "search_index_contents": search_items,
+                    "resource_registry": resources,
+                    "restore_plan": restore_plan,
+                    "event_bus_traffic": traffic,
+                    "kpi_metrics": metrics
+                }
+            })
+        elif payload.get("type") == "dogfooding.record_failure":
+            if hasattr(self.runtime, 'kpi_collector') and self.runtime.kpi_collector:
+                self.runtime.kpi_collector.record_failure_reason(
+                    payload.get("reason", "other"),
+                    details=payload.get("details", "")
+                )
+        elif payload.get("type") == "dogfooding.calibrate_confidence":
+            if hasattr(self.runtime, 'kpi_collector') and self.runtime.kpi_collector:
+                self.runtime.kpi_collector.record_confidence_calibration(
+                    int(payload.get("score", 0)),
+                    payload.get("rating", "mostly_correct")
+                )
+        elif payload.get("type") == "dogfooding.record_acceptance":
+            if hasattr(self.runtime, 'kpi_collector') and self.runtime.kpi_collector:
+                self.runtime.kpi_collector.record_acceptance_event(
+                    payload.get("event", "shown")
+                )
+        elif payload.get("type") == "dogfooding.record_search_analytics":
+            if hasattr(self.runtime, 'kpi_collector') and self.runtime.kpi_collector:
+                self.runtime.kpi_collector.record_search_analytics(
+                    payload.get("query", ""),
+                    bool(payload.get("result_clicked", False)),
+                    float(payload.get("time_to_click_sec", 0.0)),
+                    bool(payload.get("needed_second_search", False))
+                )
         elif payload.get("type") == "environment.ignore_app":
             from arova.core.config.manager import get_config_manager
             app_name = payload.get("app_name")
@@ -270,8 +417,8 @@ class ArovaDaemon:
                                 if c.get("id") == cap_id:
                                     capsule = c
                                     break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Could not load capsule {cap_id} from plan store: {e}")
 
                     room_str = capsule.get("room", "Unknown") if capsule else "Unknown"
                     thread_str = "Cognitive Timeline" # Mocked or fetched from active context
@@ -311,6 +458,32 @@ class ArovaDaemon:
                             "actions": []
                         }
                     })
+        elif payload.get("type") == "search.query":
+            query = payload.get("query", "")
+            kind_filter = payload.get("kind")
+            results = []
+            if self.runtime and hasattr(self.runtime, "search_index") and self.runtime.search_index:
+                if hasattr(self.runtime, "workspace_manager") and self.runtime.workspace_manager.get_active_workspace():
+                    self.runtime.search_index.index_workspace(self.runtime.workspace_manager.get_active_workspace())
+                items = self.runtime.search_index.search(query, limit=30, kind_filter=kind_filter)
+                results = [it.to_dict() for it in items]
+            self.ws_manager.broadcast({
+                "v": 1,
+                "type": "search.results",
+                "query": query,
+                "results": results
+            })
+        elif payload.get("type") == "timeline.get_canonical_events":
+            limit = payload.get("limit", 100)
+            events = []
+            if self.runtime and hasattr(self.runtime, "capture_engine") and self.runtime.capture_engine:
+                recent = self.runtime.capture_engine.get_recent_events(limit)
+                events = [e.to_dict() for e in recent]
+            self.ws_manager.broadcast({
+                "v": 1,
+                "type": "timeline.canonical_events",
+                "events": events
+            })
         elif payload.get("type") == "memory.query_request":
             if self.runtime and self.runtime.memory_runtime:
                 asyncio.create_task(self._handle_memory_query(payload.get("req_id", "")))
@@ -336,6 +509,25 @@ class ArovaDaemon:
         elif payload.get("type") == "diagnostics.poll":
             if self.runtime:
                 self.ws_manager.broadcast(self._build_diagnostics_payload())
+        elif payload.get("type") == "debug.export_bundle":
+            import zipfile, glob, platform
+            try:
+                out_dir = Path(os.path.expanduser("~/.arova"))
+                out_dir.mkdir(parents=True, exist_ok=True)
+                zip_path = out_dir / "arova-debug.zip"
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for folder in ["logs", "config", "runtime"]:
+                        for p in glob.glob(str(out_dir / folder / "**"), recursive=True):
+                            if os.path.isfile(p):
+                                zf.write(p, os.path.relpath(p, out_dir))
+                    info = f"Version: 0.1.0-beta\nOS: {platform.platform()}\nPython: {platform.python_version()}\nSafe Mode: {'--safe-mode' in sys.argv}"
+                    zf.writestr("system_info.txt", info)
+                logging.info(f"Exported debug bundle to {zip_path}")
+            except Exception as e:
+                logging.error(f"Failed to export debug bundle: {e}")
+        elif payload.get("type") == "runtime.restart":
+            logging.warning("Received runtime.restart request from UI. Shutting down daemon...")
+            sys.exit(0) # Supervisor will auto-restart
 
     def _build_diagnostics_payload(self) -> dict:
         payload = {"type": "diagnostics.sync", "data": {}}
@@ -349,6 +541,14 @@ class ArovaDaemon:
         payload["data"]["cognition"] = {
             "active_threads": len(self.runtime.session.thread_manager.get_all_threads()) if self.runtime.session else 0,
             "memory_nodes": 0 # We'll just fetch this if needed
+        }
+        payload["data"]["health"] = {
+            "ui_running": True,
+            "daemon_connected": True,
+            "database_ok": hasattr(self.runtime, "memory_runtime") and self.runtime.memory_runtime is not None,
+            "memory_loaded": hasattr(self.runtime, "memory_runtime") and getattr(self.runtime.memory_runtime, "storage", None) is not None,
+            "workspace_engine_ready": hasattr(self.runtime, "workspace_manager") and self.runtime.workspace_manager is not None,
+            "wake_word_ready": hasattr(self.runtime, "voice_service") and self.runtime.voice_service is not None
         }
         return payload
 
@@ -434,7 +634,11 @@ class ArovaDaemon:
         })
 
     async def start(self):
-        logging.info("Starting Arova Daemon...")
+        is_safe_mode = "--safe-mode" in sys.argv
+        if is_safe_mode:
+            logging.warning(">>> STARTING AROVA DAEMON IN SAFE MODE <<<")
+        else:
+            logging.info("Starting Arova Daemon...")
         
         self.runtime = RuntimeContainer()
         
@@ -452,23 +656,24 @@ class ArovaDaemon:
             try:
                 msg = json.dumps(payload.__dict__ if hasattr(payload, '__dict__') else payload)
                 asyncio.run_coroutine_threadsafe(self.transport.broadcast(msg), loop)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.warning(f"Error broadcasting event over UDS: {e}")
                 
         def _broadcast_event_ws(topic, event_type, payload):
-            print(f">>> _broadcast_event_ws ENTERED for {event_type}")
+            logging.debug(f">>> _broadcast_event_ws ENTERED for {event_type}")
             payload_dict = payload.__dict__ if hasattr(payload, '__dict__') else payload
             if not isinstance(payload_dict, dict):
                 payload_dict = {"raw": payload_dict}
-            print(f">>> _broadcast_event_ws MAP for {event_type}, payload_dict: {payload_dict}")
+            logging.debug(f">>> _broadcast_event_ws MAP for {event_type}, payload_dict: {payload_dict}")
             try:
-                external_event = RuntimeEventMapper.map_internal_event(event_type, payload_dict)
-                print(f">>> _broadcast_event_ws MAPPED {event_type} -> {external_event}")
+                external_event = RuntimeEventMapper.map_internal_event(event_type, payload_dict, topic=topic)
+                logging.debug(f">>> _broadcast_event_ws MAPPED {event_type} -> {external_event}")
                 if external_event:
                     self.ws_manager.broadcast(external_event)
-                    print(f">>> _broadcast_event_ws BROADCAST SUCCESS for {event_type}")
+                    logging.debug(f">>> _broadcast_event_ws BROADCAST SUCCESS for {event_type}")
             except Exception as e:
-                print(f">>> _broadcast_event_ws CRASHED: {e}")
+                logging.debug(f">>> _broadcast_event_ws CRASHED: {e}")
+
 
         def _make_subscriber(topic, event_type):
             def _handler(payload):
@@ -505,6 +710,8 @@ class ArovaDaemon:
         # Environmental events for the UI
         _subscribe("environment", "ATTENTION_STATE_CHANGED")
         _subscribe("environment", "AMBIENT_INTENT_DETECTED")
+        _subscribe("workspace", "sync")
+        _subscribe("capture", "EVENT_INGESTED")
 
         logging.info("Arova Daemon is running.")
         
