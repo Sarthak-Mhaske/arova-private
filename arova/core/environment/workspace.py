@@ -23,6 +23,8 @@ class WorkspaceAwarenessEngine:
         
         self._last_role = None
         self._last_window_app = None
+        self._last_window_title = None
+        self._last_window_time = 0.0
         
         # We store callbacks to emit purely semantic/intent events upwards
         self._listeners = []
@@ -51,26 +53,35 @@ class WorkspaceAwarenessEngine:
                 self.active_workspace_id = event.window_data.workspace_id
                 
                 app_name = event.window_data.app_class or "Unknown App"
+                window_title = event.window_data.title or ""
+                now = time.time()
                 
                 from arova.core.config.manager import get_config_manager
                 cfg = get_config_manager().load_config()
                 ignored = cfg.get("privacy", {}).get("ignored_apps", [])
                 
+                is_new_app = app_name != self._last_window_app
+                is_new_title = window_title != self._last_window_title and len(window_title) > 2
+                is_time_gap = (now - self._last_window_time) > 120.0
+                
                 if app_name not in ignored:
-                    if app_name != self._last_window_app and self.event_bus:
+                    if (is_new_app or is_new_title or is_time_gap) and self.event_bus:
                         from arova.core.timeline.events import CATEGORY_ENVIRONMENT
+                        desc = f"{app_name} became active." if is_new_app else (f"Switched window to '{window_title}'" if is_new_title else f"Resumed activity in {app_name}.")
                         self.event_bus.emit("timeline", "create", {
                             "category": CATEGORY_ENVIRONMENT,
                             "title": f"App Active: {app_name}",
-                            "description": f"{app_name} became active.",
+                            "description": desc,
                             "source": "workspace_engine",
                             "importance": 0.2,  # Low importance so it doesn't spam Important view
                             "metadata": {
                                 "app_name": app_name,
-                                "window_title": event.window_data.title
+                                "window_title": window_title
                             }
                         })
                         self._last_window_app = app_name
+                        self._last_window_title = window_title
+                        self._last_window_time = now
                 
                 # Update topology
                 ws_id = self.active_workspace_id

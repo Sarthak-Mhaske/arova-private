@@ -21,6 +21,32 @@ class ModelRuntime:
             candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED)
         return candidate.id
 
+    async def generate(self,
+                       messages: List[Dict[str, Any]],
+                       system_prompt: str = "",
+                       depth: ReasoningDepth = ReasoningDepth.STANDARD,
+                       budget: Optional[ReasoningBudget] = None) -> str:
+        """Convenience non-streaming text generation method."""
+        import asyncio
+        if budget is None:
+            budget = ReasoningBudget()
+        model_name = self._select_model(depth)
+        loop = asyncio.get_running_loop()
+        try:
+            result_text = await loop.run_in_executor(
+                None,
+                self._sync_groq_call,
+                messages,
+                system_prompt,
+                model_name,
+                budget.max_tokens,
+                False
+            )
+            return str(result_text)
+        except Exception as e:
+            logging.error(f"ModelRuntime.generate failed: {e}")
+            raise e
+
     async def invoke_structured(self, 
                                 messages: List[Dict[str, Any]], 
                                 system_prompt: str, 
@@ -53,23 +79,34 @@ class ModelRuntime:
                     False # streaming
                 )
                 
-                # Parse JSON
-                # Clean up markdown code blocks if the LLM output them
+                # Robust JSON extraction: handles codeblocks and conversational intro/outro text
                 text = result_text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.startswith("```"):
-                    text = text[3:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                    
-                return json.loads(text.strip())
+                if "```json" in text:
+                    text = text.split("```json", 1)[1].split("```", 1)[0].strip()
+                elif "```" in text:
+                    text = text.split("```", 1)[1].split("```", 1)[0].strip()
+
+                if "{" in text and "}" in text:
+                    first_brace = text.find("{")
+                    last_brace = text.rfind("}")
+                    text = text[first_brace:last_brace + 1].strip()
+
+                return json.loads(text)
             except json.JSONDecodeError as e:
-                logging.warning(f"Failed to parse LLM JSON (Attempt {attempt+1}): {e}")
+                logging.warning(f"Failed to parse LLM JSON (Attempt {attempt+1}): {e}. Raw text: {result_text[:200]}")
                 if attempt == retries - 1:
-                    return {"error": "JSON parse failed", "raw": result_text}
+                    # Secondary attempt: try finding JSON object in raw un-stripped result_text
+                    if "{" in result_text and "}" in result_text:
+                        try:
+                            sub = result_text[result_text.find("{"):result_text.rfind("}")+1]
+                            return json.loads(sub)
+                        except Exception:
+                            pass
+                    return {"content": result_text}
             except Exception as e:
                 logging.error(f"ModelRuntime invocation failed: {e}")
+                if 'result_text' in locals():
+                    return {"content": result_text}
                 return {"error": str(e)}
 
     async def invoke_stream(self, messages: List[Dict[str, Any]], system_prompt: str, depth: ReasoningDepth = ReasoningDepth.STANDARD, budget: Optional[ReasoningBudget] = None):

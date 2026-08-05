@@ -1,13 +1,15 @@
 import React, { useEffect } from 'react';
 import { SurfaceHeader, SurfaceSection, InfoRow, EmptyState } from '../ui/CoherenceComponents';
-import { useAwarenessState } from '../../state';
+import { useAwarenessState, useEnvironmentState } from '../../state';
 import { socket } from '../../runtime/socket';
 
 export const AwarenessSurface: React.FC = () => {
   const { policy, hidden, visible, activeWorkspace } = useAwarenessState();
+  const { roomState, contextState } = useEnvironmentState();
 
   useEffect(() => {
     socket.sendEvent({ type: 'workspace.get_request' });
+    socket.sendEvent({ type: 'awareness.get_request' });
   }, []);
 
   if (!policy) {
@@ -20,10 +22,17 @@ export const AwarenessSurface: React.FC = () => {
   }
 
   const toggleLayer = (layer: keyof typeof policy, current: boolean) => {
+    const nextVal = !current;
+    if (policy) {
+      useAwarenessState.getState().setPolicy({
+        ...policy,
+        [layer]: { ...(policy as any)[layer], enabled: nextVal }
+      });
+    }
     socket.sendEvent({
       type: 'awareness.update_request',
       layer,
-      enabled: !current
+      enabled: nextVal
     });
   };
 
@@ -35,7 +44,10 @@ export const AwarenessSurface: React.FC = () => {
     { key: 'vision', label: 'Vision', enabled: policy?.vision?.enabled ?? false, desc: policy?.vision?.description ?? '' },
   ];
 
-  const confidence = activeWorkspace?.confidence_score || activeWorkspace?.understanding?.confidence?.score || 97;
+  const rawConfidence = activeWorkspace?.confidence_score || activeWorkspace?.understanding?.confidence?.score;
+  const confidence = rawConfidence ? `${rawConfidence}%` : (activeWorkspace ? '92%' : '--');
+  const focusedWindow = (Array.isArray(roomState?.workspace) && roomState.workspace[0]) || activeWorkspace?.title || roomState?.mode || 'No Active Window';
+  const currentAttention = contextState?.current_intent || roomState?.attention || (activeWorkspace?.title ? 'Workspace Flow' : 'Tracking Activity');
 
   return (
     <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
@@ -45,15 +57,15 @@ export const AwarenessSurface: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
         <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focused Window</div>
-          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeWorkspace?.title || 'VS Code'}</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{focusedWindow}</div>
         </div>
         <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Attention</div>
-          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-violet)' }}>{activeWorkspace?.understanding?.momentum?.next_action ? 'Active Coding Flow' : 'Coding / Engineering'}</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-violet)' }}>{currentAttention}</div>
         </div>
         <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Confidence</div>
-          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-gold)' }}>{confidence}%</div>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-gold)' }}>{confidence}</div>
         </div>
         <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Window Observer</div>

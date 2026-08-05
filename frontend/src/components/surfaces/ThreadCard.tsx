@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { executeThreadAction } from '../../ipc';
+import { useSurfaceState, useCognitionState } from '../../state';
 
 interface ThreadCardProps {
   thread: {
@@ -43,6 +44,23 @@ export const ThreadCard: React.FC<ThreadCardProps> = ({ thread }) => {
 
   const handleAction = (action: string, payload: any = {}) => {
     executeThreadAction(action, thread.thread_id, payload);
+    const { threads, setThreads } = useCognitionState.getState();
+    
+    if (action === 'resume') {
+      import('../../runtime/socket').then(({ socket }) => {
+        socket.sendEvent({ type: 'client.resume_thread', thread_id: thread.thread_id });
+      });
+      useSurfaceState.getState().closeSurface();
+    } else if (action === 'delete') {
+      import('../../runtime/socket').then(({ socket }) => {
+        socket.sendEvent({ type: 'client.delete_thread', thread_id: thread.thread_id });
+      });
+      setThreads(threads.filter(t => t.thread_id !== thread.thread_id));
+    } else if (action === 'archive') {
+      setThreads(threads.map(t => t.thread_id === thread.thread_id ? { ...t, state: 'archived' } : t));
+    } else if (action === 'pin') {
+      setThreads(threads.map(t => t.thread_id === thread.thread_id ? { ...t, pinned: !t.pinned } : t));
+    }
     setShowMenu(false);
   };
 
@@ -84,7 +102,8 @@ export const ThreadCard: React.FC<ThreadCardProps> = ({ thread }) => {
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)', minWidth: '120px'
           }}>
             <button onClick={() => handleAction('pin')} style={menuButtonStyle}>{thread.pinned ? 'Unpin' : 'Pin'}</button>
-            <button onClick={() => handleAction('archive')} style={{...menuButtonStyle, color: '#e55'}}>Archive</button>
+            <button onClick={() => handleAction('archive')} style={menuButtonStyle}>Archive</button>
+            <button onClick={() => handleAction('delete')} style={{...menuButtonStyle, color: '#f55'}}>Delete Thread</button>
           </div>
         )}
       </div>

@@ -32,11 +32,11 @@ class LiveOSAmbientProvider(AmbientProvider):
         self._has_xdotool = shutil.which("xdotool") is not None
         self._has_xprintidle = shutil.which("xprintidle") is not None
         self._last_context = AmbientContext(
-            active_app="Arova Architecture & Development",
-            window_title="Arova Cognitive Substrate",
-            workspace="1",
+            active_app=None,
+            window_title=None,
+            workspace=None,
             is_idle=False,
-            time_of_day="morning"
+            time_of_day="unknown"
         )
         self._event_callbacks: list = []
 
@@ -62,9 +62,9 @@ class LiveOSAmbientProvider(AmbientProvider):
         else:
             tod = "night"
 
-        active_app = self._last_context.active_app or "Arova Architecture & Development"
-        window_title = self._last_context.window_title or "Arova Cognitive Substrate"
-        workspace = self._last_context.workspace or "1"
+        active_app = self._last_context.active_app if self._last_context else None
+        window_title = self._last_context.window_title if self._last_context else None
+        workspace = (self._last_context.workspace if self._last_context else None) or "1"
         is_idle = False
         idle_time_seconds = 0.0
 
@@ -117,13 +117,26 @@ class LiveOSAmbientProvider(AmbientProvider):
         except Exception as e:
             logger.debug(f"LiveOSAmbientProvider idle check error: {e}")
 
+        # Fetch cross-platform ambient data
+        open_windows = []
+        playing_media = []
+        try:
+            from arova.core.platform.services.backend import PlatformBackend
+            backend = PlatformBackend.create()
+            open_windows = backend.get_open_windows()
+            playing_media = backend.get_playing_media()
+        except Exception as e:
+            logger.debug(f"LiveOSAmbientProvider cross-platform ambient fetch failed: {e}")
+
         self._last_context = AmbientContext(
             active_app=active_app,
             window_title=window_title,
             workspace=workspace,
             is_idle=is_idle,
             idle_time_seconds=idle_time_seconds,
-            time_of_day=tod
+            time_of_day=tod,
+            open_windows=open_windows,
+            playing_media=playing_media
         )
         return self._last_context
 

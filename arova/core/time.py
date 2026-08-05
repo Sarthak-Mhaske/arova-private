@@ -35,3 +35,37 @@ class LatencyTracker:
         if start_time is None:
             return 0.0
         return RuntimeClock.now() - start_time
+
+def get_live_temporal_context_prompt(last_active_timestamp: float | None = None) -> str:
+    """
+    Generates a live wall-clock date, time, timezone, and user absence gap prompt block.
+    Injected directly into LLM prompts so Arova always has exact real-world time awareness.
+    """
+    import datetime
+    now = datetime.datetime.now()
+    now_str = now.strftime("%A, %B %d, %Y at %I:%M %p")
+    tz_str = time.tzname[0] if time.tzname else "Local Time"
+    
+    absence_lines = []
+    if last_active_timestamp and last_active_timestamp > 0:
+        elapsed_seconds = time.time() - last_active_timestamp
+        if elapsed_seconds >= 60:
+            hours = int(elapsed_seconds // 3600)
+            minutes = int((elapsed_seconds % 3600) // 60)
+            last_dt = datetime.datetime.fromtimestamp(last_active_timestamp)
+            if hours > 0:
+                absence_lines.append(f"- User Absence Gap: User was away for ~{hours}h {minutes}m (Last active: {last_dt.strftime('%A %I:%M %p')})")
+            else:
+                absence_lines.append(f"- User Absence Gap: User was away for ~{minutes} minutes")
+
+    absence_block = ("\n" + "\n".join(absence_lines)) if absence_lines else ""
+
+    return (
+        f"========================\n"
+        f"LIVE TEMPORAL & TIME CONTEXT\n"
+        f"========================\n"
+        f"- Current Date & Time: {now_str}\n"
+        f"- Timezone: {tz_str}"
+        f"{absence_block}\n"
+        f"IMPORTANT: You ALWAYS have access to real-time information and the exact current date/time stated above. NEVER state 'I don't have access to real-time information'."
+    )

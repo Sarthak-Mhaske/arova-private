@@ -54,53 +54,69 @@ class RoutingPolicy:
     Translates a Presence Style (auto/coding/instant/hybrid/local/custom) into
     an ordered preference list of providers for each Capability.
     
-    Presence Style -> RoutingPolicy -> CapabilityRouter -> Provider
+    If `preferred_provider` is set, it deterministically prioritizes it.
+    If `allow_fallback` is False, it strictly returns only the preferred provider.
     """
 
-    def __init__(self, presence_style: str = "auto", custom_routing: Dict[str, str] = None):
+    def __init__(self, 
+                 presence_style: str = "auto", 
+                 custom_routing: Dict[str, str] = None,
+                 preferred_provider: str = None,
+                 allow_fallback: bool = True):
         self._presence_style = presence_style
         self._custom_routing = custom_routing or {}
+        self._preferred_provider = preferred_provider
+        self._allow_fallback = allow_fallback
         
-        self._policy = ROUTING_POLICIES.get(presence_style, ROUTING_POLICIES["auto"]).copy()
-        
-        if presence_style == "custom":
-            self._apply_custom_routing()
-            
-        logger.info(f"RoutingPolicy: Active policy = '{presence_style}'")
+        self._build_policy()
+        logger.info(f"RoutingPolicy initialized: style='{presence_style}', preferred='{preferred_provider}', fallback={allow_fallback}")
 
-    def _apply_custom_routing(self):
-        """Overrides the primary provider for capabilities defined in custom_routing."""
-        # Use auto as the base fallback strategy for custom
-        base_policy = ROUTING_POLICIES["auto"]
+    def _build_policy(self):
+        base_style = self._presence_style
+        if base_style not in ROUTING_POLICIES and base_style != "custom":
+            base_style = "auto"
+            
+        base_policy = ROUTING_POLICIES.get(base_style, ROUTING_POLICIES["auto"])
+        self._policy = {}
         
         for cap in Capability:
+            candidates = base_policy.get(cap, []).copy()
+            
+            # 1. Custom routing overrides specific capabilities
             if cap.value in self._custom_routing:
-                chosen_provider = self._custom_routing[cap.value]
-                # Keep the base fallback list, but put the chosen provider first
-                fallback = [p for p in base_policy.get(cap, []) if p != chosen_provider]
-                self._policy[cap] = [chosen_provider] + fallback
-            else:
-                self._policy[cap] = base_policy.get(cap, ["ollama"])
+                chosen = self._custom_routing[cap.value]
+                if chosen in candidates:
+                    candidates.remove(chosen)
+                candidates.insert(0, chosen)
+                
+            # 2. Global preferred provider deterministically takes priority (if supported for capability)
+            if self._preferred_provider:
+                if self._preferred_provider in candidates:
+                    candidates.remove(self._preferred_provider)
+                    candidates.insert(0, self._preferred_provider)
+                
+            # 3. Strict mode (no fallback)
+            if not self._allow_fallback:
+                primary = candidates[0] if candidates else None
+                candidates = [primary] if primary else []
+                
+            self._policy[cap] = candidates
 
     @property
     def presence_style(self) -> str:
         return self._presence_style
 
-    def set_presence_style(self, style: str, custom_routing: Dict[str, str] = None):
-        if style not in ROUTING_POLICIES and style != "custom":
-            logger.warning(f"RoutingPolicy: Unknown style '{style}', defaulting to 'auto'.")
-            style = "auto"
-            
+    def set_presence_style(self, style: str, custom_routing: Dict[str, str] = None, preferred_provider: str = None, allow_fallback: bool = None):
         self._presence_style = style
         if custom_routing is not None:
             self._custom_routing = custom_routing
+        if preferred_provider is not None:
+            self._preferred_provider = preferred_provider
+        if allow_fallback is not None:
+            self._allow_fallback = allow_fallback
             
-        if style == "custom":
-            self._apply_custom_routing()
-        else:
-            self._policy = ROUTING_POLICIES[style].copy()
-            
-        logger.info(f"RoutingPolicy: Switched to '{style}'")
+        self._build_policy()
+        logger.info(f"RoutingPolicy: Switched to style '{style}' (preferred={self._preferred_provider}, fallback={self._allow_fallback})")
 
     def get_provider_order(self, capability: Capability) -> List[str]:
         """Return the ordered list of provider names for a given capability under the active policy."""

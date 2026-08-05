@@ -22,8 +22,8 @@ class MockProvider(CognitiveProvider):
 
     @property
     def supported_capabilities(self) -> Set[Capability]:
-        # Mock supports everything — it's the last resort
-        return {Capability.CHAT, Capability.REASONING, Capability.SUMMARIZATION, Capability.EMBEDDINGS, Capability.VISION}
+        # Only support CHAT so user gets explicit fallback message in UI. Never support embeddings or summaries.
+        return {Capability.CHAT}
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 512) -> str:
@@ -36,5 +36,4 @@ class MockProvider(CognitiveProvider):
         yield MOCK_RESPONSE
 
     async def embed(self, text: str) -> List[float]:
-        # Return a zero vector so downstream doesn't crash
-        return [0.0] * 384
+        raise RuntimeError("Inference Unavailable: Cannot generate real embeddings without a healthy provider.")

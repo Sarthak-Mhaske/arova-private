@@ -122,5 +122,8 @@ class PolicyRuntime:
     async def resolve_approval(self, approval_id: str, approved: bool):
         """Called by RuntimeFacade when client responds."""
         if approval_id in self._approval_locks:
+            if len(self._approved_cache) >= 1000 and approval_id not in self._approved_cache:
+                first_key = next(iter(self._approved_cache))
+                del self._approved_cache[first_key]
             self._approved_cache[approval_id] = approved
             self._approval_locks[approval_id].set()

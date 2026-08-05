@@ -57,6 +57,7 @@ class ActivityCaptureEngine:
         # References to downstream engines (injected during runtime initialization)
         self.timeline_engine: Optional[Any] = None
         self.workspace_manager: Optional[Any] = None
+        self.working_memory_runtime: Optional[Any] = None
         self.memory_runtime: Optional[Any] = None
         self.sync_store: Optional[Any] = None
 
@@ -150,7 +151,14 @@ class ActivityCaptureEngine:
             except Exception as e:
                 logger.debug(f"Could not forward canonical event to workspace_manager: {e}")
 
-        # 5. Feed into EventLogSyncStore (if attached)
+        # 5. Feed into WorkingMemoryRuntime (`HYP-06` & `HYP-07`)
+        if self.working_memory_runtime:
+            try:
+                self.working_memory_runtime.ingest_event(event.to_dict())
+            except Exception as e:
+                logger.debug(f"Could not forward canonical event to working_memory_runtime: {e}")
+
+        # 6. Feed into EventLogSyncStore (if attached)
         if self.sync_store:
             try:
                 self.sync_store.append_event(event)

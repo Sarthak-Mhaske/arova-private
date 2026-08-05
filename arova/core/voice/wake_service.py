@@ -2,10 +2,13 @@ from dataclasses import dataclass
 from typing import Optional
 from arova.core.events import RuntimeEventBus, EventPayload
 from arova.core.time import RuntimeClock
-import time
 import logging
+import time
 import numpy as np
-from openwakeword.model import Model
+try:
+    from openwakeword.model import Model
+except ImportError:
+    Model = None
 
 @dataclass(frozen=True, kw_only=True)
 class WakeEvent(EventPayload):

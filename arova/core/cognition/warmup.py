@@ -18,6 +18,9 @@ class PredictiveCacheTopology:
         self.last_warmed_time = 0.0
         
     def populate(self, trigger_source: str, context: dict):
+        if len(self.semantic_cache) >= 50 and trigger_source not in self.semantic_cache:
+            first_key = next(iter(self.semantic_cache))
+            del self.semantic_cache[first_key]
         self.semantic_cache[trigger_source] = context
         self.last_warmed_time = time.time()
         

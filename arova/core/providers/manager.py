@@ -120,12 +120,12 @@ class ProviderManager:
         """
         for provider_name in preferred_order:
             provider = self._providers.get(provider_name)
-            if provider and capability in provider.supported_capabilities and provider.health.available:
+            if provider and capability in provider.supported_capabilities and provider.health.is_available:
                 return provider
 
         # All preferred providers failed — try ANY healthy provider
         for provider in self._providers.values():
-            if provider.name != "mock" and capability in provider.supported_capabilities and provider.health.available:
+            if provider.name != "mock" and capability in provider.supported_capabilities and provider.health.is_available:
                 return provider
 
         # Everything is dead

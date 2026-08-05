@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SurfaceHeader, EmptyState, LoadingState } from '../ui/CoherenceComponents';
 import { socket } from '../../runtime/socket';
 import { useSurfaceState } from '../../state';
@@ -22,20 +22,32 @@ export const TimelineSurface: React.FC = () => {
   const [importantOnly, setImportantOnly] = useState(false);
   const [narrativeMode, setNarrativeMode] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const reqIdRef = useRef(`timeline_${Date.now()}`);
 
-  useEffect(() => {
-    // Request initial timeline state
+  const fetchTimeline = () => {
     socket.sendEvent({
       type: 'timeline.get_request',
       limit: 50,
-      req_id: reqIdRef.current
+      req_id: `tl_${Date.now()}`
     });
+  };
+
+  useEffect(() => {
+    // Request initial timeline state
+    fetchTimeline();
+
+    // 10s periodic refresh for live updates
+    const interval = setInterval(fetchTimeline, 10000);
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchTimeline();
+      }
+    };
 
     const handleEvent = (e: CustomEvent) => {
       const payload = e.detail;
       
-      if (payload.type === 'timeline.query_response' && payload.req_id === reqIdRef.current) {
+      if (payload.type === 'timeline.query_response') {
         setEvents(payload.events || []);
         setIsLoading(false);
       } else if (payload.type === 'TIMELINE_EVENT') {
@@ -47,8 +59,14 @@ export const TimelineSurface: React.FC = () => {
     };
 
     window.addEventListener('arova-event', handleEvent as EventListener);
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
     return () => {
+      clearInterval(interval);
       window.removeEventListener('arova-event', handleEvent as EventListener);
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
     };
   }, []);
 
@@ -92,7 +110,7 @@ export const TimelineSurface: React.FC = () => {
             gap: '6px'
           }}
         >
-          <span>⚡ View Canonical Activity Stream (Phase 6)</span>
+          <span>⚡ View Canonical Activity Stream</span>
           <span>→</span>
         </button>
       </div>

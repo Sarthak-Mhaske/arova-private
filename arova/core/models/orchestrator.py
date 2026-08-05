@@ -24,8 +24,15 @@ class ModelOrchestrator:
         os_config = get_config_manager().load_config()
         presence_style = os_config.get("presence_style", "instant")
         custom_routing = os_config.get("custom_routing", {})
+        preferred_provider = os_config.get("preferred_provider")
+        allow_fallback = os_config.get("allow_fallback", True)
         
-        self.routing_policy = RoutingPolicy(presence_style=presence_style, custom_routing=custom_routing)
+        self.routing_policy = RoutingPolicy(
+            presence_style=presence_style, 
+            custom_routing=custom_routing,
+            preferred_provider=preferred_provider,
+            allow_fallback=allow_fallback
+        )
         self.router = CapabilityRouter(
             provider_manager=self.provider_manager, 
             routing_policy=self.routing_policy,
@@ -35,6 +42,21 @@ class ModelOrchestrator:
         # Phase 8 Cognitive Action Router components
         from arova.core.models.router.ambiguity import AmbiguityRouterLLM
         self.ambiguity_router = AmbiguityRouterLLM(self.provider_manager, event_bus=event_bus)
+
+    async def generate(self,
+                       messages: List[Dict[str, Any]],
+                       system_prompt: str = "",
+                       depth: ReasoningDepth = ReasoningDepth.STANDARD,
+                       budget: Optional[ReasoningBudget] = None,
+                       capability: Capability = Capability.CHAT,
+                       max_tokens: int = 1024) -> str:
+        """Convenience method delegating to CapabilityRouter."""
+        return await self.router.generate(
+            messages=messages,
+            system_prompt=system_prompt,
+            capability=capability,
+            max_tokens=max_tokens
+        )
 
     async def resolve_cognitive_action(self, situation: 'CognitiveSituation') -> Capability:
         """
@@ -97,15 +119,23 @@ class ModelOrchestrator:
         import json
         text = await self.router.generate(messages, system_prompt, capability=cap, max_tokens=max_tokens)
         
+        if text.strip() == "I'm currently unable to connect to my cognitive providers. Please check the network or provider settings.":
+            raise RuntimeError("Cognitive providers offline")
+        
         # Attempt to parse JSON if structured
         try:
             t = text.strip()
             if t.startswith("```json"): t = t[7:]
             if t.startswith("```"): t = t[3:]
             if t.endswith("```"): t = t[:-3]
-            return json.loads(t.strip())
+            t = t.strip()
+            return json.loads(t)
         except Exception:
-            return {"content": text}
+            try:
+                import ast
+                return ast.literal_eval(t)
+            except Exception:
+                return {"content": text}
 
     async def invoke_stream(self, 
                             messages: List[Dict[str, Any]], 

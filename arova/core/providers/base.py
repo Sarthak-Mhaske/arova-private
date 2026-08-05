@@ -58,6 +58,11 @@ class ProviderHealth:
     last_success: float = 0.0       # epoch timestamp
     consecutive_failures: int = 0
     last_error: str = ""
+    rate_limited_until: float = 0.0
+
+    @property
+    def is_available(self) -> bool:
+        return self.available and time.time() > self.rate_limited_until
 
     @property
     def availability_pct(self) -> float:
@@ -83,9 +88,18 @@ class ProviderHealth:
         self.consecutive_failures += 1
         self.success_rate = max(0.0, self.success_rate * 0.8)
         self.last_error = reason
-        if self.consecutive_failures >= 3 or "401" in reason or "Invalid" in reason:
+
+        reason_lower = reason.lower()
+        is_auth_error = "401" in reason or "invalid" in reason_lower
+        is_rate_limit = "429" in reason or "rate limit" in reason_lower or "too many requests" in reason_lower
+
+        if self.consecutive_failures >= 3 or is_auth_error:
             self.available = False
             self.status = reason if reason else "unreachable"
+
+        if is_rate_limit:
+            self.rate_limited_until = time.time() + 300
+            self.status = "Rate Limited"
 
     def to_dict(self) -> dict:
         return {

@@ -3,7 +3,10 @@ import json
 import time
 import logging
 import asyncio
-import aiohttp
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Set
@@ -270,74 +273,99 @@ class ModelRegistry:
                 latency_ms=420, cost_per_1k_tokens=0.59, selection_reason=["Baseline Groq fast chat model"]
             ),
             ModelCandidate(
-                id="qwen-2.5-32b", provider="groq", context_window=131072,
+                id="openai/gpt-oss-120b", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=510, cost_per_1k_tokens=0.65, selection_reason=["Baseline Groq reasoning model"]
+                latency_ms=500, cost_per_1k_tokens=0.60, selection_reason=["Baseline Groq reasoning model"]
+            ),
+            ModelCandidate(
+                id="qwen/qwen3.6-27b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=500, cost_per_1k_tokens=3.00, selection_reason=["Baseline Groq vision & reasoning model"]
+            ),
+            ModelCandidate(
+                id="openai/gpt-oss-20b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=210, cost_per_1k_tokens=0.30, selection_reason=["Baseline Groq fast chat model"]
             ),
             ModelCandidate(
                 id="llama-3.1-8b-instant", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=210, cost_per_1k_tokens=0.05, selection_reason=["Baseline Groq instant low-latency model"]
+                latency_ms=150, cost_per_1k_tokens=0.08, selection_reason=["Baseline Groq instant low-latency model"]
             )
         ]
         self._candidates["openai"] = [
             ModelCandidate(
-                id="gpt-4o-mini", provider="openai", context_window=128000,
+                id="gpt-5.6-terra", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=850, cost_per_1k_tokens=2.50, selection_reason=["Baseline OpenAI reasoning model"]
+            ),
+            ModelCandidate(
+                id="gpt-5.6-luna", provider="openai", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
                 latency_ms=450, cost_per_1k_tokens=0.15, selection_reason=["Baseline OpenAI fast model"]
             ),
             ModelCandidate(
-                id="gpt-4o", provider="openai", context_window=128000,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=850, cost_per_1k_tokens=2.50, selection_reason=["Baseline OpenAI reasoning model"]
+                id="gpt-5.4-mini", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
+                latency_ms=250, cost_per_1k_tokens=0.05, selection_reason=["Baseline OpenAI mini model"]
             )
         ]
         self._candidates["ollama"] = [
             ModelCandidate(
-                id="llama3", provider="ollama", context_window=8192,
-                supports_tools=False, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=1200, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Llama3 model"]
+                id="llama3.3", provider="ollama", context_window=128000,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=1200, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Llama 3.3 model"]
             ),
             ModelCandidate(
-                id="qwen2.5:14b", provider="ollama", context_window=32768,
-                supports_tools=False, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=1600, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Qwen reasoning model"]
+                id="qwen2.5-coder:32b", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=1600, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Qwen reasoning and coding model"]
             )
         ]
         self._candidates["anthropic"] = [
             ModelCandidate(
-                id="claude-3-5-sonnet-20241022", provider="anthropic", context_window=200000,
+                id="claude-opus-5", provider="anthropic", context_window=1000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=650, cost_per_1k_tokens=3.00, selection_reason=["Baseline Anthropic coding and reasoning model"]
+                latency_ms=850, cost_per_1k_tokens=5.00, selection_reason=["Baseline Anthropic frontier reasoning model"]
             ),
             ModelCandidate(
-                id="claude-3-5-haiku-20241022", provider="anthropic", context_window=200000,
+                id="claude-sonnet-5", provider="anthropic", context_window=1000000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=650, cost_per_1k_tokens=2.00, selection_reason=["Baseline Anthropic coding and reasoning model"]
+            ),
+            ModelCandidate(
+                id="claude-haiku-4.5", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=350, cost_per_1k_tokens=0.80, selection_reason=["Baseline Anthropic fast chat model"]
+                latency_ms=350, cost_per_1k_tokens=1.00, selection_reason=["Baseline Anthropic fast chat model"]
             )
         ]
         self._candidates["gemini"] = [
             ModelCandidate(
-                id="gemini-1.5-pro", provider="gemini", context_window=1000000,
+                id="gemini-3.5-flash", provider="gemini", context_window=2000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=750, cost_per_1k_tokens=1.25, selection_reason=["Baseline Google Gemini long-context reasoning model"]
+                latency_ms=750, cost_per_1k_tokens=1.25, selection_reason=["Baseline Google Gemini most intelligent model"]
             ),
             ModelCandidate(
-                id="gemini-1.5-flash", provider="gemini", context_window=1000000,
+                id="gemini-3.6-flash", provider="gemini", context_window=2000000,
                 supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
                 latency_ms=300, cost_per_1k_tokens=0.07, selection_reason=["Baseline Google Gemini fast chat model"]
             )
         ]
         self._candidates["openrouter"] = [
             ModelCandidate(
-                id="deepseek/deepseek-r1", provider="openrouter", context_window=131072,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=550, cost_per_1k_tokens=0.55, selection_reason=["Baseline OpenRouter DeepSeek reasoning model"]
+                id="openrouter/auto", provider="openrouter", context_window=2000000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=500, cost_per_1k_tokens=1.00, selection_reason=["Baseline OpenRouter auto-routing meta-model"]
             ),
             ModelCandidate(
-                id="anthropic/claude-3.5-sonnet", provider="openrouter", context_window=200000,
+                id="mistralai/mistral-large", provider="openrouter", context_window=128000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=450, cost_per_1k_tokens=2.00, selection_reason=["Baseline OpenRouter Mistral Large model"]
+            ),
+            ModelCandidate(
+                id="anthropic/claude-sonnet-5", provider="openrouter", context_window=1000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=650, cost_per_1k_tokens=3.00, selection_reason=["Baseline OpenRouter Claude coding model"]
+                latency_ms=650, cost_per_1k_tokens=2.00, selection_reason=["Baseline OpenRouter Claude coding model"]
             )
         ]
 

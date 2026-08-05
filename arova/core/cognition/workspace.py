@@ -53,9 +53,9 @@ SignalsLayer = InterpretationLayer
 
 @dataclass
 class WorkspaceMomentum:
-    goal: str = "Observing activity and forming workspace understanding..."
+    goal: Optional[str] = None
     progress_percentage: int = 0
-    confidence_level: str = "Low"  # High | Medium | Low
+    confidence_level: str = "Unavailable"  # High | Medium | Low | Unavailable
     current_blocker: Optional[str] = None
     next_action: Optional[str] = None
 
@@ -83,7 +83,7 @@ class WorkspaceHealth:
 
 @dataclass
 class WorkspaceConfidence:
-    score: int = 20  # 0 to 100 percentage
+    score: Optional[int] = None  # 0 to 100 percentage or None if uncalculated
     reasons: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -96,7 +96,7 @@ class WorkspaceConfidence:
 
 @dataclass
 class ItemConfidence:
-    score: int = 85
+    score: Optional[int] = None
     reasons: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -164,6 +164,7 @@ class UnderstandingLayer:
     confidence_layer: ConfidenceLayer = field(default_factory=ConfidenceLayer)
     decisions: List[str] = field(default_factory=list)
     open_questions: List[str] = field(default_factory=list)
+    completed_work: List[Dict[str, Any]] = field(default_factory=list)
     story_narrative: List[str] = field(default_factory=list)
     explainability_reasons: List[str] = field(default_factory=list)
     state_summary: str = "Active trajectory progression"
@@ -173,12 +174,23 @@ class UnderstandingLayer:
     last_synthesized_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
-        d = asdict(self)
-        d["momentum"] = self.momentum.to_dict()
-        d["health"] = self.health.to_dict()
-        d["confidence"] = self.confidence.to_dict()
-        d["confidence_layer"] = self.confidence_layer.to_dict()
-        return d
+        import copy
+        return {
+            "momentum": self.momentum.to_dict(),
+            "health": self.health.to_dict(),
+            "confidence": self.confidence.to_dict(),
+            "confidence_layer": self.confidence_layer.to_dict(),
+            "decisions": copy.deepcopy(self.decisions),
+            "open_questions": copy.deepcopy(self.open_questions),
+            "completed_work": copy.deepcopy(self.completed_work),
+            "story_narrative": copy.deepcopy(self.story_narrative),
+            "explainability_reasons": copy.deepcopy(self.explainability_reasons),
+            "state_summary": self.state_summary,
+            "what_changed": self.what_changed,
+            "delta_changes": copy.deepcopy(self.delta_changes),
+            "trajectory_story": self.trajectory_story,
+            "last_synthesized_at": self.last_synthesized_at,
+        }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'UnderstandingLayer':
@@ -255,21 +267,21 @@ class CognitiveWorkspace:
         
         # 2. Why am I doing it?
         why = m.goal
-        if cl.goal.score < 85 and c.score < 85:
-            why = f"I think the goal is: {why} (Confidence: {cl.goal.score}%)"
+        if (cl.goal.score or 0) < 85 and (c.score or 0) < 85:
+            why = f"I think the goal is: {why} (Confidence: {cl.goal.score or 0}%)"
             
         # 3. How far am I?
         how_far = f"You are around {m.progress_percentage}% along. Health status: {u.health.status}."
         
         # 4. What's blocking me?
         blocker = m.current_blocker if m.current_blocker else "No critical blockers right now."
-        if m.current_blocker and cl.blocker.score < 85 and c.score < 85:
-            blocker = f"Possible blocker: {blocker} ({cl.blocker.score}% certainty)"
+        if m.current_blocker and (cl.blocker.score or 0) < 85 and (c.score or 0) < 85:
+            blocker = f"Possible blocker: {blocker} ({cl.blocker.score or 0}% certainty)"
             
         # 5. What should I do next?
         next_do = m.next_action if m.next_action else "Continue observing current signals."
-        if m.next_action and cl.next_action.score < 85 and c.score < 85:
-            next_do = f"Suggested focus: {next_do} ({cl.next_action.score}% certainty)"
+        if m.next_action and (cl.next_action.score or 0) < 85 and (c.score or 0) < 85:
+            next_do = f"Suggested focus: {next_do} ({cl.next_action.score or 0}% certainty)"
             
         # 6. Why do you believe that?
         reasons_text = ", ".join(c.reasons) if c.reasons else "Initial observations."
@@ -329,26 +341,21 @@ class CognitiveWorkspace:
         resources_str = "\n".join([f"• {name} ({res.get('identity', name)})" for name, res in self.reality.resources.items()]) if self.reality.resources else "• Active working files"
         
         return (
-            f"=== Active Workspace Context (High Priority) ===\n"
-            f"Project: {self.title}\n"
-            f"Domain: {self.domain_type}\n"
-            f"Goal / Trajectory: {m.goal}\n"
-            f"Status: {u.health.status} ({m.progress_percentage}% complete)\n\n"
-            f"What recently changed / finished:\n"
-            f"- {u.what_changed or 'Ongoing trajectory progression'}\n\n"
-            f"Current blocker:\n"
-            f"- {m.current_blocker or 'None'}\n\n"
-            f"Important decisions (already settled):\n"
-            f"{decisions_str}\n\n"
-            f"Open questions:\n"
-            f"{questions_str}\n\n"
-            f"Prepared resources:\n"
-            f"{resources_str}\n\n"
-            f"Next action:\n"
-            f"- {m.next_action or 'Continue with current development flow'}\n"
-            f"================================================\n"
-            f"Instruction: When answering questions like 'What was I doing?', 'Why did we decide X?', "
-            f"or 'What is next?', ALWAYS prioritize this Active Workspace Context over general identity or assumptions."
+            f"========================\n"
+            f"OBSERVED USER STATE (Telemetry)\n"
+            f"========================\n"
+            f"Everything in this block describes the USER's activity and project context.\n\n"
+            f"User's Active Project: {self.title}\n"
+            f"Domain: {self.domain_type}\n\n"
+            f"--- FACTS (Directly Observed Telemetry) ---\n"
+            f"• User's active resources: {resources_str}\n"
+            f"• What the USER recently changed / finished: {u.what_changed or 'Ongoing trajectory progression'}\n"
+            f"• Settled decisions: {decisions_str}\n\n"
+            f"--- INFERENCES & HYPOTHESES (Context Understanding) ---\n"
+            f"• User's Current Goal: {m.goal}\n"
+            f"• Current blocker the USER is facing: {m.current_blocker or 'None'}\n"
+            f"• User's next intended action: {m.next_action or 'Continue with current development flow'}\n"
+            f"========================"
         )
 
     def to_dict(self) -> Dict[str, Any]:

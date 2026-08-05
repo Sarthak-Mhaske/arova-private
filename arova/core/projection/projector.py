@@ -17,10 +17,11 @@ class RuntimeProjector:
     Shields the frontend from internal fatigue vectors, raw intent probabilities, and architectural routing.
     Contains zero fabricated runtime or placeholder data.
     """
-    def __init__(self, session_manager: Any, thread_manager: Any, environment_graph: Optional[Any] = None):
+    def __init__(self, session_manager: Any, thread_manager: Any, environment_graph: Optional[Any] = None, execution_runtime: Optional[Any] = None):
         self.session_manager = session_manager
         self.thread_manager = thread_manager
         self.environment_graph = environment_graph
+        self.execution_runtime = execution_runtime
         
     def project(self, orb_override: Optional[Dict[str, Any]] = None) -> RuntimeProjection:
         projection = RuntimeProjection()
@@ -39,7 +40,8 @@ class RuntimeProjector:
                 
         # 2. Visible Threads
         for thread in self.thread_manager.get_all_threads():
-            if thread.state in ("foreground", "ambient") or thread.pinned:
+            if thread.state != "archived":
+                snap = getattr(thread, "continuity_snapshot", None)
                 projection.visible_threads.append(
                     VisibleThread(
                         thread_id=thread.thread_id,
@@ -48,7 +50,11 @@ class RuntimeProjector:
                         pinned=thread.pinned,
                         last_active=thread.last_updated,
                         continuity_resonance=getattr(thread, "continuity_resonance", 0.0) or 0.0,
-                        workspace_match=getattr(thread, "workspace_match", "") or ""
+                        workspace_match=getattr(thread, "workspace_match", "") or "",
+                        messages=getattr(thread, "messages", []) or [],
+                        summary=snap.summary if snap else (thread.title or ""),
+                        unresolved_questions=snap.unresolved_questions if snap else [],
+                        why_it_matters=snap.why_it_matters if snap else ""
                     )
                 )
                 
@@ -89,9 +95,10 @@ class RuntimeProjector:
         }
         
         # 6. Runtime State
+        plans_list = self.execution_runtime.get_all_plans() if self.execution_runtime and hasattr(self.execution_runtime, "get_all_plans") else []
         projection.runtime_state = {
             "agents": [],
-            "plans": []
+            "plans": plans_list
         }
         
         return projection

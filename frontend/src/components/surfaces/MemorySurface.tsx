@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SurfaceHeader, SurfaceSection, InfoRow, ActionButton, EmptyState, LoadingState } from '../ui/CoherenceComponents';
 import { useCognitionState } from '../../state';
 import { socket } from '../../runtime/socket';
+import { MemoryGraphView } from './MemoryGraphView';
 
 const formatRelativeTime = (timestamp: number) => {
   const diffMs = Date.now() - timestamp * 1000;
@@ -19,6 +20,7 @@ export const MemorySurface: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isError] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('memories');
+  const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
   const [selectedPolicy, setSelectedPolicy] = useState<string>('review_queue');
 
   useEffect(() => {
@@ -93,50 +95,100 @@ export const MemorySurface: React.FC = () => {
   ];
 
   return (
-    <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <SurfaceHeader title="What I hold of you" sub={`Memory · ${regularMemories.length} semantic nodes`} />
+    <div className="surface-content" style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       
-      <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px' }}>
-        {tabs.map(tab => (
-          <div 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as TabType)}
-            style={{ 
-              fontSize: '14px', 
-              fontWeight: activeTab === tab.id ? 600 : 500,
-              color: activeTab === tab.id ? 'var(--ink)' : 'var(--ink-3)',
-              cursor: 'pointer',
-              position: 'relative',
-              transition: 'color 0.2s ease'
-            }}
-          >
-            {tab.label} {tab.count > 0 && <span style={{ opacity: 0.5, marginLeft: '4px' }}>({tab.count})</span>}
-            {activeTab === tab.id && (
-              <div style={{ position: 'absolute', bottom: '-13px', left: 0, right: 0, height: '2px', background: 'var(--ink)' }} />
+      {/* Header and Tabs */}
+      <div style={{ padding: '28px 36px 0 36px', zIndex: 10 }}>
+        <div>
+          <SurfaceHeader title="What I hold of you" sub={`Memory · ${regularMemories.length} semantic nodes`} />
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--hairline-2)', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '24px' }}>
+              {tabs.map(tab => (
+                <div 
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  style={{ 
+                    fontSize: '14px', 
+                    fontWeight: activeTab === tab.id ? 600 : 500,
+                    color: activeTab === tab.id ? 'var(--ink)' : 'var(--ink-3)',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'color 0.2s ease'
+                  }}
+                >
+                  {tab.label} {tab.count > 0 && <span style={{ opacity: 0.5, marginLeft: '4px' }}>({tab.count})</span>}
+                  {activeTab === tab.id && (
+                    <div style={{ position: 'absolute', bottom: '-13px', left: 0, right: 0, height: '2px', background: 'var(--ink)' }} />
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {activeTab === 'memories' && (
+              <div style={{ display: 'flex', background: 'var(--glass-2)', borderRadius: '6px', padding: '2px', border: '1px solid var(--hairline-2)' }}>
+                <button 
+                  onClick={() => setViewMode('graph')}
+                  style={{ 
+                    padding: '4px 12px', fontSize: '12px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                    background: viewMode === 'graph' ? 'var(--glass-hover)' : 'transparent',
+                    color: viewMode === 'graph' ? 'var(--ink)' : 'var(--ink-3)'
+                  }}
+                >
+                  Graph
+                </button>
+                <button 
+                  onClick={() => setViewMode('list')}
+                  style={{ 
+                    padding: '4px 12px', fontSize: '12px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                    background: viewMode === 'list' ? 'var(--glass-hover)' : 'transparent',
+                    color: viewMode === 'list' ? 'var(--ink)' : 'var(--ink-3)'
+                  }}
+                >
+                  List
+                </button>
+              </div>
             )}
           </div>
-        ))}
+        </div>
       </div>
       
+      {/* Content Area */}
       {isLoading ? (
-        <LoadingState message="Scanning semantic database..." />
+        <div style={{ padding: '0 42px 42px 42px' }}>
+          <LoadingState message="Scanning semantic database..." />
+        </div>
       ) : activeTab === 'memories' && regularMemories.length === 0 ? (
-        <EmptyState 
-          title="No Memories Yet" 
-          description="Arova will automatically extract facts and preferences as you converse."
-        />
+        <div style={{ padding: '0 42px 42px 42px' }}>
+          <EmptyState 
+            title="No Memories Yet" 
+            description="Arova will automatically extract facts and preferences as you converse."
+          />
+        </div>
       ) : activeTab === 'inbox' && pendingMemories.length === 0 ? (
-        <EmptyState 
-          title="Inbox Empty" 
-          description="No memories are currently waiting for your review."
-        />
+        <div style={{ padding: '0 42px 42px 42px' }}>
+          <EmptyState 
+            title="Inbox Empty" 
+            description="No memories are currently waiting for your review."
+          />
+        </div>
       ) : activeTab === 'pinned' && pinnedMemories.length === 0 ? (
-        <EmptyState 
-          title="Nothing Pinned" 
-          description="Pin memories to prevent them from ever decaying."
-        />
+        <div style={{ padding: '0 42px 42px 42px' }}>
+          <EmptyState 
+            title="Nothing Pinned" 
+            description="Pin memories to prevent them from ever decaying."
+          />
+        </div>
+      ) : activeTab === 'memories' && viewMode === 'graph' ? (
+        <div style={{ flex: 1, minHeight: '680px', width: '100%', position: 'relative', overflow: 'hidden', padding: '0 24px 24px 24px' }}>
+           <MemoryGraphView 
+            memories={regularMemories} 
+            onPinToggle={handlePinToggle} 
+            onForget={handleForget} 
+          />
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto', padding: '0 42px 42px 42px', zIndex: 1, position: 'relative' }}>
           
           {activeTab === 'inbox' && pendingMemories.map(m => (
             <SurfaceSection key={m.id}>

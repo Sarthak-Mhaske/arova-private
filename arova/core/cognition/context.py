@@ -37,6 +37,11 @@ class CognitiveContext:
             lines.append(f"Time of Day: {self.ambient.time_of_day}")
             lines.append(f"Active App: {self.ambient.active_app or 'None'}")
             lines.append(f"System Idle: {self.ambient.is_idle}")
+            
+        if self.ambient.open_windows:
+            lines.append(f"Open Windows/Apps: {', '.join(self.ambient.open_windows)}")
+        if self.ambient.playing_media:
+            lines.append(f"Currently Playing Media: {', '.join(self.ambient.playing_media)}")
         
         # 2. Behavioral Modulation
         if self.presence_profile:
@@ -95,7 +100,8 @@ class ContextSynthesizer:
         # Pull active policies
         policies = [
             "DANGEROUS capabilities require explicit user approval via PolicyRuntime.",
-            "Do not execute loops or recursive plans."
+            "Do not execute loops or recursive plans.",
+            "Before launching an app or playing media, check the Open Windows and Playing Media lists in the Environment section to avoid repeating duplicate actions."
         ]
         
         # Synthesize Attention Narrative and Modulation Profile

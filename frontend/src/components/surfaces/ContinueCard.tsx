@@ -30,84 +30,74 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         type: 'dogfooding.record_acceptance',
         event: 'shown'
       });
-      const resourcesObj = workspace?.reality?.resources || {};
-      const urlResources: string[] = Object.keys(resourcesObj).filter(k => k.startsWith('http') || resourcesObj[k]?.type === 'url' || resourcesObj[k]?.type === 'browser');
-      if (urlResources.length === 0) {
-        urlResources.push('https://sqlite.org/docs', 'https://fastapi.tiangolo.com/advanced/websockets/');
-      }
+      const resourcesArr = (workspace as any).associated_resources || [];
+      const urlResources: string[] = resourcesArr.filter((k: string) => k.startsWith('http') || k.startsWith('https'));
       setSelectedUrls(urlResources);
     }
   }, [workspace?.id, workspace?.workspace_id]);
 
-  if (!workspace || continueCardDismissed) return null;
+  if (!workspace || !(workspace.id || workspace.workspace_id)) return null;
+
+
+  if (continueCardDismissed) return null;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   const title = workspace?.title || 'Current Workspace';
-  const blocker = workspace?.understanding?.momentum?.current_blocker || '';
-  const nextAction = workspace?.understanding?.momentum?.next_action || '';
-  const whatChanged = workspace?.understanding?.what_changed || '';
-  const deltaChanges: string[] = workspace?.understanding?.delta_changes || workspace?.delta_changes || [];
-  const trajectoryStory = workspace?.understanding?.trajectory_story || '';
-  const storyNarrative: string[] = workspace?.understanding?.story_narrative || [
-    `Yesterday you focused on ${title}.`,
-    blocker ? `Stopped due to blocker: ${blocker}` : nextAction ? `Next step planned: ${nextAction}` : `Active engineering momentum preserved.`
-  ];
+  const confidence = workspace?.confidence_score !== undefined ? workspace?.confidence_score : (workspace?.understanding?.confidence?.score ?? null);
+  const storyNarrative: string[] = workspace?.story_narrative || workspace?.understanding?.story_narrative || [];
+  const whatChanged = '';
   
-  const confLayer = workspace?.understanding?.confidence_layer || {};
-  const confidence = workspace?.understanding?.confidence?.score || workspace?.confidence_score || confLayer.overall_score || 94;
-
-  const explainabilityReasons: string[] = workspace?.understanding?.explainability_reasons || [
-    `You spent significant time in ${title} recently`,
-    `Active working resources prepared`,
-    `Confidence: ${confidence}% (${confidence >= 70 ? 'High' : 'Medium'})`
-  ];
-  const reasons = workspace?.understanding?.confidence?.reasons || [];
+  const continueData = workspace as any;
+  const deltaChanges = continueData?.delta_changes || [];
   
-  const resourcesObj = workspace?.reality?.resources || {};
-  const preparedList = Object.keys(resourcesObj).map(k => k.split('/').pop() || k).slice(0, 6);
+  const blocker = continueData?.current_blocker || workspace?.understanding?.momentum?.current_blocker || '';
+  const nextAction = continueData?.next_action || workspace?.understanding?.momentum?.next_action || '';
+  const trajectoryStory = continueData?.trajectory_story || workspace?.understanding?.trajectory_story || '';
+  
+  const associated_resources = continueData?.associated_resources || [];
+  const preparedList = associated_resources.map((r: string) => r.split('/').pop());
 
-  const repoConf = confLayer.repository?.score || confLayer.goal?.score || 100;
-  const blockerConf = confLayer.blocker?.score || 92;
-  const resourcesConf = confLayer.resources?.score || 65;
-
-  const confBreakdown = workspace?.confidence_breakdown || workspace?.understanding?.confidence_breakdown || {
-    "Repository": repoConf,
-    "Open files": resourcesConf,
-    "Goal": 94,
-    "Blocker": blockerConf,
-    "Browser docs": 61,
-    "Terminal": 95
-  };
-
-  const recAcc = workspace?.understanding?.recovery_accuracy || {
+  const recAcc = continueData?.confidence_breakdown ? {
+    dimensions: Object.entries(continueData.confidence_breakdown).map(([k, v]) => ({ label: k, ok: (v as number) > 0 }))
+  } : {
     dimensions: [
-      { name: 'Repository', ok: repoConf >= 70 },
-      { name: 'Files', ok: resourcesConf >= 60 },
-      { name: 'Goal', ok: true },
-      { name: 'Blocker', ok: blockerConf >= 70 },
-      { name: 'Terminal', ok: true },
-      { name: 'Browser', ok: false }
+      { label: 'Repository', ok: false },
+      { label: 'Files', ok: false },
+      { label: 'Goal', ok: false },
+      { label: 'Blocker', ok: false },
+      { label: 'Terminal', ok: false },
+      { label: 'Browser', ok: false }
     ]
   };
   const accuracyScore = recAcc.dimensions.filter((d: any) => d.ok).length;
   const accuracyTotal = recAcc.dimensions.length;
 
-  const groupedChanges: { category: string; text: string }[] = workspace?.understanding?.grouped_changes || [
-    { category: 'PROJECT', text: whatChanged || `Updated ${title} architecture and dependencies` },
-    { category: 'CODE', text: deltaChanges.length > 0 ? deltaChanges[0] : `${preparedList.length || 4} files modified or prepared for continuation` },
-    { category: 'DECISION', text: workspace?.understanding?.decisions?.[0]?.title || 'Persistent recovery state stored in snapshot engine' },
-    { category: 'BLOCKER', text: blocker || 'None — clean resumption path ready' },
-    { category: 'NEXT', text: nextAction || 'Continue active engineering flow and verify unit tests' }
-  ].filter(item => item.text && (item.text !== 'None — clean resumption path ready' || item.category === 'NEXT'));
+  const rawChanges: { category: string; text: string }[] = workspace?.understanding?.grouped_changes || [
+    ...(whatChanged ? [{ category: 'PROJECT', text: whatChanged }] : []),
+    ...(deltaChanges.length > 0 ? [{ category: 'CODE', text: deltaChanges[0] }] : (preparedList.length > 0 ? [{ category: 'CODE', text: `${preparedList.length} items observed in working set` }] : [])),
+    ...(workspace?.understanding?.decisions?.[0] ? [{ category: 'DECISION', text: workspace?.understanding?.decisions[0]?.title || workspace?.understanding?.decisions[0] }] : []),
+    ...(blocker ? [{ category: 'BLOCKER', text: blocker }] : []),
+    ...(nextAction ? [{ category: 'NEXT', text: nextAction }] : [])
+  ];
+  const groupedChanges = rawChanges.filter(item => item.text);
 
   const lastOutcomes = workspace?.last_restore_outcomes?.items || [];
 
-  const urlResources: string[] = Object.keys(resourcesObj).filter(k => k.startsWith('http') || resourcesObj[k]?.type === 'url' || resourcesObj[k]?.type === 'browser');
-  if (urlResources.length === 0) {
-    urlResources.push('https://sqlite.org/docs', 'https://fastapi.tiangolo.com/advanced/websockets/');
-  }
+  const urlResources: string[] = associated_resources.filter((k: string) => k.startsWith('http') || k.startsWith('https'));
+
+  const confBreakdown = continueData?.confidence_breakdown || {
+    "Repository": 0,
+    "Open files": 0,
+    "Goal": 0,
+    "Blocker": 0,
+    "Browser docs": 0,
+    "Terminal": 0
+  };
+
+  const explainabilityReasons: string[] = workspace?.understanding?.explainability_reasons || [];
+  const reasons = workspace?.understanding?.confidence?.reasons || [];
 
   const handleCalibrate = (rating: string) => {
     setCalibrationRated(rating);
@@ -135,7 +125,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
     });
     socket.sendEvent({
         type: 'workspace.continue',
-        workspace_id: workspace.id || workspace.workspace_id,
+        workspace_id: workspace.workspace_id || workspace.id || 'ws_default',
         options: {
           restore_all: restoreAll && !showOptions,
           restore_vscode: restoreEditors,
@@ -150,8 +140,8 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
     dismissContinueCard();
   };
 
-  const terminalCwd = workspace?.terminal_cwd || '/home/sarthak/arova';
-  const recentCommand = workspace?.recent_command || 'python -m pytest tests/test_resume_engine_v2.py';
+  const terminalCwd = workspace?.terminal_cwd;
+  const recentCommand = workspace?.recent_command;
 
   return (
     <div className="surfacing momentum" style={{ animation: 'surface-in 900ms cubic-bezier(0.32, 0.72, 0.24, 1) both' }}>
@@ -161,20 +151,28 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         {greeting}. Ready to resume {title}?
       </div>
 
-      <p>
-        Yesterday you focused on <strong>{title}</strong>.{' '}
-        {blocker && blocker !== 'None' ? (
-          <span style={{ color: 'var(--accent-amber)' }}>Stopped due to blocker: {blocker}. </span>
-        ) : (
-          <span>You stopped cleanly without blockers. </span>
-        )}
-        {nextAction ? `Next step planned: ${nextAction}` : 'Active engineering momentum preserved.'}
-      </p>
+      {storyNarrative.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
+          {storyNarrative.map((line, idx) => (
+            <p key={idx} style={{ margin: 0 }}>
+              • {line}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
+          Still learning your workspace...
+        </p>
+      )}
 
       {(deltaChanges.length > 0 || preparedList.length > 0) && (
         <p className="quiet">
-          While you were away, {deltaChanges.length > 0 ? deltaChanges[0] : `${preparedList.length || 4} files prepared for continuation (${preparedList.slice(0, 3).join(', ')}${preparedList.length > 3 ? '...' : ''})`}.{' '}
-          Arova is currently <strong style={{ color: 'var(--ink)' }}>{confidence}% confident</strong> with {accuracyScore}/{accuracyTotal} verified context dimensions.
+          While you were away, {deltaChanges.length > 0 ? deltaChanges[0] : `${preparedList.length} files observed in working set (${preparedList.slice(0, 3).join(', ')}${preparedList.length > 3 ? '...' : ''})`}.{' '}
+          {confidence !== null ? (
+            <>Arova is currently <strong style={{ color: 'var(--ink)' }}>{confidence}% confident</strong> with {accuracyScore}/{accuracyTotal} verified context dimensions.</>
+          ) : (
+            <>Context recovery accuracy: {accuracyScore}/{accuracyTotal} verified dimensions.</>
+          )}
         </p>
       )}
 
@@ -217,7 +215,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
       {showOptions && (
         <div style={{ marginTop: '20px', padding: '18px', background: 'var(--glass-1)', borderRadius: '14px', border: '1px solid var(--hairline-2)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', display: 'flex', justifyContent: 'space-between' }}>
-            <span>Select exact items to restore (`Phase 7`)</span>
+            <span>Select exact items to restore</span>
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink-2)', cursor: 'pointer' }}>
             <input
@@ -228,24 +226,28 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
             />
             <span>VS Code / Editor files (Exact line positions)</span>
           </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink-2)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={restoreTerminal}
-                onChange={e => setRestoreTerminal(e.target.checked)}
-                style={{ accentColor: 'var(--accent-gold)' }}
-              />
-              <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Terminal working directory ({terminalCwd})</span>
-            </label>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', background: 'var(--glass-2)', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--hairline-2)' }}>
-              <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>Recent command: {recentCommand}</span>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button className="action-chip" onClick={() => handleCommandAction(recentCommand)} style={{ padding: '2px 8px', fontSize: '11px' }}>{copiedCmd ? 'Copied!' : 'Copy'}</button>
-                <button className="action-chip primary" onClick={() => socket.sendEvent({ type: 'terminal.execute', command: recentCommand, cwd: terminalCwd })} style={{ padding: '2px 8px', fontSize: '11px' }}>Run</button>
-              </div>
+          {terminalCwd && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink-2)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={restoreTerminal}
+                  onChange={e => setRestoreTerminal(e.target.checked)}
+                  style={{ accentColor: 'var(--accent-gold)' }}
+                />
+                <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Terminal working directory ({terminalCwd})</span>
+              </label>
+              {recentCommand && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', background: 'var(--glass-2)', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--hairline-2)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>Recent command: {recentCommand}</span>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button className="action-chip" onClick={() => handleCommandAction(recentCommand)} style={{ padding: '2px 8px', fontSize: '11px' }}>{copiedCmd ? 'Copied!' : 'Copy'}</button>
+                    <button className="action-chip primary" onClick={() => socket.sendEvent({ type: 'terminal.execute', command: recentCommand, cwd: terminalCwd })} style={{ padding: '2px 8px', fontSize: '11px' }}>Run</button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
           {urlResources.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-2)' }}>Documentation & browser tabs:</div>

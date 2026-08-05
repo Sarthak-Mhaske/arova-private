@@ -54,7 +54,7 @@ export const SessionTimelineSurface: React.FC = () => {
       case 'chrome':
       case 'browser': return { bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', label: 'BROWSER' };
       case 'git': return { bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', label: 'GIT' };
-      default: return { bg: 'rgba(255, 255, 255, 0.1)', color: '#aaa', label: (source || 'OS').toUpperCase() };
+      default: return { bg: 'var(--glass-2)', color: 'var(--ink-2)', label: (source || 'OS').toUpperCase() };
     }
   };
 
@@ -74,9 +74,9 @@ export const SessionTimelineSurface: React.FC = () => {
         <button
           onClick={() => openSurface('timeline')}
           style={{
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            color: 'rgba(255, 255, 255, 0.8)',
+            background: 'var(--glass-2)',
+            border: '1px solid var(--hairline-2)',
+            color: 'var(--ink)',
             padding: '8px 16px',
             borderRadius: '20px',
             fontSize: '12px',
@@ -127,39 +127,39 @@ export const SessionTimelineSurface: React.FC = () => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px dashed rgba(255, 255, 255, 0.1)',
+          background: 'var(--glass-2)',
+          border: '1px dashed var(--hairline-2)',
           borderRadius: '16px',
           padding: '36px',
           maxWidth: '680px',
           margin: '0 auto',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '18px', fontWeight: 600, color: '#fff', marginBottom: '12px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--ink)', marginBottom: '12px' }}>
             No Activity Stream Events Yet
           </div>
-          <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: '1.6', marginBottom: '24px' }}>
+          <p style={{ fontSize: '14px', color: 'var(--ink-2)', lineHeight: '1.6', marginBottom: '24px' }}>
             Arova passively captures developer activity to automatically understand your working context without manual note-taking:
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', textAlign: 'left', width: '100%', marginBottom: '24px' }}>
             <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '10px', padding: '12px' }}>
               <div style={{ color: '#3b82f6', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>VS CODE</div>
-              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Tracks active file tabs, code switches, and debugger events via the Arova extension.</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Tracks active file tabs, code switches, and debugger events via the Arova extension.</div>
             </div>
             <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '12px' }}>
               <div style={{ color: '#10b981', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>TERMINAL</div>
-              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Logs commands and exit statuses via shell hooks (`~/.bashrc` or `~/.zshrc`).</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Logs commands and exit statuses via shell hooks (`~/.bashrc` or `~/.zshrc`).</div>
             </div>
             <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '10px', padding: '12px' }}>
               <div style={{ color: '#a855f7', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>BROWSER</div>
-              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Monitors active documentation domains (`http/https`) when browser extension is connected.</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Monitors active documentation domains (`http/https`) when browser extension is connected.</div>
             </div>
             <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '10px', padding: '12px' }}>
               <div style={{ color: '#f59e0b', fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>GIT & OS</div>
-              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>Captures branch switches, commit operations, and window focus shifts.</div>
+              <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Captures branch switches, commit operations, and window focus shifts.</div>
             </div>
           </div>
-          <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
             As soon as activity occurs or plugins post telemetry to `/tmp/arova.sock`, real-time events will stream here automatically.
           </div>
         </div>
@@ -247,7 +247,7 @@ export const SessionTimelineSurface: React.FC = () => {
                         borderLeft: `3px solid ${badge.color}`
                       }}>
                         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Normalized Payload & Provenance (`Phase 6 & 8`)
+                          Normalized Payload &amp; Provenance
                         </div>
                         <pre style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.85)', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
                           {JSON.stringify({

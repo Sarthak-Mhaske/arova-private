@@ -1,6 +1,9 @@
 import logging
 import numpy as np
-import webrtcvad
+try:
+    import webrtcvad
+except ImportError:
+    webrtcvad = None
 from typing import Optional
 from dataclasses import dataclass
 from arova.core.events import RuntimeEventBus, EventPayload
@@ -24,7 +27,7 @@ class VoiceActivityRuntime:
     """
     def __init__(self, event_bus: RuntimeEventBus, sensitivity: int = 3):
         self._event_bus = event_bus
-        self._vad = webrtcvad.Vad(sensitivity)
+        self._vad = webrtcvad.Vad(sensitivity) if webrtcvad else None
         
         self._is_speaking = False
         self._last_speech_frame_time = 0.0

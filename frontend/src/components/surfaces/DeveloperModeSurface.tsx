@@ -37,7 +37,7 @@ export const DeveloperModeSurface: React.FC = () => {
 
   const capturedEvents = debugState?.captured_events || [];
   const activeWs = debugState?.active_workspace || {};
-  const whyChose = debugState?.why_chose_workspace || ["Most active repository activity", "Unresolved blocker observed"];
+  const whyChose = debugState?.why_chose_workspace || [];
   const searchIndex = debugState?.search_index_contents || [];
   const resources = debugState?.resource_registry || [];
   const restorePlan = debugState?.restore_plan || {};
@@ -52,7 +52,7 @@ export const DeveloperModeSurface: React.FC = () => {
             Internal Dogfooding Overlay (Triggered by Ctrl+Shift+D)
           </div>
           <div style={{ fontSize: '24px', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
-            Developer Mode (`Phase 7 Product Freeze`)
+            Developer Mode
           </div>
         </div>
         <button

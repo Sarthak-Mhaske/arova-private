@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSurfaceState, useCognitionState } from '../../state';
 import { SurfaceHeader, EmptyState, LoadingState } from '../ui/CoherenceComponents';
 import { ThreadCard } from './ThreadCard';
+import { socket } from '../../runtime/socket';
 
 export const ThreadsSurface: React.FC = () => {
   const { activeSurface } = useSurfaceState();
@@ -27,7 +28,31 @@ export const ThreadsSurface: React.FC = () => {
 
   return (
     <div className="surface-content" id="surface-threads" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <SurfaceHeader title="Cognitive Threads" sub="Contextual sessions and intent graphs" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+        <SurfaceHeader title="Cognitive Threads" sub="Contextual sessions and organized chats" />
+        <button
+          onClick={() => {
+            socket.sendEvent({ type: 'client.new_thread' });
+            useCognitionState.getState().setItems([]);
+            useSurfaceState.getState().closeSurface();
+          }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: '1px solid var(--hairline-2)',
+            background: 'var(--glass-2)',
+            color: 'var(--ink)',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <span>+</span> New Chat
+        </button>
+      </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {isLoading ? (
           <LoadingState message="Synchronizing cognitive threads..." />

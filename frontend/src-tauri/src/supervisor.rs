@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::process::Command;
-use std::io::Write;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,63 +95,43 @@ impl SupervisorState {
                     c.env("TMPDIR", "/var/tmp");
                     c
                 } else {
-                    let venv_py = exe_dir.join("../lib/Arova/_up_/_up_/venv/bin/python");
-                    let py_bin = if venv_py.exists() {
-                        venv_py.to_string_lossy().to_string()
-                    } else if std::path::Path::new("./venv/bin/python").exists() {
-                        "./venv/bin/python".to_string()
-                    } else {
-                        "python3".to_string()
-                    };
+                    let venv_candidates = vec![
+                        std::path::PathBuf::from("/home/sarthak/arova/venv/bin/python"),
+                        std::path::PathBuf::from("../venv/bin/python"),
+                        std::path::PathBuf::from("../../venv/bin/python"),
+                        std::path::PathBuf::from("./venv/bin/python"),
+                    ];
+                    let py_bin = venv_candidates
+                        .into_iter()
+                        .find(|p| p.exists())
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "python3".to_string());
+
                     let mut c = Command::new(py_bin);
                     c.env_remove("PYTHONHOME");
                     c.env("TMPDIR", "/var/tmp");
-                    let py_dir = if resource_py_dir.join("arova").exists() {
-                        resource_py_dir
-                    } else {
-                        exe_dir.join("../lib/Arova/_up_/_up_")
-                    };
-                    if py_dir.join("arova").exists() {
-                        c.env("PYTHONPATH", &py_dir);
-                        c.current_dir(&py_dir);
+
+                    let py_dir_candidates = vec![
+                        std::path::PathBuf::from("/home/sarthak/arova"),
+                        std::path::PathBuf::from(".."),
+                        std::path::PathBuf::from("../.."),
+                        resource_py_dir.clone(),
+                        exe_dir.join("../lib/Arova/_up_/_up_"),
+                    ];
+
+                    if let Some(target_dir) = py_dir_candidates.into_iter().find(|d| d.join("arova").exists()) {
+                        c.env("PYTHONPATH", &target_dir);
+                        c.current_dir(&target_dir);
                     }
+
                     c.args(&["-m", "arova.daemon.main"]);
                     c
                 };
 
-                if let Ok(addr) = "127.0.0.1:8765".parse() {
-                    let probe = |addr: &std::net::SocketAddr| -> bool {
-                        if let Ok(mut s) = std::net::TcpStream::connect_timeout(addr, Duration::from_millis(250)) {
-                            let _ = s.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nConnection: close\r\n\r\n");
-                            return true;
-                        }
-                        false
-                    };
-                    if probe(&addr) {
-                        {
-                            let mut st = status.lock().unwrap();
-                            st.is_running = true;
-                            st.safe_mode = false;
-                        }
-                        loop {
-                            {
-                                let stop = stop_signal.lock().unwrap();
-                                if *stop {
-                                    break;
-                                }
-                            }
-                            if !probe(&addr) {
-                                break;
-                            }
-                            thread::sleep(Duration::from_secs(5));
-                        }
-                        continue;
-                    }
-                }
-
                 if crash_counter > 5 {
                     cmd.arg("--safe-mode");
                 }
+
 
                 match cmd.spawn() {
                     Ok(mut child) => {

@@ -4,3 +4,4 @@ export * from './cognitionState';
 export * from './surfaceState';
 export * from './environmentState';
 export * from './awarenessState';
+export * from './startupState';

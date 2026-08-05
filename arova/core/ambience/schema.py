@@ -18,6 +18,10 @@ class AmbientContext:
     # Derived temporal state
     time_of_day: str = "unknown" # e.g. "morning", "afternoon", "night"
     
+    # Live Environment Context
+    open_windows: list[str] = field(default_factory=list)
+    playing_media: list[str] = field(default_factory=list)
+    
     def __eq__(self, other):
         if not isinstance(other, AmbientContext):
             return False

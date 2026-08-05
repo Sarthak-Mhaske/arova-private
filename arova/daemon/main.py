@@ -8,6 +8,8 @@ from arova.core.runtime import RuntimeContainer
 from arova.core.ipc.uds import UnixSocketTransport
 from arova.core.bridge.websocket_manager import WebSocketManager
 from arova.core.bridge.runtime_events import RuntimeEventMapper
+from arova.core.cognition.ledger import InvestigationLedger
+from arova.core.cognition.investigator import ProactiveInvestigator
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,6 +19,13 @@ class ArovaDaemon:
         self.runtime = None
         self.transport = UnixSocketTransport("/tmp/arova.sock")
         self.ws_manager = WebSocketManager(host="127.0.0.1", port=8765)
+        
+        self.investigation_ledger = InvestigationLedger()
+        self.proactive_investigator = ProactiveInvestigator(self.investigation_ledger)
+        
+        # Keep track of latest telemetry
+        self._latest_telemetry = {}
+
 
     async def _on_client_message(self, client_id: str, payload: dict):
         import json
@@ -92,19 +101,34 @@ class ArovaDaemon:
             logging.info("Main: Received client.interrupt via WebSocket.")
             if self.runtime and self.runtime.event_bus:
                 self.runtime.event_bus.emit("runtime", "INTERRUPT_REQUESTED", {"source": "ui_command"})
+        elif payload.get("type") == "voice.set_mic":
+            enabled = payload.get("enabled", True)
+            logging.info(f"Main: Received voice.set_mic via WebSocket: enabled={enabled}")
+            if self.runtime and self.runtime.event_bus:
+                self.runtime.event_bus.emit("voice", "MIC_TOGGLED", {"enabled": enabled})
         elif payload.get("type") == "client.new_thread":
             logging.info("Main: Received client.new_thread via WebSocket.")
             if self.runtime and self.runtime.session:
-                # Clear hot memory so next input starts fresh
-                self.runtime.session._legacy_messages = []
-                self.runtime.session._warm_context = []
+                # 1. Save active chat as an organized CognitiveThread before resetting
+                msgs = self.runtime.session._legacy_messages
+                if msgs:
+                    user_msgs = [m for m in msgs if m.get("role") == "user"]
+                    first_text = user_msgs[0].get("content", "").strip() if user_msgs else ""
+                    thread_title = (first_text[:45] + "...") if len(first_text) > 45 else (first_text or f"Chat Thread {len(self.runtime.session.thread_manager.get_all_threads()) + 1}")
+                    
+                    thread = self.runtime.session.thread_manager.create_thread(title=thread_title)
+                    thread.messages = list(msgs)
+                    self.runtime.session.thread_manager.update_thread_state(thread.thread_id, "latent")
+                
+                # 2. Reset active session messages
+                self.runtime.session.clear()
                 if self.runtime.session._active_turn:
                     self.runtime.session._archive_turn(self.runtime.session._active_turn)
                     self.runtime.session._active_turn = None
                 self.runtime.session.thread_manager._sync()
-                # Persist immediately so restart starts clean
                 self.runtime._persist_runtime()
-                # Confirm to frontend
+                
+                # 3. Confirm clear state to frontend
                 self.ws_manager.broadcast({
                     "v": 1,
                     "type": "session.sync",
@@ -120,41 +144,6 @@ class ArovaDaemon:
                     "type": "session.sync",
                     "messages": history
                 })
-                self.runtime.session.thread_manager._sync()
-        elif payload.get("type") == "awareness.get_request":
-            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
-                active_ws = self.runtime.workspace_manager.get_active_workspace()
-                active_ws_payload = None
-                if active_ws:
-                    active_ws_payload = {
-                        "id": active_ws.workspace_id,
-                        "title": active_ws.title,
-                        "context": getattr(active_ws, "active_context", {})
-                    }
-                self.ws_manager.broadcast({
-                    "v": 1,
-                    "type": "awareness.sync",
-                    "policy": getattr(self.runtime, "routing_policy", "instant"),
-                    "hidden": [],
-                    "visible": [],
-                    "active_workspace": active_ws_payload
-                })
-        elif payload.get("type") == "momentum.get_latest":
-            latest_item = None
-            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
-                active_ws = self.runtime.workspace_manager.get_active_workspace()
-                if active_ws and hasattr(active_ws, 'understanding') and active_ws.understanding:
-                    latest_item = {
-                        "kind": "momentum",
-                        "title": active_ws.title,
-                        "next_action": getattr(active_ws.understanding.momentum, "next_action", ""),
-                        "current_blocker": getattr(active_ws.understanding.momentum, "current_blocker", "")
-                    }
-            self.ws_manager.broadcast({
-                "v": 1,
-                "type": "momentum.latest_capsule",
-                "item": latest_item
-            })
         elif payload.get("type") == "provider.discovery_request":
             from arova.core.config.discovery import ProviderDiscovery
             asyncio.create_task(self._handle_discovery())
@@ -213,57 +202,66 @@ class ArovaDaemon:
                 wid = payload.get("workspace_id")
                 if wid:
                     self.runtime.workspace_manager.set_active_workspace(wid)
+        elif payload.get("type") in ["work.accept", "work.accept_request"]:
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                self.runtime.workspace_manager._on_work_accept(payload)
+        elif payload.get("type") in ["work.reject", "work.reject_request"]:
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                self.runtime.workspace_manager._on_work_reject(payload)
         elif payload.get("type") == "workspace.continue":
             if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
                 wid = payload.get("workspace_id")
                 restore_options = payload.get("options", {})
                 if wid:
                     self.runtime.workspace_manager.set_active_workspace(wid)
-                active_ws = self.runtime.workspace_manager.get_active_workspace()
+                active_ws = self.runtime.workspace_manager.get_workspace(wid) if wid else self.runtime.workspace_manager.get_active_workspace()
+                if not active_ws:
+                    active_ws = self.runtime.workspace_manager.get_workspace("ws_default")
                 if active_ws:
                     title = active_ws.title
                     # 1. Restore Environment & emit telemetry
                     self.runtime.workspace_manager.restore_environment(active_ws, restore_options)
                     
-                    # 2. Prime Cognitive State (Layer 2 Active Workspace Context)
-                    summary_prompt = active_ws.get_workspace_summary_prompt() if hasattr(active_ws, 'get_workspace_summary_prompt') else ""
-                    if hasattr(self.runtime, 'session') and self.runtime.session:
-                        self.runtime.session.set_system_prompt(summary_prompt)
-                        
-                        # 3. Proactive Welcome Back message with Delta narrative (`What just changed`)
-                        decisions_summary = active_ws.understanding.decisions[0] if active_ws.understanding.decisions else "continue this project"
-                        next_step_summary = active_ws.understanding.momentum.next_action or "exploring current signals"
-                        delta_items = getattr(active_ws.understanding, "delta_changes", [])
-                        if delta_items:
-                            delta_lines = "\n".join(f"• {item}" for item in delta_items)
-                            welcome_msg = (
-                                f"Welcome back. I've restored your {title} workspace.\n\n"
-                                f"Since you left:\n"
-                                f"{delta_lines}\n\n"
-                                f"Next expected action: {next_step_summary}."
-                            )
-                        elif getattr(active_ws.understanding, "what_changed", "") and active_ws.understanding.what_changed != "Initial workspace observations established.":
-                            welcome_msg = (
-                                f"Welcome back. I've restored your {title} workspace.\n\n"
-                                f"Since you left:\n"
-                                f"• {active_ws.understanding.what_changed}\n"
-                                f"• Yesterday you decided to: {decisions_summary}\n\n"
-                                f"Next expected action: {next_step_summary}."
-                            )
-                        else:
-                            welcome_msg = (
-                                f"Welcome back. I've restored your {title} workspace. "
-                                f"Yesterday you decided to: {decisions_summary}, "
-                                f"and your next step is: {next_step_summary}. Ready to continue?"
-                            )
-                        self.runtime.session.add_assistant_message(welcome_msg)
-                        
-                        # 4. Sync updated chat feed immediately to frontend
-                        history = [dict(msg) for msg in self.runtime.session._legacy_messages]
-                        self.ws_manager.broadcast({
-                            "type": "session.sync",
-                            "messages": history
-                        })
+                    async def _generate_dynamic_welcome():
+                        try:
+                            # 2. Prime Cognitive State (Layer 2 Active Workspace Context)
+                            summary_prompt = active_ws.get_workspace_summary_prompt() if hasattr(active_ws, 'get_workspace_summary_prompt') else ""
+                            if hasattr(self.runtime, 'session') and self.runtime.session:
+                                self.runtime.session.set_system_prompt(summary_prompt)
+
+                                decisions_summary = active_ws.understanding.decisions[0] if active_ws.understanding.decisions else "continue this project"
+                                next_step_summary = active_ws.understanding.momentum.next_action or "exploring current signals"
+                                delta_items = getattr(active_ws.understanding, "delta_changes", [])
+                                
+                                prompt = f"I have just returned to my workspace '{title}'. "
+                                if delta_items:
+                                    prompt += f"Since I left, these changes occurred: {', '.join(delta_items)}. "
+                                else:
+                                    prompt += f"Since I left, {active_ws.understanding.what_changed}. "
+                                prompt += f"Yesterday I decided to {decisions_summary}. My next step should be {next_step_summary}. "
+                                prompt += "Write a very concise, conversational welcome back message summarizing this and asking if I want to proceed. Avoid markdown lists.\n"
+
+                                from arova.core.models.schema import ReasoningDepth, ReasoningBudget
+                                welcome_msg = await self.runtime.model_runtime.generate(
+                                    messages=[{"role": "user", "content": prompt}],
+                                    system_prompt="You are Arova, an intelligent desktop OS assistant. Be highly concise, human-like, and direct.",
+                                    depth=ReasoningDepth.STANDARD,
+                                    budget=ReasoningBudget(max_tokens=150)
+                                )
+                                
+                                self.runtime.session.add_assistant_message(welcome_msg.strip())
+                                
+                                # 4. Sync updated chat feed immediately to frontend
+                                history = [dict(msg) for msg in self.runtime.session._legacy_messages]
+                                self.ws_manager.broadcast({
+                                    "type": "session.sync",
+                                    "messages": history
+                                })
+                        except Exception as e:
+                            import logging
+                            logging.error(f"Failed to generate dynamic welcome: {e}")
+                    
+                    asyncio.create_task(_generate_dynamic_welcome())
                     
                     # 5. Visual confirmation toast
                     self.ws_manager.broadcast({
@@ -272,7 +270,7 @@ class ArovaDaemon:
                             "type": "surfacing",
                             "from": "System",
                             "paragraphs": [
-                                f"<strong>Restored: {title}</strong>",
+                                f"**Restored: {title}**",
                                 f"Primed active AI context & prepared {len(active_ws.reality.resources)} working resources."
                             ],
                             "actions": []
@@ -499,10 +497,32 @@ class ArovaDaemon:
             thread_id = payload.get("thread_id")
             if self.runtime and self.runtime.session and thread_id:
                 self.runtime.session.thread_manager.resume_thread(thread_id)
+                self.ws_manager.broadcast({
+                    "v": 1,
+                    "type": "session.sync",
+                    "messages": self.runtime.session._legacy_messages
+                })
                 self.ws_manager.broadcast({"type": "client.thread_resumed", "thread_id": thread_id})
+        elif payload.get("type") == "client.delete_thread":
+            thread_id = payload.get("thread_id")
+            if self.runtime and self.runtime.session and thread_id:
+                self.runtime.session.thread_manager.delete_thread(thread_id)
+                self.runtime._persist_runtime()
         elif payload.get("type") == "intention.thread_action":
             if getattr(self.runtime, 'event_bus', None):
                 self.runtime.event_bus.emit("intention", "THREAD_ACTION_REQUESTED", payload)
+                t_id = payload.get("thread_id") or (payload.get("payload") or {}).get("thread_id")
+                act = payload.get("action") or (payload.get("payload") or {}).get("action")
+                if act == "resume" and t_id and self.runtime and self.runtime.session:
+                    self.runtime.session.thread_manager.resume_thread(t_id)
+                    self.ws_manager.broadcast({
+                        "v": 1,
+                        "type": "session.sync",
+                        "messages": self.runtime.session._legacy_messages
+                    })
+                elif act == "delete" and t_id and self.runtime and self.runtime.session:
+                    self.runtime.session.thread_manager.delete_thread(t_id)
+                    self.runtime._persist_runtime()
         elif payload.get("type") == "timeline.get_request":
             if self.runtime and hasattr(self.runtime, "timeline"):
                 asyncio.create_task(self._handle_timeline_query(payload))
@@ -534,13 +554,30 @@ class ArovaDaemon:
         if not self.runtime:
             return payload
             
+        has_active_provider = False
+        if hasattr(self.runtime, "model_runtime") and self.runtime.model_runtime:
+            pm = getattr(self.runtime.model_runtime, "provider_manager", None)
+            if pm and hasattr(pm, "all_providers"):
+                has_active_provider = any(k != "mock" for k in pm.all_providers.keys())
+
+        mem_count = 0
+        if hasattr(self.runtime, "memory_runtime") and self.runtime.memory_runtime:
+            if hasattr(self.runtime.memory_runtime, "storage") and self.runtime.memory_runtime.storage:
+                try:
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        mem_count = len(self.runtime.memory_runtime.storage.get_all_memories_sync())
+                except Exception:
+                    mem_count = 0
+
         payload["data"]["inference"] = {
-            "active_provider": self.runtime.model_runtime.provider_manager.get("groq") is not None, # Simplified
-            "fallbacks": getattr(self.runtime.model_runtime, "_fallback_count", 0)
+            "active_provider": has_active_provider,
+            "fallbacks": getattr(self.runtime.model_runtime, "_fallback_count", 0) if hasattr(self.runtime, "model_runtime") else 0
         }
         payload["data"]["cognition"] = {
-            "active_threads": len(self.runtime.session.thread_manager.get_all_threads()) if self.runtime.session else 0,
-            "memory_nodes": 0 # We'll just fetch this if needed
+            "active_threads": len(self.runtime.session.thread_manager.get_all_threads()) if self.runtime and self.runtime.session else 0,
+            "memory_nodes": mem_count
         }
         payload["data"]["health"] = {
             "ui_running": True,
@@ -633,6 +670,44 @@ class ArovaDaemon:
             "result": result
         })
 
+    def _cleanup_orphaned_daemon_processes(self, port: int = 8765):
+        """Clean up any dangling socket files or orphaned daemon processes holding port 8765."""
+        import os
+        import signal
+        import socket
+        import subprocess
+        import time
+
+        for sock_file in ["/tmp/arova.sock", "/var/tmp/arova.sock"]:
+            if os.path.exists(sock_file):
+                try:
+                    os.remove(sock_file)
+                    logging.info(f"Cleaned up stale socket file: {sock_file}")
+                except Exception as e:
+                    logging.warning(f"Could not remove stale socket file {sock_file}: {e}")
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        err = s.connect_ex(("127.0.0.1", port))
+        s.close()
+
+        if err == 0:
+            logging.warning(f"Port {port} is occupied by an existing process. Attempting cleanup of orphaned processes...")
+            try:
+                out = subprocess.check_output(f"fuser {port}/tcp 2>/dev/null || true", shell=True).decode().strip()
+                pids = [int(p) for p in out.split() if p.isdigit()]
+                current_pid = os.getpid()
+                for pid in pids:
+                    if pid != current_pid:
+                        logging.warning(f"Terminating orphaned process {pid} holding port {port}...")
+                        try:
+                            os.kill(pid, signal.SIGTERM)
+                            time.sleep(0.3)
+                            os.kill(pid, signal.SIGKILL)
+                        except (ProcessLookupError, OSError):
+                            pass
+            except Exception as e:
+                logging.warning(f"Port cleanup check returned: {e}")
+
     async def start(self):
         is_safe_mode = "--safe-mode" in sys.argv
         if is_safe_mode:
@@ -640,6 +715,7 @@ class ArovaDaemon:
         else:
             logging.info("Starting Arova Daemon...")
         
+        self._cleanup_orphaned_daemon_processes()
         self.runtime = RuntimeContainer()
         
         # Start IPC Server
@@ -648,6 +724,8 @@ class ArovaDaemon:
         # Start WebSocket Bridge
         self.ws_manager.add_message_handler(self._on_ws_message)
         await self.ws_manager.start()
+
+
         
         loop = asyncio.get_running_loop()
         
@@ -691,6 +769,7 @@ class ArovaDaemon:
 
         # Subscribe WS and UDS to the event bus
         _subscribe("cognition", "COGNITION_STATE_CHANGED")
+        _subscribe("automation", "NODE_STATE_CHANGED")
         _subscribe("voice", "TRANSCRIPT_FINAL")
         _subscribe("voice", "TEXT_STREAM_STARTED")
         _subscribe("voice", "TEXT_CHUNK_GENERATED")
@@ -710,14 +789,70 @@ class ArovaDaemon:
         # Environmental events for the UI
         _subscribe("environment", "ATTENTION_STATE_CHANGED")
         _subscribe("environment", "AMBIENT_INTENT_DETECTED")
+        _subscribe("ambience", "CONTEXT_CHANGED")
         _subscribe("workspace", "sync")
         _subscribe("capture", "EVENT_INGESTED")
+        _subscribe("cognition", "WORKING_MEMORY_CHANGED")
+        _subscribe("reasoning", "REASONING_STEP_COMPLETED")
+
+        # Start WakeWord background service
+        try:
+            from arova.core.wake import WakeWordService
+            wake_cfg = self.runtime.config if hasattr(self.runtime, 'config') and isinstance(self.runtime.config, dict) else {}
+            self.wake_service = WakeWordService(self.runtime.event_bus, wake_cfg)
+            self.wake_service.start()
+        except Exception as e:
+            logging.warning(f"Failed to start WakeWordService: {e}")
 
         logging.info("Arova Daemon is running.")
+        
+        # Start proactive investigation loop
+        asyncio.create_task(self._proactive_loop())
         
         # Keep alive
         while True:
             await asyncio.sleep(3600)
+
+    async def _proactive_loop(self):
+        """Background loop that periodically checks telemetry for proactive interventions."""
+        logging.info("Started proactive investigation loop.")
+        while True:
+            await asyncio.sleep(15)  # Check every 15 seconds
+            
+            # Fetch real ambient context telemetry
+            ambient_ctx = getattr(getattr(self.runtime, 'ambient_observer', None), 'current_context', None)
+            telemetry = self._latest_telemetry or {}
+            if ambient_ctx:
+                telemetry.update({
+                    "active_app": ambient_ctx.active_app,
+                    "window_title": ambient_ctx.window_title,
+                    "idle_seconds": ambient_ctx.idle_time_seconds,
+                    "open_windows": ambient_ctx.open_windows,
+                    "playing_media": ambient_ctx.playing_media
+                })
+            
+            try:
+                completed_work = self.proactive_investigator.evaluate_and_investigate(telemetry)
+                if completed_work:
+                    # Silent surface to UI
+                    logging.info(f"Proactive Loop generated work: {completed_work.summary}")
+                    if self.runtime and self.runtime.event_bus:
+                        self.runtime.event_bus.emit("cognition", "surfacing_push", {
+                            "type": "surfacing",
+                            "kind": "proactive_investigation",
+                            "from": "AROVA · INVESTIGATION",
+                            "lede": completed_work.title,
+                            "paragraphs": [
+                                f"**Summary**: {completed_work.summary}",
+                                f"**Evidence**: {len(completed_work.evidence.context_keys)} signals analyzed"
+                            ],
+                            "actions": [
+                                {"label": action.get("label", "Review"), "eventType": "investigation.review", "primary": True}
+                                for action in completed_work.suggested_actions
+                            ] + [{"label": "Dismiss", "clientAction": "dismiss"}]
+                        })
+            except Exception as e:
+                logging.error(f"Error in proactive loop: {e}")
 
     def shutdown(self):
         if self.runtime:

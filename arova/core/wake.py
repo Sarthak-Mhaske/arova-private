@@ -107,10 +107,24 @@ class WakeWordListener:
     def __init__(self, config: dict[str, Any]):
         self.config = get_wake_config(config)
         self.is_running = False
+        self._muted = False
         self._pa = None
         self._stream = None
         self._model = None
         self._last_detect_time = 0.0
+
+    def set_muted(self, muted: bool):
+        self._muted = muted
+        if muted and self._stream:
+            try:
+                self._stream.stop_stream()
+            except Exception:
+                pass
+        elif not muted and self._stream and hasattr(self._stream, "is_stopped") and self._stream.is_stopped():
+            try:
+                self._stream.start_stream()
+            except Exception:
+                pass
 
     def _setup(self) -> None:
         """Initialize dependencies and models lazily."""
@@ -148,6 +162,14 @@ class WakeWordListener:
         
         try:
             while self.is_running:
+                if self._muted:
+                    time.sleep(0.2)
+                    continue
+
+                if self._stream is None:
+                    time.sleep(0.2)
+                    continue
+
                 data = self._stream.read(self.config["frame_length"], exception_on_overflow=False)
                 # Convert bytes to numpy array
                 audio_data = np.frombuffer(data, dtype=np.int16)
@@ -159,17 +181,18 @@ class WakeWordListener:
                 threshold = self.config["threshold"]
                 detected = False
                 
-                for mdl_name, score in prediction.items():
-                    if score >= threshold:
-                        detected = True
-                        break
+                if isinstance(prediction, dict):
+                    for mdl_name, score in prediction.items():
+                        if score >= threshold:
+                            detected = True
+                            break
                         
                 if detected:
                     now = time.time()
                     if now - self._last_detect_time > self.config["cooldown_seconds"]:
                         self._last_detect_time = now
                         
-                        # Stop stream to free ALSA device for record.py
+                        # Stop stream to free ALSA/audio device for recording
                         if self._stream is not None:
                             try:
                                 self._stream.stop_stream()
@@ -194,9 +217,8 @@ class WakeWordListener:
                                     input=True,
                                     frames_per_buffer=self.config["frame_length"]
                                 )
-                            except Exception as e:
-                                print(f"Failed to reopen audio stream: {e}")
-                                self.is_running = False
+                            except Exception:
+                                self._stream = None
         finally:
             self.stop()
 

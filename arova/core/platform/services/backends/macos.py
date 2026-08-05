@@ -362,6 +362,70 @@ class MacOSBackend(PlatformBackend):
         app = self._catalog.get_application(intent.preferred_application or "")
         return self._launcher.execute_intent(intent, app=app)
 
+    def get_open_windows(self) -> list[str]:
+        windows = set()
+        script = '''
+        tell application "System Events"
+            set windowList to {}
+            set activeProcs to every process whose background only is false
+            repeat with proc in activeProcs
+                try
+                    set procWindows to name of every window of proc
+                    repeat with winName in procWindows
+                        if winName is not "" then
+                            set end of windowList to (name of proc) & " - " & winName
+                        end if
+                    end repeat
+                end try
+            end repeat
+            return windowList
+        end tell
+        '''
+        try:
+            proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=3)
+            if proc.returncode == 0 and proc.stdout:
+                titles = proc.stdout.strip().split(", ")
+                for t in titles:
+                    if t:
+                        windows.add(t.strip())
+        except Exception as e:
+            logger.debug(f"MacOSBackend window tracking failed: {e}")
+        return list(windows)
+
+    def get_playing_media(self) -> list[str]:
+        media = []
+        script = '''
+        set mediaInfo to ""
+        try
+            if application "Spotify" is running then
+                tell application "Spotify"
+                    if player state is playing then
+                        set mediaInfo to "Playing: " & artist of current track & " - " & name of current track
+                    end if
+                end tell
+            end if
+        end try
+        try
+            if application "Music" is running then
+                tell application "Music"
+                    if player state is playing then
+                        set mediaInfo to mediaInfo & "\nPlaying: " & artist of current track & " - " & name of current track
+                    end if
+                end tell
+            end if
+        end try
+        return mediaInfo
+        '''
+        try:
+            proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=2)
+            if proc.returncode == 0 and proc.stdout:
+                for line in proc.stdout.splitlines():
+                    if line.strip():
+                        media.append(line.strip())
+        except Exception as e:
+            logger.debug(f"MacOSBackend media tracking failed: {e}")
+        return media
+
     def register_capabilities(self, registry: CapabilityRegistry) -> None:
         registry.register(Capability.OPEN_FILE, lambda intent: self.execute(intent))
         registry.register(Capability.OPEN_URL, lambda intent: self.execute(intent))

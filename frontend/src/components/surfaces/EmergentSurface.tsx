@@ -6,7 +6,6 @@ import { MemorySurface } from './MemorySurface';
 import { TimelineSurface } from './TimelineSurface';
 
 import { CalibrationSurface } from './CalibrationSurface';
-import { EnvironmentSurface } from './EnvironmentSurface';
 import { DiagnosticsSurface } from './DiagnosticsSurface';
 import { ProjectionInspector } from './ProjectionInspector';
 import { ContextSurface } from './ContextSurface';
@@ -15,7 +14,7 @@ import { AttentionSurface } from './AttentionSurface';
 import { AgentsSurface } from './AgentsSurface';
 import { PlansSurface } from './PlansSurface';
 import { ThreadsSurface } from './ThreadsSurface';
-import { PlaceholderSurface } from './PlaceholderSurface';
+import { CognitionSurface } from './CognitionSurface';
 import { AwarenessSurface } from './AwarenessSurface';
 import { CommandPaletteSurface } from './CommandPaletteSurface';
 import { SessionTimelineSurface } from './SessionTimelineSurface';
@@ -23,9 +22,11 @@ import { DeveloperModeSurface } from './DeveloperModeSurface';
 import { SettingsLayout } from '../../surfaces/settings/SettingsLayout';
 import { sheetEnter, scrimEnter, easeSpring, easeSoft } from '../../motion';
 
+import { WorkHubSurface } from './WorkHubSurface';
+
 export const EmergentSurface: React.FC = () => {
   const { activeSurface, closeSurface } = useSurfaceState();
-  const isOpen = activeSurface !== null && activeSurface !== 'environment' && (activeSurface as any) !== 'presence';
+  const isOpen = activeSurface !== null && activeSurface !== 'environment';
   const surfaceRef = useRef<HTMLDivElement>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
 
@@ -77,7 +78,7 @@ export const EmergentSurface: React.FC = () => {
 
   return (
     <AnimatePresence>
-      {activeSurface && (
+      {activeSurface && activeSurface !== 'environment' && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, pointerEvents: 'none' }}>
           <MDiv 
             className="surface-scrim"
@@ -99,20 +100,27 @@ export const EmergentSurface: React.FC = () => {
             animate="animate"
             exit="exit"
             transition={{ ...easeSpring }}
-            style={{ 
+            style={activeSurface === 'memory' ? {
+              pointerEvents: 'auto',
+              width: 'min(1400px, 94vw)',
+              height: 'calc(100vh - 80px)',
+              maxHeight: 'calc(100vh - 80px)',
+              top: '50%',
+              padding: 0,
+              overflow: 'hidden'
+            } : { 
               pointerEvents: 'auto', 
               maxHeight: 'calc(100vh - 140px)', 
               top: '45%' 
             }}
           >
+            {activeSurface === 'work' && <WorkHubSurface onContinue={() => closeSurface()} />}
+            {activeSurface === 'presence' && <WorkHubSurface onContinue={() => closeSurface()} />}
+            {activeSurface === 'cognition' && <CognitionSurface />}
+            {activeSurface === 'timeline' && <TimelineSurface />}
             {activeSurface === 'threads' && <ThreadsSurface />}
             {activeSurface === 'memory' && <MemorySurface />}
-            {activeSurface === 'timeline' && <TimelineSurface />}
-            
-            {/* New Placeholder Routes */}
-            {activeSurface === 'cognition' && <PlaceholderSurface title="Cognition Overview" description="This surface will show an overview of Arova's cognitive threads and memory." />}
             {activeSurface === 'awareness' && <AwarenessSurface />}
-            {activeSurface === 'environment' && <EnvironmentSurface />}
             {activeSurface === 'context' && <ContextSurface />}
             {activeSurface === 'workspace' && <WorkspaceSurface />}
             {activeSurface === 'attention' && <AttentionSurface />}

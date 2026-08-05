@@ -117,9 +117,34 @@ class WebSocketManager:
             logger.error(f"Error during broadcast: {e}")
 
     async def start(self):
-        """Start the WebSocket server."""
+        """Start the WebSocket server with automatic retry on port conflict (Errno 98)."""
         logger.info(f"Starting WebSocket bridge on ws://{self.host}:{self.port}")
-        self._server = await websockets.serve(self._handle_connection, self.host, self.port)
+        for attempt in range(1, 6):
+            try:
+                # Try to bind with reuse_port where available
+                kwargs = {}
+                import sys
+                if sys.platform != "win32":
+                    kwargs["reuse_port"] = True
+                self._server = await websockets.serve(self._handle_connection, self.host, self.port, **kwargs)
+                return
+            except (OSError, TypeError) as e:
+                # Fallback without reuse_port if TypeError raised on unsupported platforms
+                if isinstance(e, TypeError):
+                    try:
+                        self._server = await websockets.serve(self._handle_connection, self.host, self.port)
+                        return
+                    except OSError as os_err:
+                        e = os_err
+                if getattr(e, "errno", None) == 98 or "address already in use" in str(e).lower():
+                    if attempt < 5:
+                        logger.warning(f"Port {self.port} in use (Errno 98). Retrying in 1s (attempt {attempt}/5)...")
+                        await asyncio.sleep(1.0)
+                    else:
+                        logger.error(f"Failed to bind WebSocket server to {self.host}:{self.port} after 5 attempts.")
+                        raise e
+                else:
+                    raise e
 
     async def stop(self):
         """Stop the WebSocket server."""

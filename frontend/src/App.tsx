@@ -12,6 +12,7 @@ import { ThreadsSurface } from './components/surfaces/ThreadsSurface';
 import { CursorBleed } from './components/effects/CursorBleed';
 import { MemoryConsentPopup } from './components/effects/MemoryConsentPopup';
 import { PersonalMemoryPolicyDialog } from './components/effects/PersonalMemoryPolicyDialog';
+import { StartupOverlay } from './components/effects/StartupOverlay';
 import { useCognitionState, useEnvironmentState, usePresenceState, useSurfaceState } from './state';
 import { fetchStreamItems, fetchAwareness } from './ipc';
 
@@ -201,6 +202,7 @@ function App() {
 
   return (
     <>
+      <StartupOverlay />
       <Room />
       <CursorBleed />
       <Environment>

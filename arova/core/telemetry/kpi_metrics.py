@@ -16,6 +16,11 @@ class KPITelemetryCollector:
         self.active_resume_sessions: Dict[str, Dict[str, Any]] = {}  # workspace_id -> session state
         self.kpi_history: List[Dict[str, Any]] = []
         
+        # 0. Proactive Validation Metrics
+        self.proactive_interventions: List[Dict[str, Any]] = []
+        self.correct_silence_count: int = 0
+        self.missed_opportunity_count: int = 0
+        
         # 1. Failure reasons taxonomy (`Extensible: Category, Subcategory, Comment`)
         self.failure_reasons_tally: Dict[str, int] = {
             "wrong_workspace": 0,
@@ -57,6 +62,31 @@ class KPITelemetryCollector:
             self.event_bus.subscribe("telemetry", "context_recovery_saved", self._on_recovery_saved)
             self.event_bus.subscribe("search", "query", self._on_search_query)
             self.event_bus.subscribe("capture", "EVENT_INGESTED", self._on_capture_event)
+
+    def record_proactive_intervention(self, session_id: str, workflow: str, outcome: str, latency_breakdown: Dict[str, float], estimated_nwr_min: float, observed_nwr_min: float, regret: bool = False):
+        """
+        Record the lifecycle of a proactive intervention.
+        Outcome: 'accepted', 'dismissed', 'ignored', 'superseded', 'verification_failed'
+        Workflow: 'fix', 'investigate', 'summarize'
+        """
+        self.proactive_interventions.append({
+            "session_id": session_id,
+            "workflow": workflow.lower(),
+            "outcome": outcome.lower(),
+            "latency": latency_breakdown,
+            "estimated_nwr": estimated_nwr_min,
+            "observed_nwr": observed_nwr_min,
+            "regret": regret,
+            "timestamp": time.time()
+        })
+        logger.info(f"KPITelemetryCollector: Recorded proactive intervention: {workflow} -> {outcome}")
+
+    def record_proactive_silence(self, correct: bool):
+        if correct:
+            self.correct_silence_count += 1
+        else:
+            self.missed_opportunity_count += 1
+
 
     def record_recovery_time_saved(self, workspace_id: str, title: str, saved_seconds: float, switches_avoided: int = 0, resources_prepared: int = 0):
         """Manually or programmatically record estimated context recovery time saved (`Phase 7 Point 7`)."""

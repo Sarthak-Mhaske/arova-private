@@ -36,7 +36,11 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
 
   const handleComplete = () => {
     const providersConfig: any = {};
-    if (intelligenceSource === 'groq' && apiKey) {
+    if (intelligenceSource === 'gemini' && apiKey) {
+      providersConfig.gemini = { api_keys: [apiKey] };
+    } else if (intelligenceSource === 'anthropic' && apiKey) {
+      providersConfig.anthropic = { api_keys: [apiKey] };
+    } else if (intelligenceSource === 'groq' && apiKey) {
       providersConfig.groq = { api_keys: [apiKey] };
     } else if (intelligenceSource === 'openai' && apiKey) {
       providersConfig.openai = { api_keys: [apiKey] };
@@ -46,6 +50,8 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
 
     const appConfig = {
       presence_style: 'hybrid',
+      preferred_provider: intelligenceSource,
+      allow_fallback: true,
       privacy: {
         workspace_awareness: true,
         memory_enabled: true,
@@ -70,7 +76,7 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
       {step === 1 && (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '13px', color: '#a881ff', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '12px' }}>
-            Phase 0 — Design Partner Beta
+            Design Partner Beta
           </div>
           <h1 style={{ fontSize: '2.4rem', marginBottom: '1rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Welcome to Arova</h1>
           <p style={{ color: '#aaa', fontSize: '1.15rem', lineHeight: '1.6', margin: '0 auto 2.5rem', maxWidth: '440px' }}>
@@ -88,10 +94,12 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
           <h2 style={{ fontSize: '1.8rem', margin: '0 0 0.5rem 0' }}>Choose Intelligence Engine</h2>
           <p style={{ color: '#aaa', marginBottom: '1.5rem', fontSize: '0.95rem' }}>Select your primary model provider to synthesize your workspace understanding.</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '1.8rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '1.8rem' }}>
             {[
-              { id: 'groq', title: 'Groq', desc: 'Fastest (<1s)' },
-              { id: 'openai', title: 'OpenAI', desc: 'Standard' },
+              { id: 'gemini', title: 'Gemini 2.5 Pro', desc: 'Recommended' },
+              { id: 'anthropic', title: 'Claude Sonnet 4', desc: 'Reasoning' },
+              { id: 'openai', title: 'GPT-5', desc: 'Standard' },
+              { id: 'groq', title: 'Groq Llama 3.3', desc: 'Fast Cloud' },
               { id: 'ollama', title: 'Ollama', desc: 'Local / Free' }
             ].map(opt => (
               <div 
@@ -102,13 +110,13 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
                 }}
                 style={{ 
                   background: intelligenceSource === opt.id ? 'rgba(168, 129, 255, 0.15)' : '#1a1a22',
-                  padding: '1rem', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                  padding: '0.8rem 1rem', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
                   border: intelligenceSource === opt.id ? '2px solid #a881ff' : '1px solid #2a2a36',
                   transition: 'all 0.2s ease'
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: '1.05rem', color: '#fff' }}>{opt.title}</div>
-                <div style={{ fontSize: '0.8rem', color: '#889', marginTop: '4px' }}>{opt.desc}</div>
+                <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#fff' }}>{opt.title}</div>
+                <div style={{ fontSize: '0.75rem', color: '#889', marginTop: '2px' }}>{opt.desc}</div>
               </div>
             ))}
           </div>
@@ -127,16 +135,15 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
             ) : (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <label style={{ color: '#ccc', fontSize: '0.9rem', fontWeight: 500 }}>{intelligenceSource === 'groq' ? 'Groq API Key' : 'OpenAI API Key'}</label>
-                  <a href={intelligenceSource === 'groq' ? 'https://console.groq.com/keys' : 'https://platform.openai.com/api-keys'} target="_blank" rel="noreferrer" style={{ color: '#a881ff', fontSize: '0.85rem', textDecoration: 'none' }}>
-                    Get key →
-                  </a>
+                  <label style={{ color: '#ccc', fontSize: '0.9rem', fontWeight: 500 }}>
+                    {intelligenceSource === 'gemini' ? 'Gemini API Key' : intelligenceSource === 'anthropic' ? 'Anthropic API Key' : intelligenceSource === 'groq' ? 'Groq API Key' : 'OpenAI API Key'}
+                  </label>
                 </div>
                 <input 
                   type="password" 
                   value={apiKey} 
                   onChange={e => { setApiKey(e.target.value); setTestResult(null); }}
-                  placeholder={`Paste your secret key (` + (intelligenceSource === 'groq' ? 'gsk_...' : 'sk-...') + `)...`}
+                  placeholder={`Paste secret API key...`}
                   style={{ width: '100%', padding: '10px', background: '#20202a', color: '#fff', border: '1px solid #3a3a46', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
                 />
               </>

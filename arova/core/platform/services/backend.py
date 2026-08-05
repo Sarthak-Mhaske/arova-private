@@ -75,6 +75,14 @@ class PlatformBackend(abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_open_windows(self) -> list[str]:
+        """Return a list of window titles for all active open applications."""
+
+    @abc.abstractmethod
+    def get_playing_media(self) -> list[str]:
+        """Return a list of formatted strings representing currently playing media across all players."""
+
+    @abc.abstractmethod
     def register_capabilities(self, registry: "CapabilityRegistry") -> None:
         """
         Populate the universal CapabilityRegistry with handler methods

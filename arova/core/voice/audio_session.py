@@ -66,8 +66,8 @@ class MicrophoneSession:
             chunk = indata.tobytes()
             self.push_chunk(chunk, 16000)
 
-        import sounddevice as sd
         try:
+            import sounddevice as sd
             self._stream = sd.InputStream(
                 samplerate=16000,
                 channels=1,
@@ -78,6 +78,7 @@ class MicrophoneSession:
             self._stream.start()
             logging.info(f"MicrophoneSession: hardware capture started (gen {self._capture_generation_id}).")
         except Exception as e:
+            logging.warning(f"MicrophoneSession: sounddevice unavailable ({e}); running in audio-disabled mode.")
             logging.error(f"Failed to start hardware capture: {e}")
             self._is_capturing = False
         

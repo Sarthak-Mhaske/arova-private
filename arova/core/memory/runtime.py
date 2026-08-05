@@ -8,6 +8,7 @@ from arova.core.events import RuntimeEventBus, EventPayload
 from arova.core.memory.storage import MemoryStorage, MemoryEntry
 from arova.core.memory.extractor import MemoryExtractor
 from arova.core.session import ConversationTurn
+logger = logging.getLogger(__name__)
 
 class MemoryRuntime:
     """
@@ -89,10 +90,16 @@ class MemoryRuntime:
         existing_memories = await self.storage.get_all_semantic_memory()
         
         for cand in candidates:
-            # Check for existing memory with the exact same content (case-insensitive)
+            # Check for existing memory with similar content using word overlap
             duplicate = None
+            cand_words = set(cand.content.lower().split())
             for mem in existing_memories:
-                if mem.content.lower() == cand.content.lower():
+                mem_words = set(mem.content.lower().split())
+                if not mem_words or not cand_words:
+                    continue
+                intersection = len(mem_words.intersection(cand_words))
+                union = len(mem_words.union(cand_words))
+                if union > 0 and (intersection / union) > 0.6:
                     duplicate = mem
                     break
                     
@@ -156,7 +163,26 @@ class MemoryRuntime:
                 cand.approval_state = "pending"
                 # RAM ONLY - Do not write to storage!
                 self.event_bus.emit("memory", "MEMORY_SENSITIVE_CANDIDATE", {"memory": asdict(cand)})
-                logging.info(f"Sensitive Memory Popup Triggered: {cand.content}")
+    def form_incremental_memory(self, working_memory_dict: Dict[str, Any]) -> None:
+        """
+        Continuous Memory Formation (`HYP-05`).
+        Called by WorkingMemoryRuntime whenever active files, terminal errors, or objectives shift meaningfully.
+        Appends episodic shift events and extracts incremental factual context without waiting for user chat turns.
+        """
+        active_files = working_memory_dict.get("active_files", [])
+        errors = working_memory_dict.get("unresolved_errors", [])
+        repo = working_memory_dict.get("current_repository")
+        
+        shift_summary = f"Working state shift in {repo or 'Unknown Project'} ({len(active_files)} active files, {len(errors)} unresolved errors)"
+        logging.info(f"MemoryRuntime.form_incremental_memory: {shift_summary}")
+        
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(self.storage.append_episodic_event(
+                event_id=str(uuid.uuid4()),
+                event_type="CONTINUOUS_WORKING_MEMORY_SHIFT",
+                turn_id=None,
+                payload=working_memory_dict
+            ), self._loop)
 
     async def recall_context(self) -> str:
         """
@@ -181,6 +207,9 @@ class MemoryRuntime:
         Evaluates semantic memories against the current transcript.
         Applies confidence gating, temporal cooldowns, and semantic cluster suppression.
         """
+        if not hasattr(self, "_last_surfaced_memories") or self._last_surfaced_memories is None:
+            self._last_surfaced_memories = {}
+
         memories = await self.storage.get_all_semantic_memory()
         if not memories:
             return
@@ -189,11 +218,11 @@ class MemoryRuntime:
         words = set(transcript.lower().split())
         
         for m in memories:
-            # We assume m has a semantic_cluster_id or we derive a naive one
             cluster_id = getattr(m, 'semantic_cluster_id', f"cluster_{len(m.content)}")
+            mem_key = getattr(m, 'id', None) or m.content
             
-            # Simple cooldown check (don't surface the same memory or cluster within 10 minutes)
-            last_surfaced = getattr(m, 'last_surfaced_time', 0)
+            # Simple cooldown check (don't surface the same memory or cluster within 10 minutes / 600s)
+            last_surfaced = self._last_surfaced_memories.get(mem_key, 0)
             if now - last_surfaced < 600:
                 continue
                 
@@ -201,20 +230,16 @@ class MemoryRuntime:
             intersection = words.intersection(mem_words)
             meaningful = [w for w in intersection if len(w) > 4]
             
-            # Confidence Threshold Logic
-            # Confidence is derived from the ratio of matched meaningful words vs total words
             if not meaningful:
                 continue
                 
             confidence = len(meaningful) / max(1, len(mem_words))
             
-            # Strict Gating: only surface if confidence is high
+            # Strict Gating: surface only high confidence matches
             if confidence > 0.4:
-                m.last_surfaced_time = now
+                self._last_surfaced_memories[mem_key] = now
                 logger.info(f"MemoryRuntime: Surfacing ghost [Conf {confidence:.2f}] for '{m.content}'")
                 
-                # Emit via Cognitive Priority Engine paradigm if wired, else raw event
-                # We package this so CognitivePriorityEngine can arbitrate it
                 self.event_bus.emit("memory", "MEMORY_RECALLED", {
                     "summary": m.content,
                     "confidence": confidence,
@@ -222,4 +247,4 @@ class MemoryRuntime:
                     "semantic_type": "MEMORY_RECALLED",
                     "source": "memory_runtime"
                 })
-                break # Only surface the single highest confidence match per turn
+                break

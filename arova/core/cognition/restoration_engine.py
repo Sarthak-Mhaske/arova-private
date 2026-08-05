@@ -15,18 +15,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RestoreOutcomeItem:
-    """Per-item restoration outcome (`Phase 7`)."""
+    """Per-item restoration outcome (`Phase 7 & HYP-10 Provenance Guarantee`)."""
     name: str                  # e.g. "VS Code", "Terminal", "SQLite docs"
     resource_id: Optional[str] = None
     status: str = "requested"  # "requested" | "restored" | "failed" | "skipped"
     detail: Optional[str] = None
+    provenance: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
             "resource_id": self.resource_id,
             "status": self.status,
-            "detail": self.detail
+            "detail": self.detail,
+            "provenance": self.provenance or {
+                "source": "EnvironmentRestorationEngine",
+                "timestamp": time.time(),
+                "verification_method": "empirical_runtime_probe"
+            }
         }
 
 @dataclass

@@ -4,6 +4,7 @@ import { OrbGlow } from './OrbGlow';
 import { OrbShell } from './OrbShell';
 import { Satellites } from './Satellites';
 import { OrbCaption } from './OrbCaption';
+import { ObservationPill } from './ObservationPill';
 
 export const OrbStage: React.FC = () => {
   return (
@@ -16,6 +17,7 @@ export const OrbStage: React.FC = () => {
         <Satellites />
       </div>
       <OrbCaption />
+      <ObservationPill />
       <div className="voice-transcription-zone" />
     </div>
   );

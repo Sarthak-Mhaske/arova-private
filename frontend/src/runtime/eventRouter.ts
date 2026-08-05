@@ -16,7 +16,7 @@ export function routeEvent(event: any) {
 
   switch (event.type) {
     case 'orb.state':
-      useOrbState.getState().setMode(event.state);
+      useOrbState.getState().setMode(event.state, event.details, event.raw_state);
       break;
 
     case 'stream.start':
@@ -43,10 +43,6 @@ export function routeEvent(event: any) {
       }, 600);
       break;
 
-    case 'user.message':
-      // The backend echo of the user's message
-      useCognitionState.getState().addUserInput(event.text);
-      break;
 
     case 'awareness.update':
       // The backend detected an attention state change.
@@ -56,6 +52,25 @@ export function routeEvent(event: any) {
         socket.sendEvent({ type: 'awareness.get_request' });
       });
       break;
+
+    case 'awareness.ambient_snapshot':
+      useAwarenessState.getState().setAmbientSnapshot(event);
+      break;
+
+    case 'automation.action_progress': {
+      const nodeState = (event.node_state || '').toLowerCase();
+      console.log(`[runtime] ACTION_PROGRESS: action="${event.action}" state="${nodeState}"`, event);
+      if (nodeState === 'running') {
+        useCognitionState.getState().setActiveAction(event.action);
+      } else if (nodeState === 'completed' || nodeState === 'failed') {
+        // Only clear if this action is still the active one
+        const current = useCognitionState.getState().activeAction;
+        if (current === event.action) {
+          useCognitionState.getState().setActiveAction(null);
+        }
+      }
+      break;
+    }
 
     case 'runtime.status':
       if (event.status === 'connected') {
@@ -87,9 +102,9 @@ export function routeEvent(event: any) {
       if (Array.isArray(event.messages)) {
         const parsedItems = event.messages.map((m: any) => {
           if (m.role === 'user') {
-            return { id: m.id, type: 'userSaid', timestamp: m.timestamp, text: m.content };
+            return { id: m.id, type: 'userSaid', timestamp: m.timestamp * 1000, text: m.content };
           } else if (m.role === 'assistant') {
-            return { id: m.id, type: 'surfacing', timestamp: m.timestamp, from: 'Arova', paragraphs: [m.content] };
+            return { id: m.id, type: 'surfacing', timestamp: m.timestamp * 1000, from: 'Arova', paragraphs: [m.content] };
           }
           return null;
         }).filter(Boolean);
@@ -133,7 +148,15 @@ export function routeEvent(event: any) {
           useOrbState.getState().setMode(event.projection.orb_state.state);
         }
         if (Array.isArray(event.projection.stream_items)) {
-          useCognitionState.getState().setItems(event.projection.stream_items);
+          const parsedItems = event.projection.stream_items.map((m: any) => {
+            if (m.role === 'user') {
+              return { id: m.turn_id || m.id, type: 'userSaid', timestamp: (m.timestamp || Date.now() / 1000) * 1000, text: m.content };
+            } else if (m.role === 'assistant') {
+              return { id: m.turn_id || m.id, type: 'surfacing', timestamp: (m.timestamp || Date.now() / 1000) * 1000, from: 'Arova', paragraphs: [m.content] };
+            }
+            return null;
+          }).filter(Boolean);
+          useCognitionState.getState().setItems(parsedItems);
         }
         if (Array.isArray(event.projection.visible_threads)) {
           useCognitionState.getState().setThreads(event.projection.visible_threads);
@@ -177,6 +200,12 @@ export function routeEvent(event: any) {
         ...useCognitionState.getState().pendingMemories,
         event.memory
       ]);
+      break;
+
+    case 'voice.text_response_generated':
+      if (event.execution_metadata) {
+        useCognitionState.getState().setLastExecutionMetadata(event.execution_metadata);
+      }
       break;
 
     case 'memory.sensitive_candidate':

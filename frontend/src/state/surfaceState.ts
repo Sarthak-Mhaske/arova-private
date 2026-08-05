@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type SurfaceType = 
-  | 'presence'
+  | 'presence' | 'work'
   | 'cognition' | 'threads' | 'memory' | 'plans' | 'timeline'
   | 'environment' | 'context' | 'workspace' | 'attention' | 'awareness'
   | 'runtime' | 'agents' | 'calibration' | 'diagnostics'

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSurfaceState, SurfaceType } from '../../state';
 import { OrbShell } from '../orb/OrbShell';
@@ -84,28 +84,27 @@ const RailGlyph: React.FC<{ surface: SurfaceType; label: string; icon: React.Rea
   );
 };
 
-const AccordionGroup: React.FC<{ group: RailGroupData }> = ({ group }) => {
-  const [isExpanded, setIsExpanded] = useState(() => {
-    const saved = localStorage.getItem(`arova_rail_${group.id}`);
-    return saved === 'true';
-  });
-
-  const { activeSurface } = useSurfaceState();
-
-  useEffect(() => {
-    localStorage.setItem(`arova_rail_${group.id}`, String(isExpanded));
-  }, [isExpanded, group.id]);
-
-  const handleGroupClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsExpanded(!isExpanded);
-  };
-
+const AccordionGroup: React.FC<{ 
+  group: RailGroupData; 
+  isExpanded: boolean; 
+  onToggle: () => void;
+}> = ({ group, isExpanded, onToggle }) => {
+  const { activeSurface, openSurface } = useSurfaceState();
   const isGroupActive = activeSurface === group.id || group.items.some(i => i.id === activeSurface);
 
   return (
     <div className="rail-group" style={{ width: '100%' }}>
-      <button className={`rail-glyph ${isGroupActive ? 'active' : ''}`} onClick={handleGroupClick}>
+      <button 
+        className={`rail-glyph ${isGroupActive ? 'active' : ''}`} 
+        onClick={(e) => {
+          e.stopPropagation();
+          openSurface(group.id);
+          onToggle();
+        }}
+        onMouseEnter={() => {
+          if (!isExpanded) onToggle();
+        }}
+      >
         <div className="glyph-mark">
           {group.icon}
         </div>
@@ -120,7 +119,7 @@ const AccordionGroup: React.FC<{ group: RailGroupData }> = ({ group }) => {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
             style={{ overflow: 'hidden' }}
           >
             <div className="rail-group-items" style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px' }}>
@@ -145,6 +144,7 @@ const AccordionGroup: React.FC<{ group: RailGroupData }> = ({ group }) => {
 
 export const SpatialRail: React.FC = () => {
   const { activeSurface } = useSurfaceState();
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   return (
     <>
@@ -152,36 +152,42 @@ export const SpatialRail: React.FC = () => {
       <nav 
         className="rail" 
         id="rail"
+        onMouseLeave={() => setExpandedGroupId(null)}
       >
         <div className="rail-brand" style={{ position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) scale(0.13)', pointerEvents: 'none' }}>
-          <OrbShell />
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) scale(0.13)', pointerEvents: 'none' }}>
+            <OrbShell />
+          </div>
         </div>
-      </div>
 
-      <RailGlyph
-        surface="presence"
-        label="Presence"
-        icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round"><circle cx="12" cy="12" r="3.5"/></svg>}
-        isActive={activeSurface === 'presence' || activeSurface === null}
-        liveColor="ice-blue"
-      />
+        <RailGlyph
+          surface="presence"
+          label="Presence"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round"><circle cx="12" cy="12" r="3.5"/></svg>}
+          isActive={activeSurface === 'presence' || activeSurface === null}
+          liveColor="ice-blue"
+        />
 
-      <div className="rail-divider"></div>
+        <div className="rail-divider"></div>
 
-      {GROUPS.map(group => (
-        <AccordionGroup key={group.id} group={group} />
-      ))}
+        {GROUPS.map(group => (
+          <AccordionGroup 
+            key={group.id} 
+            group={group} 
+            isExpanded={expandedGroupId === group.id}
+            onToggle={() => setExpandedGroupId(expandedGroupId === group.id ? null : group.id)}
+          />
+        ))}
 
-      <div className="rail-divider"></div>
+        <div className="rail-divider"></div>
 
-      <RailGlyph
-        surface="settings"
-        label="Settings"
-        icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>}
-        isActive={activeSurface === 'settings'}
-      />
-    </nav>
+        <RailGlyph
+          surface="settings"
+          label="Settings"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>}
+          isActive={activeSurface === 'settings'}
+        />
+      </nav>
     </>
   );
 };

@@ -141,8 +141,12 @@ def format_context_for_llm(env: dict[str, Any]) -> str:
     installed_apps = env.get("installed_apps", [])
     apps_str = ", ".join(installed_apps) if installed_apps else "none detected"
     
+    from arova.core.time import get_live_temporal_context_prompt
+    temporal_str = get_live_temporal_context_prompt()
+    
     lines = [
-        "SYSTEM CONTEXT:",
+        temporal_str,
+        "\nSYSTEM CONTEXT:",
         f"- OS: {env.get('os', 'unknown')}",
         f"- Window Manager: {env.get('wm', 'unknown')}",
         f"- Display Server: {env.get('display', 'unknown')}",

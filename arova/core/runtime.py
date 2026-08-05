@@ -115,6 +115,17 @@ class RuntimeContainer:
         self.capture_engine.timeline_engine = self.timeline
         self.capture_engine.subscribe(lambda evt: self.search_index.index_canonical_event(evt))
         self.workspace_manager.search_index = self.search_index
+
+        from arova.core.memory.working_memory import WorkingMemoryRuntime
+        from arova.core.reasoning.runtime import ReasoningRuntime
+        from arova.core.cognition.belief import BeliefRuntime
+        self.working_memory_runtime = WorkingMemoryRuntime(event_bus=self.event_bus)
+        self.belief_runtime = BeliefRuntime(event_bus=self.event_bus)
+        self.reasoning_runtime = ReasoningRuntime(event_bus=self.event_bus, workspace_manager=self.workspace_manager)
+        self.working_memory_runtime.reasoning_runtime = self.reasoning_runtime
+        self.working_memory_runtime.belief_runtime = self.belief_runtime
+        self.reasoning_runtime.belief_runtime = self.belief_runtime
+        self.capture_engine.working_memory_runtime = self.working_memory_runtime
         self.kpi_collector = KPITelemetryCollector(event_bus=self.event_bus)
         
         # Attach EventBus to the ThreadManager for action handling
@@ -174,6 +185,8 @@ class RuntimeContainer:
             logging.debug("No running asyncio event loop during capability builtin registration; deferred.")
 
         self.memory_runtime = MemoryRuntime(event_bus=self.event_bus, config=self.config)
+        if hasattr(self, 'working_memory_runtime') and self.working_memory_runtime:
+            self.working_memory_runtime.memory_runtime = self.memory_runtime
         # Pass memory runtime to session to delegate archiving
         self.session._memory_runtime = self.memory_runtime
         # Wire save callback so history persists on every turn end
@@ -239,10 +252,15 @@ class RuntimeContainer:
         
         # Start OS event listeners and decay loop in background
         import asyncio
+        self._bg_tasks = getattr(self, '_bg_tasks', set())
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self.window_backend.subscribe_events())
-            loop.create_task(self.environment_graph.start_decay_loop())
+            t1 = loop.create_task(self.window_backend.subscribe_events())
+            t2 = loop.create_task(self.environment_graph.start_decay_loop())
+            self._bg_tasks.add(t1)
+            self._bg_tasks.add(t2)
+            t1.add_done_callback(self._bg_tasks.discard)
+            t2.add_done_callback(self._bg_tasks.discard)
         except RuntimeError:
             logging.debug("No running asyncio event loop during window/environment graph loop startup; deferred.")
         
@@ -341,6 +359,9 @@ class RuntimeContainer:
         self.event_bus.subscribe("cognition", "THREAD_SYNC", _emit_projection)
         self.event_bus.subscribe("voice", "TEXT_RESPONSE_GENERATED", _emit_projection)
         self.event_bus.subscribe("voice", "TRANSCRIPT_FINAL", _emit_projection)
+        self.event_bus.subscribe("automation", "GRAPH_EXECUTION_REQUESTED", _emit_projection)
+        self.event_bus.subscribe("automation", "NODE_STATE_CHANGED", _emit_projection)
+        self.event_bus.subscribe("automation", "GRAPH_EXECUTION_COMPLETED", _emit_projection)
         self.event_bus.subscribe("intention", "INTENT_PRESSURE_HIGH", lambda p: _feed_priority(p, "ambient"))
         self.event_bus.subscribe("intention", "CONTINUITY_RESONANCE_SPIKE", lambda p: _feed_priority(p, "ambient"))
         
@@ -357,6 +378,8 @@ class RuntimeContainer:
         self.cognitive_trace = CognitiveTraceEngine(event_bus=self.event_bus)
         self.memory_retrieval = MemoryRetrievalEngine(memory_runtime=self.memory_runtime)
         
+        self.ambient_observer.narrative_generator = self.narrative_generator
+
         self.context_synthesizer = ContextSynthesizer(
             provider_manager=self.provider_manager,
             memory_retrieval=self.memory_retrieval,
@@ -369,6 +392,9 @@ class RuntimeContainer:
         )
         self.cognitive_router = CognitiveRouter(model_runtime=self.model_runtime, event_bus=self.event_bus)
         self.cognitive_planner = CognitivePlanner(model_runtime=self.model_runtime)
+        
+        from arova.core.cognition.action_planner import ActionPlanner
+        self.action_planner = ActionPlanner(model_runtime=self.model_runtime)
     
         self.voice_runtime = VoiceRuntime(event_bus=self.event_bus)
         self.intent_runtime = IntentRuntime(
@@ -376,12 +402,20 @@ class RuntimeContainer:
             session=self.session,
             router=self.cognitive_router,
             context_synthesizer=self.context_synthesizer,
-            planner=self.cognitive_planner
+            planner=self.cognitive_planner,
+            action_planner=self.action_planner
         )
         self.intent_runtime._workspace_manager = self.workspace_manager
     
         self.tts_runtime = TTSRuntime(event_bus=self.event_bus, config=self.config, 
                                       cancellation=self.cancellation, audio_manager=self.audio_session)
+                                      
+        from arova.core.automation.dispatcher import ActionDispatcher
+        from arova.core.automation.execution_runtime import ExecutionRuntime
+        self.action_dispatcher = ActionDispatcher(orchestrator=self.model_runtime)
+        self.execution_runtime = ExecutionRuntime(event_bus=self.event_bus, dispatcher=self.action_dispatcher)
+        self.runtime_projector.execution_runtime = self.execution_runtime
+        
     def _persist_runtime(self):
         """Serializes hot runtime state into the canonical RuntimeSnapshot and saves it."""
         try:
@@ -411,7 +445,8 @@ class RuntimeContainer:
             self.runtime_store.save(self.runtime_snapshot)
         except Exception as e:
             import logging
-            logging.error(f"Failed to persist runtime state: {e}")
+            import traceback
+            logging.error(f"Failed to persist runtime state: {e}\n{traceback.format_exc()}")
         
 
     def shutdown(self):

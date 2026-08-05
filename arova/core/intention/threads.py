@@ -23,13 +23,14 @@ class ContinuitySnapshot:
 @dataclass
 class CognitiveThread:
     """
-    A semantic continuity overlay. Does not store message history (that belongs to SessionManager),
-    but stores the semantic identity and temporal state of an ongoing conversational/cognitive thread.
+    A semantic continuity overlay. Stores the semantic identity, conversation history,
+    and temporal state of an ongoing conversational/cognitive thread.
     """
     thread_id: str = field(default_factory=lambda: f"thr_{uuid.uuid4().hex[:12]}")
     title: str = "New Thread"
     state: ThreadState = "foreground"
     pinned: bool = False
+    messages: List[Dict[str, Any]] = field(default_factory=list)
     
     # Associated chronological turn IDs and their affinity [-1.0, 1.0]
     thread_affinity: Dict[str, float] = field(default_factory=dict)
@@ -50,6 +51,10 @@ class CognitiveThread:
     
     created_at: float = field(default_factory=time.time)
     last_updated: float = field(default_factory=time.time)
+
+    @property
+    def turn_ids(self) -> List[str]:
+        return list(self.thread_affinity.keys())
 
     def to_dict(self) -> Dict[str, Any]:
         from dataclasses import asdict
@@ -78,39 +83,6 @@ class ThreadManager:
         self._threads: Dict[str, CognitiveThread] = {}
         self.session_manager = session_manager
         self.event_bus = event_bus
-        
-        # Inject mock threads for testing Phase 9 Threads Surface
-        t1 = CognitiveThread(title="Memory Consent System", state="latent", pinned=True)
-        t1.continuity_snapshot = ContinuitySnapshot(
-            summary="You were implementing memory consent.",
-            unresolved_questions=["Next step: Connect Tier 2 approval queue."],
-            why_it_matters="Impact: Completes memory explainability flow.",
-            active_pressures=0.8,
-            provenance=[
-                ProvenanceSource(
-                    source_type="workspace",
-                    source_id="VSCode",
-                    confidence=0.93,
-                    explanation="Focused for 45 minutes"
-                ),
-                ProvenanceSource(
-                    source_type="file",
-                    source_id="memory_policy.py",
-                    confidence=0.88,
-                    explanation="Primary active document"
-                )
-            ]
-        )
-        self._threads[t1.thread_id] = t1
-        
-        t2 = CognitiveThread(title="Provider Profiles", state="ambient")
-        self._threads[t2.thread_id] = t2
-        
-        t3 = CognitiveThread(title="Audio Wake Word", state="latent")
-        self._threads[t3.thread_id] = t3
-
-        t4 = CognitiveThread(title="UI Polish", state="ambient")
-        self._threads[t4.thread_id] = t4
 
         if self.event_bus:
             self.event_bus.subscribe("intention", "THREAD_ACTION_REQUESTED", self._handle_action_request)
@@ -126,6 +98,7 @@ class ThreadManager:
         if action == "resume": self.resume_thread(thread_id)
         elif action == "pause": self.pause_thread(thread_id)
         elif action == "archive": self.archive_thread(thread_id)
+        elif action == "delete": self.delete_thread(thread_id)
         elif action == "pin": self.toggle_pin_thread(thread_id)
         elif action == "rename":
             self.rename_thread(thread_id, payload.get("payload", {}).get("new_title", "Renamed Thread"))
@@ -151,6 +124,7 @@ class ThreadManager:
                     "title": t.title,
                     "state": t.state,
                     "pinned": t.pinned,
+                    "messages": t.messages,
                     "resonance": t.continuity_resonance,
                     "active_pressures": snap.active_pressures if snap else 0.0,
                     "last_updated": t.last_updated,
@@ -183,13 +157,44 @@ class ThreadManager:
             
     # Phase 7A: Explicit Thread Actions
     def resume_thread(self, thread_id: str):
-        self.update_thread_state(thread_id, "foreground")
+        thread = self.get_thread(thread_id)
+        if thread:
+            # Save current foreground thread messages if any
+            if hasattr(self.session_manager, "_legacy_messages") and self.session_manager._legacy_messages:
+                fg_threads = [t for t in self._threads.values() if t.state == "foreground" and t.thread_id != thread_id]
+                if fg_threads:
+                    fg_threads[0].messages = list(self.session_manager._legacy_messages)
+                    fg_threads[0].state = "latent"
+
+            # Set selected thread to foreground and populate session messages
+            self.update_thread_state(thread_id, "foreground")
+            if hasattr(self.session_manager, "_legacy_messages"):
+                self.session_manager._legacy_messages = list(thread.messages)
         
     def pause_thread(self, thread_id: str):
         self.update_thread_state(thread_id, "latent")
         
     def archive_thread(self, thread_id: str):
         self.update_thread_state(thread_id, "archived")
+        
+    def delete_thread(self, thread_id: str):
+        if thread_id in self._threads:
+            thread = self._threads[thread_id]
+            
+            # Check if this thread is currently loaded into the active session
+            if self.session_manager and getattr(self.session_manager, "_legacy_messages", None):
+                active_msgs = self.session_manager._legacy_messages
+                if active_msgs and thread.messages:
+                    if active_msgs[0].get("id") == thread.messages[0].get("id"):
+                        # Clear active session state to prevent the deleted thread from resurrecting
+                        self.session_manager._legacy_messages = []
+                        if hasattr(self.session_manager, "_warm_context"):
+                            self.session_manager._warm_context = []
+                        if hasattr(self.session_manager, "_active_turn"):
+                            self.session_manager._active_turn = None
+            
+            del self._threads[thread_id]
+            self._sync()
         
     def rename_thread(self, thread_id: str, new_title: str):
         thread = self.get_thread(thread_id)
@@ -217,20 +222,46 @@ class ThreadManager:
             thread.last_updated = time.time()
             
     def _take_snapshot(self, thread: CognitiveThread):
-        """Take a snapshot of the thread's cognitive state before it goes dormant (`P1 & P2`)."""
-        summary_text = f"Cognitive thread '{thread.title}' tracked across {len(thread.turn_ids)} turns."
-        questions = []
-        workspace_title = "active"
+        """Take a snapshot of the thread's cognitive state before it goes dormant."""
+        msg_count = len(thread.messages)
+        user_msgs = [m for m in thread.messages if m.get("role") == "user"]
         
-        if hasattr(self.session_manager, "_warm_context"):
-            for turn in reversed(self.session_manager._warm_context):
-                if turn.turn_id in thread.turn_ids or not thread.turn_ids:
-                    if "?" in turn.user_transcript:
-                        questions.append(turn.user_transcript)
-                    if not questions and turn.user_transcript:
-                        summary_text = f"Recent topic: {turn.user_transcript[:120]}..."
-                    break
-                    
+        turn_count = max(len(thread.turn_ids), len(user_msgs), 1 if msg_count > 0 else 0)
+        
+        first_user_text = user_msgs[0].get("content", "").strip() if user_msgs else ""
+        last_user_text = user_msgs[-1].get("content", "").strip() if user_msgs else ""
+        
+        if first_user_text:
+            if len(first_user_text) < 25:
+                summary_text = f"Query: \"{first_user_text}\""
+            elif len(first_user_text) > 60:
+                summary_text = f"Discussion on: {first_user_text[:60]}..."
+            else:
+                summary_text = f"Discussion on: {first_user_text}"
+        else:
+            summary_text = f"Conversation Thread '{thread.title}'"
+
+        questions = []
+        for m in reversed(user_msgs):
+            content = m.get("content", "").strip()
+            if "?" in content:
+                questions.append(content)
+        
+        if questions:
+            unresolved = questions[:3]
+        elif last_user_text:
+            unresolved = [f"Continue query: \"{last_user_text[:50]}\""]
+        else:
+            unresolved = [f"Resume work on {thread.title}"]
+
+        if turn_count > 1:
+            why_it_matters = f"Preserves contextual history across {turn_count} turns for {thread.title}."
+        elif turn_count == 1:
+            why_it_matters = f"Preserves prompt context for quick continuation."
+        else:
+            why_it_matters = f"Maintains thread state for future interaction."
+
+        workspace_title = "Active Workspace"
         if hasattr(self.session_manager, "runtime") and getattr(self.session_manager.runtime, "workspace_manager", None):
             active_ws = self.session_manager.runtime.workspace_manager.get_active_workspace()
             if active_ws:
@@ -238,10 +269,10 @@ class ThreadManager:
 
         thread.continuity_snapshot = ContinuitySnapshot(
             summary=summary_text,
-            unresolved_questions=questions[:3] if questions else [f"Resume work on {thread.title}."],
-            why_it_matters=f"Maintains contextual continuity across {len(thread.turn_ids)} turns for {thread.title}.",
-            active_pressures=min(1.0, 0.3 + (len(thread.turn_ids) * 0.1)),
-            environment_context={"workspace": workspace_title, "turn_count": len(thread.turn_ids)}
+            unresolved_questions=unresolved,
+            why_it_matters=why_it_matters,
+            active_pressures=min(1.0, 0.3 + (turn_count * 0.1)),
+            environment_context={"workspace": workspace_title, "turn_count": str(turn_count)}
         )
         
     def get_threads_by_state(self, state: ThreadState) -> List[CognitiveThread]:

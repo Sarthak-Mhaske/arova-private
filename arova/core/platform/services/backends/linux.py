@@ -442,6 +442,55 @@ class LinuxBackend(PlatformBackend):
         app = self._resolve_app(intent.preferred_application or "")
         return self._launcher.execute_intent(intent, app=app)
 
+    def get_open_windows(self) -> list[str]:
+        windows = set()
+        # 1. Try hyprctl
+        if shutil.which("hyprctl"):
+            try:
+                import json
+                proc = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=2)
+                if proc.returncode == 0:
+                    data = json.loads(proc.stdout)
+                    for client in data:
+                        title = client.get("title", "")
+                        cls = client.get("class", "")
+                        if title and title != "v2":  # Ignore weird hyprland defaults
+                            windows.add(f"{cls} - {title}" if cls else title)
+            except Exception as e:
+                logger.debug(f"LinuxBackend hyprctl window tracking failed: {e}")
+
+        # 2. Try wmctrl (X11) if hyprctl wasn't successful or to complement
+        if not windows and shutil.which("wmctrl"):
+            try:
+                proc = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=2)
+                if proc.returncode == 0:
+                    for line in proc.stdout.splitlines():
+                        parts = line.split(None, 3)
+                        if len(parts) >= 4:
+                            title = parts[3]
+                            if title and title != "N/A":
+                                windows.add(title)
+            except Exception as e:
+                logger.debug(f"LinuxBackend wmctrl window tracking failed: {e}")
+                
+        return list(windows)
+
+    def get_playing_media(self) -> list[str]:
+        media = []
+        if shutil.which("playerctl"):
+            try:
+                proc = subprocess.run(
+                    ["playerctl", "-a", "metadata", "-f", "{{status}}: {{artist}} - {{title}}"], 
+                    capture_output=True, text=True, timeout=2
+                )
+                if proc.returncode == 0:
+                    for line in proc.stdout.splitlines():
+                        if line.strip():
+                            media.append(line.strip())
+            except Exception as e:
+                logger.debug(f"LinuxBackend playerctl media tracking failed: {e}")
+        return media
+
     def register_capabilities(self, registry: CapabilityRegistry) -> None:
         registry.register(Capability.OPEN_FILE, lambda intent: self._launcher.execute_intent(intent, self._resolve_app(intent.preferred_application or "")))
         registry.register(Capability.OPEN_URL, lambda intent: self._launcher.execute_intent(intent, self._resolve_app(intent.preferred_application or "")))

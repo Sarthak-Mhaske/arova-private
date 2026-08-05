@@ -37,7 +37,12 @@ class OllamaAdapter(ModelAdapter):
                 
             return json.loads(text.strip())
         except Exception as e:
+            if "Connection refused" in str(e) or "Failed to establish a new connection" in str(e):
+                logging.info(f"Ollama local provider on {self.host} is offline.")
+                return {"error": f"Ollama provider on {self.host} is offline."}
             logging.error(f"Ollama JSON call failed: {e}")
+            if 'result_text' in locals():
+                return {"content": result_text}
             return {"error": str(e)}
 
     async def invoke_stream(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int) -> AsyncGenerator[str, None]:
@@ -50,8 +55,12 @@ class OllamaAdapter(ModelAdapter):
                     loop.call_soon_threadsafe(queue.put_nowait, chunk)
                 loop.call_soon_threadsafe(queue.put_nowait, None)
             except Exception as e:
-                logging.error(f"Ollama stream failed: {e}")
+                if "Connection refused" in str(e) or "Failed to establish a new connection" in str(e):
+                    logging.info(f"Ollama local provider on {self.host} is offline.")
+                else:
+                    logging.error(f"Ollama stream failed: {e}")
                 loop.call_soon_threadsafe(queue.put_nowait, e)
+
 
         import threading
         threading.Thread(target=_sync_stream, daemon=True).start()

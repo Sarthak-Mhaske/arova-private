@@ -403,6 +403,54 @@ class WindowsBackend(PlatformBackend):
         app = self._catalog.get_application(intent.preferred_application or "")
         return self._launcher.execute_intent(intent, app=app)
 
+    def get_open_windows(self) -> list[str]:
+        windows = set()
+        try:
+            # Quick powershell to get main window titles
+            script = "Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -ExpandProperty MainWindowTitle"
+            proc = subprocess.run(["powershell", "-Command", script], capture_output=True, text=True, timeout=3)
+            if proc.returncode == 0 and proc.stdout:
+                for line in proc.stdout.splitlines():
+                    if line.strip():
+                        windows.add(line.strip())
+        except Exception as e:
+            logger.debug(f"WindowsBackend window tracking failed: {e}")
+        return list(windows)
+
+    def get_playing_media(self) -> list[str]:
+        media = []
+        try:
+            # Fallback to winsdk if available for Windows 10/11 media transport controls
+            import asyncio
+            from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager
+            
+            async def get_media_info():
+                manager = await GlobalSystemMediaTransportControlsSessionManager.request_async()
+                session = manager.get_current_session()
+                if session:
+                    info = await session.try_get_media_properties_async()
+                    title = info.title
+                    artist = info.artist
+                    if title:
+                        return f"Playing: {artist} - {title}" if artist else f"Playing: {title}"
+                return ""
+                
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We can't await easily in a sync method, but typically get_playing_media isn't called synchronously here
+                # In Arova, if it is called sync, we need a separate thread or just skip it if loop is running
+                pass
+            else:
+                info = loop.run_until_complete(get_media_info())
+                if info:
+                    media.append(info)
+        except ImportError:
+            logger.debug("winsdk not installed, skipping Windows native media tracking.")
+        except Exception as e:
+            logger.debug(f"WindowsBackend media tracking failed: {e}")
+            
+        return media
+
     def register_capabilities(self, registry: CapabilityRegistry) -> None:
         registry.register(Capability.OPEN_FILE, lambda intent: self.execute(intent))
         registry.register(Capability.OPEN_URL, lambda intent: self.execute(intent))

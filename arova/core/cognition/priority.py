@@ -30,6 +30,27 @@ class CognitiveSignal:
     recurrence_count: int = 1
     novelty_score: float = 1.0
     cognitive_pressure: float = 0.0
+    
+    # 3-Axis Permission Governance
+    reversibility: str = "high" # "high" | "medium" | "low"
+    blast_radius: str = "tiny"  # "tiny" | "local" | "large"
+
+def evaluate_permission_ladder(confidence: float, reversibility: str = "high", blast_radius: str = "tiny") -> str:
+    """
+    Evaluates action behavior based on Confidence x Reversibility x Blast Radius.
+    Returns:
+      - 'execute_automatically': High confidence (>90%), Reversible, Tiny blast radius (read-only / local tests)
+      - 'prepare_and_ask': High confidence (>90%), Local edits (prepare patch, 1-click review)
+      - 'require_explicit_approval': Low reversibility OR large blast radius (git push, send email)
+      - 'suppress_silent': Low confidence (<60%) - stay completely silent to protect flow
+    """
+    if confidence < 0.60:
+        return "suppress_silent"
+    if reversibility == "low" or blast_radius == "large":
+        return "require_explicit_approval"
+    if reversibility == "high" and blast_radius == "tiny" and confidence >= 0.90:
+        return "execute_automatically"
+    return "prepare_and_ask"
 
 class CognitivePriorityEngine:
     """

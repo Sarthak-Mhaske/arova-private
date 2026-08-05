@@ -5,11 +5,15 @@ from typing import List, Dict, Any
 class VisibleThread:
     thread_id: str
     title: str
-    state: str # foreground, ambient
+    state: str # foreground, ambient, latent, archived
     pinned: bool = False
     last_active: float = 0.0
     continuity_resonance: float = 0.0
     workspace_match: str = ""
+    messages: List[Dict[str, Any]] = field(default_factory=list)
+    summary: str = ""
+    unresolved_questions: List[str] = field(default_factory=list)
+    why_it_matters: str = ""
 
 @dataclass
 class StreamItem:

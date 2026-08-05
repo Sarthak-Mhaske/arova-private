@@ -251,7 +251,7 @@ export const CommandPaletteSurface: React.FC = () => {
         color: 'rgba(255,255,255,0.4)',
         fontSize: '11px'
       }}>
-        <span>Universal Search Index across 6 categories (`Phase 6`)</span>
+        <span>Universal Search Index across 6 categories</span>
         <span>↑↓ Navigate • ENTER Select • ESC Close</span>
       </div>
     </div>

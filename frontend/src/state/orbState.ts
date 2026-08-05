@@ -11,15 +11,19 @@ interface CognitiveModulation {
 
 interface OrbState {
   mode: OrbMode;
+  details: string;
+  rawState: string;
   isPulsing: boolean;
   modulation: CognitiveModulation;
-  setMode: (mode: OrbMode) => void;
+  setMode: (mode: OrbMode, details?: string, rawState?: string) => void;
   setModulation: (mod: Partial<CognitiveModulation>) => void;
   triggerPulse: () => void;
 }
 
 export const useOrbState = create<OrbState>((set) => ({
   mode: 'present',
+  details: '',
+  rawState: '',
   isPulsing: false,
   modulation: {
     breathing_rhythm: 0.5,
@@ -27,7 +31,7 @@ export const useOrbState = create<OrbState>((set) => ({
     warmth: 0.5,
     saturation: 0.5
   },
-  setMode: (mode) => set({ mode }),
+  setMode: (mode, details = '', rawState = '') => set({ mode, details, rawState }),
   setModulation: (mod) => set((state) => ({ modulation: { ...state.modulation, ...mod } })),
   triggerPulse: () => {
     set({ isPulsing: true });

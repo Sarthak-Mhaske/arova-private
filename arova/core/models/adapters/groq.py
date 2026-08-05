@@ -21,24 +21,35 @@ class GroqAdapter(ModelAdapter):
     def provider_name(self) -> str:
         return "groq"
 
+    async def invoke(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int) -> str:
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(None, self._sync_call, messages, system_prompt, model_name, max_tokens, False, False)
+        except Exception as e:
+            logging.error(f"Groq API call failed: {e}")
+            raise e
+
     async def invoke_structured(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int) -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
         try:
-            result_text = await loop.run_in_executor(None, self._sync_call, messages, system_prompt, model_name, max_tokens, False)
+            result_text = await loop.run_in_executor(None, self._sync_call, messages, system_prompt, model_name, max_tokens, False, True)
             
-            # Parse JSON
+            # Parse JSON with robust extraction
             text = result_text.strip()
-            if text.startswith("```json"):
-                text = text[7:]
-            if text.startswith("```"):
-                text = text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-                
-            return json.loads(text.strip())
+            if "```json" in text:
+                text = text.split("```json", 1)[1].split("```", 1)[0].strip()
+            elif "```" in text:
+                text = text.split("```", 1)[1].split("```", 1)[0].strip()
+            
+            if "{" in text and "}" in text:
+                first_brace = text.find("{")
+                last_brace = text.rfind("}")
+                text = text[first_brace:last_brace + 1].strip()
+
+            return json.loads(text)
         except Exception as e:
             logging.error(f"Groq JSON call failed: {e}")
-            return {"error": str(e)}
+            raise e
 
     async def invoke_stream(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int) -> AsyncGenerator[str, None]:
         loop = asyncio.get_running_loop()
@@ -51,7 +62,7 @@ class GroqAdapter(ModelAdapter):
                 loop.call_soon_threadsafe(queue.put_nowait, None)
             except Exception as e:
                 logging.error(f"Groq stream failed: {e}")
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                loop.call_soon_threadsafe(queue.put_nowait, e)
 
         import threading
         threading.Thread(target=_sync_stream, daemon=True).start()
@@ -59,6 +70,8 @@ class GroqAdapter(ModelAdapter):
         buffer = ""
         while True:
             chunk = await queue.get()
+            if isinstance(chunk, Exception):
+                raise chunk
             if chunk is None:
                 if buffer.strip():
                     yield buffer.strip()
@@ -75,7 +88,7 @@ class GroqAdapter(ModelAdapter):
                             yield sentence
                         break
 
-    def _sync_call(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int, stream: bool) -> Any:
+    def _sync_call(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int, stream: bool, structured: bool = False) -> Any:
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -93,6 +106,12 @@ class GroqAdapter(ModelAdapter):
             "temperature": 0.0,
             "stream": stream
         }
+        
+        # Only enable JSON mode when explicitly requested via invoke_structured().
+        # NEVER auto-detect from system_prompt content — prompts containing "DO NOT OUTPUT JSON"
+        # would falsely trigger this and force the LLM to return JSON on chat responses.
+        if structured:
+            payload["response_format"] = {"type": "json_object"}
         
         response = requests.post(url, headers=headers, json=payload, timeout=10.0, stream=stream)
         if response.status_code != 200:

@@ -21,28 +21,28 @@ export const WorkspaceSurface: React.FC = () => {
       {!activeWorkspace && (
         <div
           style={{
-            background: 'linear-gradient(135deg, rgba(180, 150, 255, 0.08) 0%, rgba(20, 20, 30, 0.7) 100%)',
-            border: '1px solid rgba(180, 150, 255, 0.25)',
+            background: 'var(--glass-2)',
+            border: '1px solid var(--hairline-2)',
             borderRadius: '16px',
             padding: '32px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            boxShadow: 'var(--shadow-md)',
             display: 'flex',
             flexDirection: 'column',
             gap: '16px'
           }}
         >
-          <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink, #fff)', letterSpacing: '-0.01em' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
             Welcome to Arova
           </div>
-          <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)', lineHeight: '1.6' }}>
+          <div style={{ fontSize: '14px', color: 'var(--ink-2)', lineHeight: '1.6' }}>
             Arova builds a working memory automatically while you work.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '8px', color: 'rgba(255, 255, 255, 0.7)', fontSize: '13px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '8px', color: 'var(--ink-3)', fontSize: '13px' }}>
             <div>• Continue coding</div>
             <div>• Browse the web</div>
             <div>• Read documents</div>
           </div>
-          <div style={{ fontSize: '13px', color: '#a881ff', fontStyle: 'italic', marginTop: '4px' }}>
+          <div style={{ fontSize: '13px', color: 'var(--accent-violet)', fontStyle: 'italic', marginTop: '4px' }}>
             I'll quietly build your first workspace.
           </div>
         </div>

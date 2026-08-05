@@ -2,7 +2,10 @@ import logging
 import threading
 import numpy as np
 from typing import Optional
-from faster_whisper import WhisperModel
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
 from arova.core.events import RuntimeEventBus
 from arova.core.voice.audio_session import AudioSessionManager
 from arova.core.time import RuntimeClock

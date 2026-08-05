@@ -837,6 +837,100 @@ body::after {
 [data-theme="nocturne"] .orb-caption .state { color: var(--ink-3); }
 [data-theme="nocturne"] .orb-caption .mood { color: var(--ink-mute); }
 
+/* --- Real-Time Observation Overlay Pill --- */
+.observation-pill-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.observation-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 9999px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-size: 11.5px;
+  color: var(--ink-2, #e0e0e0);
+  letter-spacing: 0.01em;
+  max-width: 88vw;
+  cursor: default;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.observation-pill:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.observation-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.observation-dot.pulse {
+  background: #a0a0a0;
+  animation: obs-dot-pulse 2s infinite ease-in-out;
+}
+
+.observation-dot.active {
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  animation: obs-dot-glow 1.8s infinite ease-in-out;
+}
+
+.observation-dot.thinking {
+  background: #a855f7;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
+  animation: obs-dot-glow 1.2s infinite ease-in-out;
+}
+
+.observation-dot.executing {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+  animation: obs-dot-glow 1.0s infinite ease-in-out;
+}
+
+.observation-icon {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.observation-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 450;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.observation-label {
+  font-size: 11px;
+  color: var(--ink-mute, #888);
+  font-style: italic;
+}
+
+@keyframes obs-dot-glow {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 12px rgba(52, 211, 153, 0.9); }
+}
+
+@keyframes obs-dot-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}
+
 .orb-wrap.pulsing .orb-glow {
   animation: glow-pulse 900ms cubic-bezier(0.32, 0.72, 0.24, 1);
 }
@@ -970,6 +1064,99 @@ body::after {
 }
 .surfacing p:last-child { margin-bottom: 0; }
 .surfacing .quiet { color: var(--ink-3); }
+
+/* Surfacing Markdown & Code Blocks */
+.surfacing pre {
+  background: rgba(22, 19, 28, 0.4);
+  border: 1px solid rgba(232, 208, 164, 0.12);
+  border-radius: 14px;
+  padding: 18px 24px;
+  margin: 24px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.15), 0 4px 20px rgba(0, 0, 0, 0.05);
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #e8d0a4;
+  backdrop-filter: blur(12px) saturate(120%);
+}
+
+[data-theme="nocturne"] .surfacing pre {
+  background: rgba(14, 12, 18, 0.6);
+  border-color: rgba(232, 208, 164, 0.08);
+  box-shadow: inset 0 2px 20px rgba(0, 0, 0, 0.3), 0 8px 30px rgba(0, 0, 0, 0.2);
+}
+
+.surfacing code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  font-size: 13.5px;
+  background: rgba(212, 168, 120, 0.12);
+  border: 1px solid rgba(212, 168, 120, 0.08);
+  color: #d4a878;
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+[data-theme="nocturne"] .surfacing code {
+  background: rgba(232, 208, 164, 0.08);
+  border-color: rgba(232, 208, 164, 0.05);
+  color: #e8d0a4;
+}
+
+.surfacing pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.surfacing h1, .surfacing h2, .surfacing h3, .surfacing h4 {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--ink-1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+
+.surfacing h3, .surfacing h4 {
+  font-size: 15px;
+}
+
+.surfacing hr {
+  border: none;
+  border-top: 1px solid rgba(232, 208, 164, 0.08);
+  margin: 16px 0;
+}
+
+.surfacing ul {
+  list-style-type: disc;
+  padding-left: 18px;
+  margin-bottom: 16px;
+  color: var(--ink-2);
+}
+
+.surfacing ol {
+  padding-left: 18px;
+  margin-bottom: 16px;
+  color: var(--ink-2);
+}
+
+.surfacing li {
+  margin-bottom: 7px;
+  line-height: 1.62;
+  color: var(--ink-2);
+}
+
+.surfacing strong {
+  color: var(--ink-1);
+  font-weight: 600;
+}
 
 @keyframes surface-in {
   from { opacity: 0; transform: translateY(10px); filter: blur(3px); }
@@ -1172,6 +1359,44 @@ body::after {
   will-change: transform;
 }
 
+.active-action-overlay {
+  position: absolute;
+  top: -45px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-2);
+  backdrop-filter: blur(12px);
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--border);
+  animation: action-overlay-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  pointer-events: auto;
+  border: 1px solid var(--primary-alpha);
+}
+
+.active-action-overlay .spinner {
+  animation: spin 1.5s linear infinite;
+  display: inline-block;
+  font-size: 1rem;
+}
+
+@keyframes action-overlay-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
 /* Veil — FIXED: radial-elliptical gradient, no hard edges */
 .command-zone::before {
   content: "";
@@ -1311,6 +1536,22 @@ body::after {
 .cmd-btn.send:hover {
   transform: translateY(-1px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 5px 16px var(--send-glow);
+}
+
+.cmd-btn.active {
+  background: rgba(235, 195, 120, 0.18);
+  color: #e2b874;
+}
+.cmd-btn.mic-on {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+  animation: mic-pulse 2s infinite;
+}
+@keyframes mic-pulse {
+  0% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
+  100% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.3); }
 }
 
 .command-hint {
@@ -1467,7 +1708,6 @@ body::after {
   padding: 38px 42px;
   overflow: auto;
   opacity: 0;
-  contain: layout style paint;
   will-change: transform, opacity, filter;
   transition:
     opacity 560ms cubic-bezier(0.32, 0.72, 0.24, 1),

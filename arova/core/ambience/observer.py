@@ -64,10 +64,17 @@ class AmbientObserver:
                             self.current_context = new_ctx
                             self._pending_context = None
                             
+                            snap = dict(new_ctx.__dict__)
+                            if hasattr(self, "narrative_generator") and self.narrative_generator:
+                                try:
+                                    snap["attention_narrative"] = self.narrative_generator.get_current_trajectory().narrative
+                                except Exception:
+                                    pass
+
                             self.event_bus.emit("ambience", "CONTEXT_CHANGED", StateEvent(
                                 state="CONTEXT_CHANGED",
                                 message="Ambient context stabilized",
-                                snapshot=new_ctx.__dict__
+                                snapshot=snap
                             ))
                             logging.info("AmbientObserver: Context stabilized and updated.")
                     else:
@@ -83,4 +90,4 @@ class AmbientObserver:
             except Exception as e:
                 logging.error(f"AmbientObserver poll error: {e}")
                 
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(4.0)

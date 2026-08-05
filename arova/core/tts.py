@@ -6,8 +6,16 @@ import subprocess
 import tempfile
 from typing import Any
 
+def _resolve_binary(name: str) -> str | None:
+    path = shutil.which(name)
+    if path: return path
+    local_bin = os.path.expanduser(f"~/.local/bin/{name}")
+    if os.path.exists(local_bin) and os.access(local_bin, os.X_OK):
+        return local_bin
+    return None
+
 def _command_exists(name: str) -> bool:
-    return shutil.which(name) is not None
+    return _resolve_binary(name) is not None
 
 def _expand_path(path: str) -> str:
     return os.path.expanduser(path)
@@ -100,14 +108,15 @@ def get_piper_model(config: dict[str, Any], language: str) -> str | None:
 def synthesize_with_edge(text: str, config: dict[str, Any], language: str = "english", output_path: str | None = None) -> dict[str, Any]:
     tts_cfg = config.get("tts", {})
     edge_cfg = tts_cfg.get("edge", {})
-    binary = edge_cfg.get("binary", "edge-tts")
+    binary_name = edge_cfg.get("binary", "edge-tts")
+    binary = _resolve_binary(binary_name)
 
-    if not _command_exists(binary):
+    if not binary:
         return {
             "ok": False,
             "engine": "edge",
             "audio_path": None,
-            "error": f"Binary '{binary}' not found in PATH."
+            "error": f"Binary '{binary_name}' not found in PATH or ~/.local/bin."
         }
         
     voice = get_edge_voice(config, language)
@@ -156,14 +165,15 @@ def synthesize_with_edge(text: str, config: dict[str, Any], language: str = "eng
 def synthesize_with_piper(text: str, config: dict[str, Any], language: str = "english", output_path: str | None = None) -> dict[str, Any]:
     tts_cfg = config.get("tts", {})
     piper_cfg = tts_cfg.get("piper", {})
-    binary = piper_cfg.get("binary", "piper")
+    binary_name = piper_cfg.get("binary", "piper")
+    binary = _resolve_binary(binary_name)
 
-    if not _command_exists(binary):
+    if not binary:
         return {
             "ok": False,
             "engine": "piper",
             "audio_path": None,
-            "error": f"Binary '{binary}' not found in PATH."
+            "error": f"Binary '{binary_name}' not found in PATH or ~/.local/bin."
         }
         
     model = get_piper_model(config, language)

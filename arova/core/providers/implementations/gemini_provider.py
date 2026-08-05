@@ -1,7 +1,10 @@
 import time
 import json
 import logging
-import aiohttp
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
 from typing import List, Dict, Any, Set, AsyncGenerator
 from arova.core.providers.base import CognitiveProvider
 from arova.core.providers.capabilities import Capability
@@ -27,7 +30,7 @@ class GeminiProvider(CognitiveProvider):
 
     @property
     def supported_capabilities(self) -> Set[Capability]:
-        return {Capability.CHAT, Capability.REASONING, Capability.SUMMARIZATION}
+        return {Capability.CHAT, Capability.REASONING, Capability.SUMMARIZATION, Capability.VISION}
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
@@ -44,7 +47,28 @@ class GeminiProvider(CognitiveProvider):
 
         for m in messages:
             role = "user" if m.get("role") in ("user", "system") else "model"
-            contents.append({"role": role, "parts": [{"text": m.get("content", "")}]})
+            content = m.get("content", "")
+            if isinstance(content, str):
+                contents.append({"role": role, "parts": [{"text": content}]})
+            elif isinstance(content, list):
+                parts = []
+                for item in content:
+                    if item.get("type") == "text":
+                        parts.append({"text": item.get("text", "")})
+                    elif item.get("type") == "image_url":
+                        url = item.get("image_url", {}).get("url", "")
+                        if url.startswith("data:image/"):
+                            import re
+                            match = re.match(r"data:(image/\w+);base64,(.*)", url)
+                            if match:
+                                parts.append({
+                                    "inlineData": {
+                                        "mimeType": match.group(1),
+                                        "data": match.group(2)
+                                    }
+                                })
+                if parts:
+                    contents.append({"role": role, "parts": parts})
 
         url = f"{self.base_url}/{model}:generateContent?key={self.api_key}"
         payload = {

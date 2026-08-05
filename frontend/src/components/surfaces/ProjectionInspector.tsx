@@ -9,7 +9,7 @@ export const ProjectionInspector: React.FC = () => {
 
   return (
     <>
-      <SurfaceHead title="Projection Inspector" sub="Phase 7.25 · Raw Runtime Dump" />
+      <SurfaceHead title="Projection Inspector" sub="Raw Runtime Dump" />
       <div className="surface-content" style={{ padding: '0 42px 42px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
         <div style={{ background: 'var(--glass-1)', padding: '24px', borderRadius: '16px', border: '1px solid var(--glass-edge)', fontFamily: 'monospace', fontSize: '13px' }}>

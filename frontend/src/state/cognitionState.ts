@@ -72,6 +72,12 @@ interface CognitionState {
   setSensitiveCandidate: (candidate: any | null) => void;
   contextualCandidate: any | null;
   setContextualCandidate: (candidate: any | null) => void;
+  
+  lastExecutionMetadata: any | null;
+  setLastExecutionMetadata: (meta: any | null) => void;
+  
+  activeAction: string | null;
+  setActiveAction: (action: string | null) => void;
 }
 
 export const useCognitionState = create<CognitionState>((set) => ({
@@ -82,33 +88,80 @@ export const useCognitionState = create<CognitionState>((set) => ({
   pendingMemories: [],
   sensitiveCandidate: null,
   contextualCandidate: null,
+  lastExecutionMetadata: null,
+  activeAction: null,
   setThreads: (threads) => set({ threads }),
   setMemories: (memories) => set({ memories }),
   setPendingMemories: (memories) => set({ pendingMemories: memories }),
   setSensitiveCandidate: (candidate) => set({ sensitiveCandidate: candidate }),
   setContextualCandidate: (candidate) => set({ contextualCandidate: candidate }),
+  setLastExecutionMetadata: (meta) => set({ lastExecutionMetadata: meta }),
+  setActiveAction: (action) => set({ activeAction: action }),
   setItems: (newItems) => set((state) => {
-    // If explicitly setting to empty, clear everything
     if (newItems.length === 0) {
       return { items: [] };
     }
-    const newIds = new Set(newItems.map(i => i.id));
-    const activeUnsaved = state.items.filter(i => !newIds.has(i.id));
-    return { items: [...newItems, ...activeUnsaved] };
+    
+    // 1. Strictly deduplicate newItems by ID, keeping the latest occurrence
+    const uniqueNewItems: StreamItem[] = [];
+    const seenIds = new Set<string>();
+    for (let i = newItems.length - 1; i >= 0; i--) {
+      if (!seenIds.has(newItems[i].id)) {
+        seenIds.add(newItems[i].id);
+        uniqueNewItems.unshift(newItems[i]);
+      }
+    }
+    
+    // 2. Deduplicate user messages that are identical to the last seen user message
+    const finalNewItems: StreamItem[] = [];
+    let lastUserText = '';
+    for (const item of uniqueNewItems) {
+      if (item.type === 'userSaid') {
+        if (item.text === lastUserText) {
+          continue; // Skip if it's identical to the previous user message
+        }
+        lastUserText = item.text;
+      }
+      // Note: We deliberately do NOT reset lastUserText on non-user messages.
+      // This prevents duplicates when the backend sends User -> Assistant -> User(Duplicate)
+      finalNewItems.push(item);
+    }
+    
+    // 3. Keep any in-flight active streams that weren't in the new list
+    const finalNewIds = new Set(finalNewItems.map(i => i.id));
+    const activeUnsaved = state.items.filter(i => 
+      !finalNewIds.has(i.id) && 
+      i.type !== 'userSaid' && 
+      (i.type !== 'surfacing' || i.id === state.activeStreamId)
+    );
+    
+    return { items: [...finalNewItems, ...activeUnsaved] };
   }),
   addItems: (newItems) => set((state) => ({ items: [...state.items, ...newItems] })),
   removeItems: (ids) => set((state) => {
     const idSet = new Set(ids);
     return { items: state.items.filter(i => !idSet.has(i.id)) };
   }),
-  addUserInput: (text) => set((state) => ({
-    items: [...state.items, {
-      id: Math.random().toString(36).substring(7),
-      type: 'userSaid',
-      timestamp: Date.now(),
-      text
-    }]
-  })),
+  addUserInput: (text) => set((state) => {
+    // Deduplicate rapid consecutive identical messages (fixes websocket echo bugs)
+    const now = Date.now();
+    const isDuplicate = state.items.some(item => 
+      item.type === 'userSaid' && 
+      item.text === text && 
+      (now - item.timestamp) < 2000
+    );
+    
+    if (isDuplicate) return state;
+
+    return {
+      items: [...state.items, {
+        id: Math.random().toString(36).substring(7),
+        type: 'userSaid',
+        timestamp: now,
+        text
+      }]
+    };
+  }),
   
   streamStart: (streamId) => set((state) => {
     // Prevent duplicate stream start, but take ownership

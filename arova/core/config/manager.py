@@ -16,7 +16,9 @@ DEFAULT_CONFIG = {
     },
     "runtime": {
         "continuity_decay": "standard"
-    }
+    },
+    "preferred_provider": None,
+    "allow_fallback": True
 }
 
 DEFAULT_PROVIDERS = {

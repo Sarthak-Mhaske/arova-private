@@ -1,5 +1,6 @@
 import { routeEvent } from './eventRouter';
 import { invoke } from '@tauri-apps/api/core';
+import { useStartupState } from '../state/startupState';
 
 function feLog(msg: string) {
   console.log(msg);
@@ -24,8 +25,41 @@ class RuntimeSocket {
     }
 
     this.isIntentionalDisconnect = false;
-    feLog(`[runtime] Connecting to ${url}...`);
+    feLog(`[runtime] Initializing connection logic for ${url}...`);
+
+    if (!this.hasEverConnected && useStartupState.getState().reconnectAttempts === 0 && useStartupState.getState().phase === 'starting') {
+      setTimeout(() => {
+        if (!this.hasEverConnected && useStartupState.getState().phase === 'starting') {
+          useStartupState.getState().setPhase('launching_daemon');
+        }
+      }, 450);
+      setTimeout(() => {
+        if (!this.hasEverConnected && useStartupState.getState().phase === 'launching_daemon') {
+          useStartupState.getState().setPhase('initializing_workspace');
+        }
+      }, 1200);
+      setTimeout(() => {
+        if (!this.hasEverConnected && useStartupState.getState().phase === 'initializing_workspace') {
+          useStartupState.getState().setPhase('connecting');
+        }
+      }, 2200);
+
+      // On cold boot, wait 350ms before creating WebSocket to allow daemon process initialization
+      setTimeout(() => {
+        this._rawConnect(url);
+      }, 350);
+    } else {
+      this._rawConnect(url);
+    }
+  }
+
+  private _rawConnect(url: string) {
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    feLog(`[runtime] Opening WebSocket to ${url}...`);
     this.ws = new WebSocket(url);
+
 
     this.ws.onopen = () => {
       feLog('[runtime] Connected to daemon on ' + url);
@@ -37,6 +71,8 @@ class RuntimeSocket {
         this.reconnectTimer = null;
       }
       
+      useStartupState.getState().setPhase('ready');
+
       routeEvent({
         v: 1,
         type: 'runtime.status',
@@ -47,6 +83,7 @@ class RuntimeSocket {
       // Request session history to hydrate the UI
       this.sendEvent({ type: 'session.sync_request' });
       this.sendEvent({ type: 'awareness.get_request' });
+      this.sendEvent({ type: 'workspace.sync_request' });
 
       // Start ping heartbeat
       this.startPing();
@@ -78,6 +115,14 @@ class RuntimeSocket {
       });
 
       if (!this.isIntentionalDisconnect) {
+        if (!this.hasEverConnected) {
+          useStartupState.getState().incrementAttempts();
+          const attempts = useStartupState.getState().reconnectAttempts;
+          if (attempts >= 8) {
+            useStartupState.getState().setPhase('failed', "Couldn't start local engine.");
+            return;
+          }
+        }
         this.scheduleReconnect(url);
       }
     };
@@ -139,4 +184,23 @@ if (typeof window !== 'undefined') {
   window.addEventListener('arova-send', ((e: CustomEvent) => {
     socket.sendEvent(e.detail);
   }) as EventListener);
+
+  let syncTimer: any = null;
+  const reSyncOnWake = () => {
+    if (document.visibilityState === 'visible') {
+      if (!socket.connected) {
+        socket.connect();
+      } else {
+        if (syncTimer) clearTimeout(syncTimer);
+        syncTimer = setTimeout(() => {
+          socket.sendEvent({ type: 'session.sync_request' });
+          socket.sendEvent({ type: 'awareness.get_request' });
+        }, 100);
+      }
+    }
+  };
+
+  window.addEventListener('focus', reSyncOnWake);
+  window.addEventListener('online', reSyncOnWake);
+  document.addEventListener('visibilitychange', reSyncOnWake);
 }

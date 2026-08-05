@@ -9,6 +9,18 @@ export const PersonalMemoryPolicyDialog: React.FC = () => {
   const { contextualCandidate, setContextualCandidate } = useCognitionState();
   const [selectedPolicy, setSelectedPolicy] = useState<string>('review_queue');
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextualCandidate(null);
+      }
+    };
+    if (contextualCandidate) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [contextualCandidate, setContextualCandidate]);
+
   if (!contextualCandidate) return null;
 
   const handleConfirm = (rememberThis: boolean) => {

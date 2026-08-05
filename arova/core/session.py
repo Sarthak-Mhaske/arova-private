@@ -46,6 +46,14 @@ class ConversationSession:
         self._active_plan_timestamp: float = 0.0
         self._authoritative_turn_id: Optional[str] = None
         
+        # Rigid duplicate prevention guard
+        self._last_user_text: str = ""
+        self._last_user_ts: float = 0.0
+        
+        # Memory extraction cooldown (prevent spam)
+        self._last_memory_extract_ts: float = 0.0
+        self._persistent_last_active_ts: float = 0.0
+        
         # Phase 3: Persistent Cognitive Threads overlay
         from arova.core.intention.threads import ThreadManager
         self.thread_manager = ThreadManager(self)
@@ -53,8 +61,19 @@ class ConversationSession:
         # We still expose a legacy _messages array for the current UI to function during migration
         self._legacy_messages: List[Dict[str, Any]] = []
         
+    def _is_duplicate_user_msg(self, text: str) -> bool:
+        """Rigid duplicate prevention: reject identical user text within 5 seconds."""
+        now = time.time()
+        if text == self._last_user_text and (now - self._last_user_ts) < 5.0:
+            return True
+        return False
+    
     def start_new_turn(self, user_transcript: str) -> ConversationTurn:
         """Finalizes any active turn and starts a new one."""
+        # Rigid dedup: reject identical user messages within 5s
+        if self._is_duplicate_user_msg(user_transcript):
+            return self._active_turn or ConversationTurn(user_transcript=user_transcript)
+            
         if self._active_turn:
             self._active_turn.timestamp_end = RuntimeClock.now()
             self._warm_context.append(self._active_turn)
@@ -66,6 +85,10 @@ class ConversationSession:
         self._active_turn = ConversationTurn(user_transcript=user_transcript)
         self._authoritative_turn_id = self._active_turn.turn_id
         
+        # Update dedup guard
+        self._last_user_text = user_transcript
+        self._last_user_ts = time.time()
+        
         # Update legacy format for UI
         self._legacy_messages.append({
             "id": self._active_turn.turn_id,
@@ -75,6 +98,16 @@ class ConversationSession:
         })
         self._revision += 1
         return self._active_turn
+
+    def get_previous_user_turn_timestamp(self) -> float | None:
+        """Returns the timestamp of the previous user turn before the current active turn for absence gap calculation."""
+        active_id = self._active_turn.turn_id if self._active_turn else None
+        for msg in reversed(self._legacy_messages):
+            if msg.get("role") == "user" and msg.get("id") != active_id:
+                ts = msg.get("timestamp")
+                if ts and ts > 0:
+                    return ts
+        return self._persistent_last_active_ts if self._persistent_last_active_ts > 0 else None
         
     def get_authoritative_turn_id(self) -> Optional[str]:
         return self._authoritative_turn_id
@@ -94,9 +127,17 @@ class ConversationSession:
             self._active_turn.interrupted = interrupted
             self._active_turn.timestamp_end = RuntimeClock.now()
             
+            import uuid
+            msg_id = f"asst_{self._active_turn.turn_id}"
+            
+            # Check if this turn already has an assistant response in legacy_messages
+            has_existing = any(m.get("id", "").startswith(msg_id) for m in self._legacy_messages)
+            if has_existing:
+                msg_id = f"{msg_id}_{str(uuid.uuid4())[:8]}"
+
             # Update legacy format
             self._legacy_messages.append({
-                "id": f"asst_{self._active_turn.turn_id}",
+                "id": msg_id,
                 "role": "assistant", 
                 "content": response, 
                 "timestamp": time.time()
@@ -104,16 +145,21 @@ class ConversationSession:
             self._revision += 1
             self._save_history()
             
-            # Eagerly extract memories Phase 7.5
+            # Eagerly extract memories Phase 7.5 — with 60-second cooldown to prevent spam
             if hasattr(self, "_memory_runtime") and self._memory_runtime:
                 import asyncio
                 import logging
-                loop = getattr(self._memory_runtime, "_loop", None)
-                if loop:
-                    logging.info(f"Session: Scheduling extract_eagerly for turn {self._active_turn.turn_id}")
-                    asyncio.run_coroutine_threadsafe(self._memory_runtime.extract_eagerly(self._active_turn), loop)
+                now = time.time()
+                if (now - self._last_memory_extract_ts) >= 60.0:
+                    loop = getattr(self._memory_runtime, "_loop", None)
+                    if loop:
+                        self._last_memory_extract_ts = now
+                        logging.info(f"Session: Scheduling extract_eagerly for turn {self._active_turn.turn_id}")
+                        asyncio.run_coroutine_threadsafe(self._memory_runtime.extract_eagerly(self._active_turn), loop)
+                    else:
+                        logging.error("Session: _memory_runtime._loop is None, cannot schedule extract_eagerly")
                 else:
-                    logging.error("Session: _memory_runtime._loop is None, cannot schedule extract_eagerly")
+                    logging.debug(f"Session: Skipping extract_eagerly (cooldown: {60.0 - (now - self._last_memory_extract_ts):.0f}s remaining)")
 
     def get_canonical_history(self) -> List[Dict[str, Any]]:
         """Returns history conforming to the canonical SessionMessage schema."""
@@ -169,6 +215,11 @@ class ConversationSession:
     
     def add_user_message(self, content: str) -> bool:
         if not content.strip(): return False
+        
+        # Rigid dedup: reject identical user messages within 5s
+        if self._is_duplicate_user_msg(content):
+            return True
+            
         self.start_new_turn(content)
         self._save_history()
         return True
@@ -241,13 +292,15 @@ class ConversationSession:
     def to_dict(self) -> dict:
         return {
             "system_prompt": self._system_prompt,
-            "legacy_messages": self._legacy_messages
+            "legacy_messages": self._legacy_messages,
+            "persistent_last_active_ts": self._persistent_last_active_ts or time.time()
         }
         
     @classmethod
     def from_dict(cls, data: dict, state_store=None) -> 'ConversationSession':
         session = cls(system_prompt=data.get("system_prompt"), state_store=state_store)
         session._legacy_messages = data.get("legacy_messages", [])
+        session._persistent_last_active_ts = data.get("persistent_last_active_ts", 0.0)
         return session
 
     def get_plans(self) -> list:

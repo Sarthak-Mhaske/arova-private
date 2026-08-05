@@ -212,8 +212,6 @@ class TTSRuntime:
             
         if self._playback_queue is not None:
             # Stream mode: send EOF sentinel with total chunks expected
-            if text.strip():
-                self._on_text_chunk(payload)
             with self._lock:
                 total_chunks = self._chunk_counter
             self._playback_queue.put((-1, total_chunks))

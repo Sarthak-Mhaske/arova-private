@@ -1,6 +1,9 @@
 import time
 import logging
-import aiohttp
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
 from typing import List, Dict, Any, Set, AsyncGenerator
 from arova.core.providers.base import CognitiveProvider
 from arova.core.providers.capabilities import Capability
