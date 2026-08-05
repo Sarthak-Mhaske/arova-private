@@ -4,6 +4,7 @@ const MDiv: any = motion.div;
 import { surfaceIn, easeSoft } from '../../motion';
 import { SurfacingItem, useCognitionState, useSurfaceState } from '../../state';
 import { ActionChip } from './ActionChip';
+import { socket } from '../../runtime/socket';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -180,6 +181,28 @@ export const Surfacing: React.FC<{ item: SurfacingItem }> = ({ item }) => {
           <ReactMarkdown 
             remarkPlugins={[remarkGfm]}
             components={{
+              a({ href, children }) {
+                const handleClick = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  if (!href) return;
+                  socket.sendEvent({
+                    type: 'user.message',
+                    text: `open ${href}`,
+                    vocalize: false
+                  });
+                };
+                return (
+                  <a 
+                    href={href} 
+                    onClick={handleClick}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    {children}
+                  </a>
+                );
+              },
               p({ children }) {
                 return <p style={{ marginBottom: '14px', lineHeight: '1.65', color: 'var(--ink-2)' }}>{children}</p>;
               },

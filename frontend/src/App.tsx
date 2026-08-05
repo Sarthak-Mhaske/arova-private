@@ -35,7 +35,25 @@ function App() {
       socket.connect();
     });
     
+    // Global external link interceptor (Opens links in default OS browser instead of Tauri webview)
+    const handleGlobalLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement)?.closest('a');
+      if (anchor && anchor.href && (anchor.href.startsWith('http://') || anchor.href.startsWith('https://'))) {
+        e.preventDefault();
+        const targetUrl = anchor.href;
+        import('./runtime/socket').then(({ socket }) => {
+          socket.sendEvent({
+            type: 'user.message',
+            text: `open ${targetUrl}`,
+            vocalize: false
+          });
+        });
+      }
+    };
+    document.addEventListener('click', handleGlobalLinkClick, true);
+
     return () => {
+      document.removeEventListener('click', handleGlobalLinkClick, true);
       import('./runtime/socket').then(({ socket }) => {
         socket.disconnect();
       });

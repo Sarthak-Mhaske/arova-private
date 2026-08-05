@@ -75,9 +75,14 @@ class IntentRuntime:
         """
         Receives final transcripts and parses them.
         """
-        transcript = payload.transcript
-        turn_id = getattr(payload, "turn_id", None)
-        vocalize = getattr(payload, "vocalize", True)
+        transcript = getattr(payload, "transcript", None) or (payload.get("transcript") if isinstance(payload, dict) else "")
+        turn_id = getattr(payload, "turn_id", None) or (payload.get("turn_id") if isinstance(payload, dict) else None)
+        source = getattr(payload, "source", "voice") or (payload.get("source") if isinstance(payload, dict) else "voice")
+        vocalize = getattr(payload, "vocalize", True) if not isinstance(payload, dict) else payload.get("vocalize", True)
+        
+        # Voice & Wake Word transcripts MUST always trigger TTS vocalization!
+        if source in ("voice", "wake_word", "stt"):
+            vocalize = True
         
         # We execute this inside an asyncio task on the main loop
         if self._loop:
