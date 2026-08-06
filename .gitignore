@@ -30,3 +30,11 @@ frontend/src-tauri/target/
 .vscode/
 .idea/
 frontend/src-tauri/resources/arovad
+
+# TIER 0.1 hygiene — eval artifacts, large media, scans
+Outlier/
+*.wav
+*.mp3
+frontend/scan*.json
+frontend/public/vite.svg
+*_MEI*/

@@ -17,22 +17,114 @@ class RetrievedMemory:
 
 class MemoryRetrievalEngine:
     """
-    Intelligently retrieves and ranks memories from the MemoryRuntime.
-    For Phase 7, relies on heuristic scoring (confidence, decay, keyword overlap)
-    rather than heavy vector embeddings.
+    Hybrid retrieval: Vector semantic (QdrantLocal + HybridRetrievalEngine) + heuristic fallback.
+    Tries vector first for semantic matches (synonyms, paraphrases), falls back to keyword heuristic.
+    Keeps pipeline functional even when qdrant/sentence-transformers not installed.
     """
     def __init__(self, memory_runtime: MemoryRuntime):
         self.memory = memory_runtime
+        # Lazy hybrid components — init only if vector store available
+        self._hybrid = None
+        self._vector_available = False
+        try:
+            if getattr(self.memory, 'vector_store', None) is not None:
+                from arova.core.cognition.memory.weighting import HybridRetrievalEngine
+                self._hybrid = HybridRetrievalEngine()
+                self._vector_available = True
+        except Exception:
+            self._hybrid = None
+            self._vector_available = False
 
-    async def retrieve_for_context(self, current_query: str, limit: int = 5) -> List[RetrievedMemory]:
-        """Heuristic retrieval pipeline."""
+    async def _vector_retrieve(self, query: str, limit: int) -> List[RetrievedMemory]:
+        """Try vector semantic search, return RetrievedMemory list with source='vector'."""
+        if not self._vector_available or not getattr(self.memory, 'vector_store', None):
+            return []
+        try:
+            vector_store = self.memory.vector_store
+            # Check if store has any vectors
+            has_vectors = False
+            if vector_store.client:
+                try:
+                    has_vectors = vector_store.client.count(vector_store.collection_name).count > 0
+                except:
+                    has_vectors = len(getattr(vector_store, '_mem_store', {})) > 0
+            else:
+                has_vectors = len(getattr(vector_store, '_mem_store', {})) > 0
+            if not has_vectors:
+                return []
+
+            raw_mems = vector_store.search(query, limit=limit * 2)
+            if not raw_mems:
+                return []
+
+            # Hybrid scoring with attention context
+            attention_state = {"probable_mode": "unknown"}
+            try:
+                # Try to get attention state if available via memory -> not direct, use empty
+                pass
+            except:
+                pass
+
+            # Keep original cosine order (semantic), don't re-rank purely by confidence
+            # Hybrid temporal/attention is secondary; for prototype, preserve vector ranking
+            # Use rank-based score so semantic order wins over confidence
+            scored = [(m, 1.0 - i*0.1) for i, m in enumerate(raw_mems)]
+            # Optionally blend with hybrid confidence (weighted)
+            if self._hybrid:
+                try:
+                    hybrid_scored = {vm.id: s for vm, s in self._hybrid.score(raw_mems, attention_state)}
+                    # Blend: 0.7 * cosine rank + 0.3 * hybrid
+                    blended = []
+                    for i, (vm, rank_score) in enumerate(scored):
+                        h_score = hybrid_scored.get(vm.id, 0.5)
+                        blended_score = rank_score * 0.7 + (h_score / 1.0) * 0.3
+                        blended.append((vm, blended_score))
+                    blended.sort(key=lambda x: x[1], reverse=True)
+                    scored = blended
+                except:
+                    pass
+            vector_results: List[RetrievedMemory] = []
+            for vm, score in scored[:limit]:
+                # Convert VectorMemory -> MemoryEntry for uniformity
+                from arova.core.memory.storage import MemoryEntry
+                import time
+                entry = MemoryEntry(
+                    id=vm.id,
+                    type=vm.metadata.semantic_type or "fact",
+                    content=vm.content,
+                    source_turn_id="vector",
+                    confidence=float(vm.metadata.confidence),
+                    reinforcement_count=int(vm.metadata.retrieval_frequency),
+                    decay_score=0.0,
+                    created_at=float(vm.timestamp),
+                    last_reinforced_at=float(vm.metadata.last_retrieved or vm.timestamp),
+                    category=vm.metadata.source_context or "general",
+                    why_remembered=f"Vector semantic (score {score:.2f})",
+                    continuity_value=float(vm.metadata.attention_weight),
+                    sensitivity_tier=2,
+                    approval_state="saved"
+                )
+                vector_results.append(RetrievedMemory(
+                    entry=entry,
+                    relevance_score=float(score),
+                    why_retrieved=f"Vector semantic (cosine) score={score:.2f}",
+                    source="vector"
+                ))
+            return vector_results
+        except Exception as e:
+            import logging
+            logging.debug(f"Vector retrieve failed, fallback to heuristic: {e}")
+            return []
+
+    async def _heuristic_retrieve(self, query: str, limit: int) -> List[RetrievedMemory]:
+        """Heuristic fallback pipeline (original)."""
         # 1. Fetch all candidates (in a real system, we'd pre-filter via SQL FTS)
         all_memories = await self.memory.storage.get_all_semantic_memory()
         if not all_memories:
             return []
             
         scored: List[RetrievedMemory] = []
-        query_words = set(current_query.lower().split())
+        query_words = set(query.lower().split())
         
         for mem in all_memories:
             score = 0.0
@@ -65,3 +157,28 @@ class MemoryRetrievalEngine:
         # Sort by relevance and take top N
         scored.sort(key=lambda x: x.relevance_score, reverse=True)
         return scored[:limit]
+
+    async def retrieve_for_context(self, current_query: str, limit: int = 5) -> List[RetrievedMemory]:
+        """Hybrid: Vector semantic first (synonyms), heuristic fallback, merged & deduped."""
+        vector_results = await self._vector_retrieve(current_query, limit)
+        heuristic_results = await self._heuristic_retrieve(current_query, limit)
+
+        # Merge: vector first (semantic), then heuristic, dedupe by content
+        seen = set()
+        merged: List[RetrievedMemory] = []
+        for r in vector_results:
+            key = r.entry.content.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                merged.append(r)
+        for r in heuristic_results:
+            key = r.entry.content.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                merged.append(r)
+            if len(merged) >= limit:
+                break
+
+        # Sort by relevance_score descending (hybrid scores already comparable)
+        merged.sort(key=lambda x: x.relevance_score, reverse=True)
+        return merged[:limit]

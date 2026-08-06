@@ -93,6 +93,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "security": {
         "enable_run_command": True,
         "enable_standard_tools": True
+    },
+    "beta": {
+        # TIER 0.3: Beta profile — minimal = only Capture→Workspace→Restore→Chat
+        # voice/presence/ambience are gated distractions for beta; disable by default.
+        "profile": "minimal",  # minimal | full
+        "enable_voice": False,
+        "enable_presence": False,
+        "enable_ambience": False,
+        "enable_warmup": False
     }
 }
 

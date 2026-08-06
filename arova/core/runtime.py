@@ -1,20 +1,9 @@
+import logging
 from typing import Optional
 from arova.core.events import RuntimeEventBus
 from arova.core.session import ConversationSession
 from arova.core.config.loader import load_config
 from arova.core.logger import execution_logger
-from arova.core.voice.cancellation import RuntimeCancellationService
-from arova.core.voice.audio_session import AudioSessionManager
-from arova.core.voice.activity_runtime import VoiceActivityRuntime
-from arova.core.voice.wake_service import WakeRuntimeService
-from arova.core.voice.stt_service import STTRuntimeService
-from arova.core.voice.voice_runtime import VoiceRuntime
-from arova.core.voice.intent_runtime import IntentRuntime
-
-from arova.core.voice.tts_runtime import TTSRuntime
-from arova.core.voice.turn_filter import TurnAuthorityFilter
-from arova.core.voice.recovery_coordinator import RecoveryCoordinator, WatchdogService
-from arova.core.voice.turn_coordinator import TurnCoordinator
 from arova.core.state import RuntimeProjectionCache
 from arova.core.api import RuntimeFacade
 from arova.core.capabilities.registry import CapabilityRegistry
@@ -22,12 +11,12 @@ from arova.core.capabilities.runtime import CapabilityRuntime
 from arova.core.capabilities.builtins import register_builtins
 from arova.core.platform.system.executor import SystemExecutionLayer
 from arova.core.memory.runtime import MemoryRuntime
-from arova.core.ambience.provider import LiveOSAmbientProvider, PollingProvider
-from arova.core.ambience.observer import AmbientObserver
 from arova.core.policy.runtime import PolicyRuntime
 from arova.core.automation.runtime import AutomationRuntime
 from arova.core.models.orchestrator import ModelOrchestrator
 from arova.core.models.profiles import CognitiveProfile
+# TIER 0.3: Voice/Ambience imports are LAZY inside gated blocks to avoid hard deps in minimal beta
+# (numpy, pyaudio, etc. not required for Capture→Workspace→Restore→Chat)
 
 # Environment Perception (Phase 10)
 from arova.core.platform.windowing.manager import WindowingManager
@@ -56,6 +45,16 @@ class RuntimeContainer:
     """
     def __init__(self):
         self.config = load_config()
+        # === TIER 0.3: Beta minimal gate — only Capture→Workspace→Restore→Chat ===
+        beta_cfg = self.config.get("beta", {})
+        is_beta_minimal = beta_cfg.get("profile", "minimal") == "minimal"
+        # In minimal, voice/presence/ambience are OFF by default even if config says True
+        self.enable_voice = (not is_beta_minimal) and beta_cfg.get("enable_voice", True)
+        self.enable_presence = (not is_beta_minimal) and beta_cfg.get("enable_presence", True)
+        self.enable_ambience = (not is_beta_minimal) and beta_cfg.get("enable_ambience", True)
+        self.enable_warmup = (not is_beta_minimal) and beta_cfg.get("enable_warmup", True)
+        self.beta_mode = "minimal" if is_beta_minimal else "full"
+        logging.info(f"RuntimeContainer: BETA_{self.beta_mode.upper()} mode (voice={self.enable_voice}, presence={self.enable_presence}, ambience={self.enable_ambience})")
         self.event_bus = RuntimeEventBus()
         
         # Privacy & Trust Engine (Phase 10A)
@@ -80,7 +79,6 @@ class RuntimeContainer:
         if self.runtime_snapshot.recovery_checkpoint and not self.runtime_snapshot.recovery_checkpoint.recovered:
             # Emit a signal that we recovered from a crash, allowing UI or IntentRuntime to say "I was interrupted"
             if self.runtime_snapshot.recovery_checkpoint.interrupted_stream:
-                import logging
                 logging.warning(f"Recovered from crash during turn: {self.runtime_snapshot.recovery_checkpoint.interrupted_stream}")
                 self.event_bus.emit("cognition", "INTERRUPTED_STREAM_RECOVERED", {
                     "transcript": self.runtime_snapshot.recovery_checkpoint.interrupted_stream
@@ -142,28 +140,48 @@ class RuntimeContainer:
         for m_dict in self.runtime_snapshot.hot_state.recent_turns:
             self.session._legacy_messages.append(m_dict)
         
-        # Inject Ingestion Filter
+        # Inject Ingestion Filter — lazy import
+        from arova.core.voice.turn_filter import TurnAuthorityFilter
         self.turn_filter = TurnAuthorityFilter(session=self.session)
         self.event_bus.add_filter(self.turn_filter.filter_event)
         
-        # Initialize TurnCoordinator early so it processes WAKE_DETECTED before STT
+        # Initialize TurnCoordinator early so it processes WAKE_DETECTED before STT — lazy
+        from arova.core.voice.turn_coordinator import TurnCoordinator
         self.turn_coordinator = TurnCoordinator(event_bus=self.event_bus, session=self.session)
         
-        # Voice Pipeline Runtimes (Phase 2)
-        self.cancellation = RuntimeCancellationService(event_bus=self.event_bus)
-        self.recovery = RecoveryCoordinator(event_bus=self.event_bus, cancellation=self.cancellation)
-        self.watchdog = WatchdogService(event_bus=self.event_bus)
-        
-        self.audio_session = AudioSessionManager(event_bus=self.event_bus)
-        self.activity_runtime = VoiceActivityRuntime(event_bus=self.event_bus)
-        self.wake_service = WakeRuntimeService(event_bus=self.event_bus, config=self.config)
-        
-        # Wire physical mic to VAD and Wake modules
-        self.audio_session.microphone.subscribe("activity_runtime", 50, self.activity_runtime.process_audio_chunk)
-        self.audio_session.microphone.subscribe("wake_service", 40, self.wake_service.process_audio_chunk)
-        self.wake_service.start()
-        
-        self.stt_service = STTRuntimeService(event_bus=self.event_bus, audio_session=self.audio_session, session=self.session)
+        # === TIER 0.3: Voice Pipeline Runtimes (Phase 2) — GATED by beta minimal ===
+        if getattr(self, "enable_voice", False):
+            # Lazy imports — only needed when voice enabled (requires numpy etc.)
+            from arova.core.voice.cancellation import RuntimeCancellationService
+            from arova.core.voice.audio_session import AudioSessionManager
+            from arova.core.voice.activity_runtime import VoiceActivityRuntime
+            from arova.core.voice.wake_service import WakeRuntimeService
+            from arova.core.voice.stt_service import STTRuntimeService
+            from arova.core.voice.recovery_coordinator import RecoveryCoordinator, WatchdogService
+            self.cancellation = RuntimeCancellationService(event_bus=self.event_bus)
+            self.recovery = RecoveryCoordinator(event_bus=self.event_bus, cancellation=self.cancellation)
+            self.watchdog = WatchdogService(event_bus=self.event_bus)
+            
+            self.audio_session = AudioSessionManager(event_bus=self.event_bus)
+            self.activity_runtime = VoiceActivityRuntime(event_bus=self.event_bus)
+            self.wake_service = WakeRuntimeService(event_bus=self.event_bus, config=self.config)
+            
+            # Wire physical mic to VAD and Wake modules
+            self.audio_session.microphone.subscribe("activity_runtime", 50, self.activity_runtime.process_audio_chunk)
+            self.audio_session.microphone.subscribe("wake_service", 40, self.wake_service.process_audio_chunk)
+            self.wake_service.start()
+            
+            self.stt_service = STTRuntimeService(event_bus=self.event_bus, audio_session=self.audio_session, session=self.session)
+        else:
+            # BETA_MINIMAL: Voice disabled — keep attributes for graceful shutdown
+            self.cancellation = None
+            self.recovery = None
+            self.watchdog = None
+            self.audio_session = None
+            self.activity_runtime = None
+            self.wake_service = None
+            self.stt_service = None
+            logging.info("BETA_MINIMAL: Voice pipeline disabled (enable_voice=False)")
         
         self.projection_cache = RuntimeProjectionCache(event_bus=self.event_bus)
         self.facade = RuntimeFacade(event_bus=self.event_bus, projection_cache=self.projection_cache)
@@ -202,9 +220,17 @@ class RuntimeContainer:
         self.policy_runtime = PolicyRuntime(event_bus=self.event_bus, registry=self.capability_registry)
         self.automation_runtime = AutomationRuntime(event_bus=self.event_bus)
         
-        self.ambient_provider = LiveOSAmbientProvider()
-        self.ambient_observer = AmbientObserver(event_bus=self.event_bus, provider=self.ambient_provider, stability_window_seconds=2.0)
-        self.ambient_observer.start()
+        # === TIER 0.3: Ambience gated ===
+        if getattr(self, "enable_ambience", False):
+            from arova.core.ambience.provider import LiveOSAmbientProvider, PollingProvider
+            from arova.core.ambience.observer import AmbientObserver
+            self.ambient_provider = LiveOSAmbientProvider()
+            self.ambient_observer = AmbientObserver(event_bus=self.event_bus, provider=self.ambient_provider, stability_window_seconds=2.0)
+            self.ambient_observer.start()
+        else:
+            self.ambient_provider = None
+            self.ambient_observer = None
+            logging.info("BETA_MINIMAL: Ambience observer disabled")
         
         from arova.core.platform.windowing.manager import WindowingManager
         self.window_backend = WindowingManager.get_backend()
@@ -284,12 +310,20 @@ class RuntimeContainer:
         except RuntimeError:
             logging.debug("No running asyncio event loop during window/environment graph loop startup; deferred.")
         
-        # Cognition Layer (Phase 7 / 12A + Synthesis)
+        # === TIER 0.3: Cognition Layer (Phase 7 / 12A + Synthesis) — GATED ===
         from arova.core.models.profiles import CognitiveProfile
+        from arova.core.cognition.priority import CognitivePriorityEngine, CognitiveSignal
+        from arova.core.cognition.modulation import PresenceModulator
+        from arova.core.environment.trajectory import AttentionNarrativeGenerator
         
         self.priority_engine = CognitivePriorityEngine()
-        self.presence_modulator = PresenceModulator()
-        self.narrative_generator = AttentionNarrativeGenerator()
+        if getattr(self, "enable_presence", False):
+            self.presence_modulator = PresenceModulator()
+            self.narrative_generator = AttentionNarrativeGenerator()
+        else:
+            self.presence_modulator = None
+            self.narrative_generator = None
+            logging.info("BETA_MINIMAL: PresenceModulator/NarrativeGenerator disabled")
         
         self.intent_graph = IntentGraph(event_bus=self.event_bus)
         # Seed intents from hot state if present
@@ -302,29 +336,30 @@ class RuntimeContainer:
             event_bus=self.event_bus
         )
         
-        # Wire Attention Events to Narrative Generator, Modulator, and Continuity
-        def _feed_narrative(payload):
-            if hasattr(payload, 'payload'): # EnvironmentalEvent
-                traj = self.narrative_generator.update(payload.payload)
-                
-                # Update Modulator actively
-                snap = self.environment_graph.snapshot()
-                derived = snap.get("_derived", {})
-                profile = self.presence_modulator.modulate(traj, derived)
-                
-                # Emit to frontend
-                self.event_bus.emit("cognition", "PRESENCE_PROFILE_UPDATED", {
-                    "verbosity": profile.verbosity,
-                    "cadence": profile.cadence,
-                    "emotional_temperature": profile.emotional_temperature,
-                    "interruption_sensitivity": profile.interruption_sensitivity,
-                    "ambient_density": profile.ambient_density
-                })
-                
-                # Opportunistically evaluate continuity
-                self.continuity_engine.evaluate_resonance(traj, snap)
-                
-        self.event_bus.subscribe("environment", "ATTENTION_STATE_CHANGED", _feed_narrative)
+        # Wire Attention Events to Narrative Generator, Modulator, and Continuity — GATED
+        if getattr(self, "enable_presence", False) and self.narrative_generator and self.presence_modulator:
+            def _feed_narrative(payload):
+                if hasattr(payload, 'payload'): # EnvironmentalEvent
+                    traj = self.narrative_generator.update(payload.payload)
+                    
+                    # Update Modulator actively
+                    snap = self.environment_graph.snapshot()
+                    derived = snap.get("_derived", {})
+                    profile = self.presence_modulator.modulate(traj, derived)
+                    
+                    # Emit to frontend
+                    self.event_bus.emit("cognition", "PRESENCE_PROFILE_UPDATED", {
+                        "verbosity": profile.verbosity,
+                        "cadence": profile.cadence,
+                        "emotional_temperature": profile.emotional_temperature,
+                        "interruption_sensitivity": profile.interruption_sensitivity,
+                        "ambient_density": profile.ambient_density
+                    })
+                    
+                    # Opportunistically evaluate continuity
+                    self.continuity_engine.evaluate_resonance(traj, snap)
+                    
+            self.event_bus.subscribe("environment", "ATTENTION_STATE_CHANGED", _feed_narrative)
         
         # Add IntentGraph decay tick to the background loop
         async def _decay_loops():
@@ -408,7 +443,10 @@ class RuntimeContainer:
             environment_graph=self.environment_graph,
             presence_modulator=self.presence_modulator,
             narrative_generator=self.narrative_generator,
-            workspace_manager=self.workspace_manager
+            workspace_manager=self.workspace_manager,
+            timeline_store=self.timeline,
+            capsule_generator=self.capsule_generator,
+            search_index=self.search_index
         )
         self.cognitive_router = CognitiveRouter(model_runtime=self.model_runtime, event_bus=self.event_bus)
         self.cognitive_planner = CognitivePlanner(model_runtime=self.model_runtime)
@@ -416,7 +454,13 @@ class RuntimeContainer:
         from arova.core.cognition.action_planner import ActionPlanner
         self.action_planner = ActionPlanner(model_runtime=self.model_runtime)
     
-        self.voice_runtime = VoiceRuntime(event_bus=self.event_bus)
+        if getattr(self, "enable_voice", False):
+            from arova.core.voice.voice_runtime import VoiceRuntime
+            self.voice_runtime = VoiceRuntime(event_bus=self.event_bus)
+        else:
+            self.voice_runtime = None
+            logging.info("BETA_MINIMAL: VoiceRuntime disabled")
+        from arova.core.voice.intent_runtime import IntentRuntime
         self.intent_runtime = IntentRuntime(
             event_bus=self.event_bus, 
             session=self.session,
@@ -427,15 +471,20 @@ class RuntimeContainer:
         )
         self.intent_runtime._workspace_manager = self.workspace_manager
     
-        self.tts_runtime = TTSRuntime(event_bus=self.event_bus, config=self.config, 
-                                      cancellation=self.cancellation, audio_manager=self.audio_session)
-                                      
+        if getattr(self, "enable_voice", False) and getattr(self, "cancellation", None) and getattr(self, "audio_session", None):
+            from arova.core.voice.tts_runtime import TTSRuntime
+            self.tts_runtime = TTSRuntime(event_bus=self.event_bus, config=self.config, 
+                                          cancellation=self.cancellation, audio_manager=self.audio_session)
+        else:
+            self.tts_runtime = None
+            logging.info("BETA_MINIMAL: TTSRuntime disabled")
+            
         from arova.core.automation.dispatcher import ActionDispatcher
         from arova.core.automation.execution_runtime import ExecutionRuntime
         self.action_dispatcher = ActionDispatcher(orchestrator=self.model_runtime, workspace_manager=self.workspace_manager)
         self.execution_runtime = ExecutionRuntime(event_bus=self.event_bus, dispatcher=self.action_dispatcher)
-        self.runtime_projector.execution_runtime = self.execution_runtime
-        
+        if getattr(self, 'runtime_projector', None):
+            self.runtime_projector.execution_runtime = self.execution_runtime
     def _persist_runtime(self):
         """Serializes hot runtime state into the canonical RuntimeSnapshot and saves it."""
         try:
@@ -476,16 +525,25 @@ class RuntimeContainer:
             self._persist_runtime()
         except Exception as e:
             logging.error(f"Failed to persist runtime during shutdown: {e}")
-        if self.watchdog:
-            self.watchdog.stop()
-        if self.ambient_observer:
-            self.ambient_observer.stop()
-        self.turn_coordinator.stop()
+        if getattr(self, 'watchdog', None):
+            try:
+                self.watchdog.stop()
+            except: pass
+        if getattr(self, 'ambient_observer', None):
+            try:
+                self.ambient_observer.stop()
+            except: pass
+        if getattr(self, 'turn_coordinator', None):
+            try:
+                self.turn_coordinator.stop()
+            except: pass
         self.event_bus.shutdown(wait=True)
         self.thread_manager.shutdown(wait=True)
         
     def get_health_snapshot(self) -> dict:
         return {
             "authoritative_turn_id": self.session.get_authoritative_turn_id(),
-            "voice_runtime": self.voice_runtime.get_health_snapshot()
+            "voice_runtime": self.voice_runtime.get_health_snapshot() if getattr(self, 'voice_runtime', None) else {"status": "disabled_beta_minimal"},
+            "beta_mode": getattr(self, 'beta_mode', 'unknown'),
+            "voice_enabled": getattr(self, 'enable_voice', False)
         }

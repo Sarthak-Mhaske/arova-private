@@ -34,10 +34,14 @@ def test_resource_registry_normalization_and_lookup():
     assert len(reg.get_resources_by_type("file")) == 1
     assert len(reg.get_resources_by_type("url")) == 1
 
+@patch("os.path.isdir")
+@patch("os.path.exists")
 @patch("subprocess.Popen")
 @patch("shutil.which")
-def test_environment_restoration_engine_vscode_and_terminal(mock_which, mock_popen):
+def test_environment_restoration_engine_vscode_and_terminal(mock_which, mock_popen, mock_exists, mock_isdir):
     mock_which.return_value = "/usr/bin/code"
+    mock_exists.return_value = True
+    mock_isdir.return_value = True
     
     reg = ResourceRegistry()
     reg.register_repository("/home/sarthak/arova", display_name="Arova Repo", exists=True)
@@ -123,23 +127,26 @@ def test_workspace_manager_continue_context_evidence_breakdown_and_outcomes():
     wm._workspaces[ws.workspace_id] = ws
     wm._active_workspace_id = ws.workspace_id
 
-    context = wm.get_continue_context(ws.workspace_id)
-    assert "confidence_breakdown" in context
-    breakdown = context["confidence_breakdown"]
-    
-    # Verify evidence scores
-    assert breakdown["Repository"] == 100
-    assert breakdown["Open files"] >= 50
-    assert breakdown["Goal"] == 94
-    assert breakdown["Blocker"] == 89
-    assert breakdown["Browser docs"] >= 61
-    assert breakdown["Terminal"] == 95
+    # Mock FS for honest but hermetic test — we still assert 95 only when dir exists
+    # Wrap both context calls and restore in same patch so terminal dir check passes
+    with patch("os.path.isdir", return_value=True), patch("os.path.exists", return_value=True), patch("shutil.which", return_value="/usr/bin/gnome-terminal"), patch("subprocess.Popen"):
+        context = wm.get_continue_context(ws.workspace_id)
+        assert "confidence_breakdown" in context
+        breakdown = context["confidence_breakdown"]
+        
+        # Verify evidence scores — honest grounded values
+        assert breakdown["Repository"] == 100
+        assert breakdown["Open files"] >= 50
+        assert breakdown["Goal"] == 94
+        assert breakdown["Blocker"] == 89
+        assert breakdown["Browser docs"] >= 61
+        assert breakdown["Terminal"] == 95
 
-    # Simulate restoration attempt and verify last_restore_outcomes
-    wm.restore_environment(ws, {"restore_vscode": False, "restore_terminal": True})
-    time.sleep(0.05)
+        # Simulate restoration attempt and verify last_restore_outcomes
+        wm.restore_environment(ws, {"restore_vscode": False, "restore_terminal": True})
+        time.sleep(0.05)
 
-    context_after = wm.get_continue_context(ws.workspace_id)
+        context_after = wm.get_continue_context(ws.workspace_id)
     assert context_after["last_restore_outcomes"] is not None
     outcomes_dict = context_after["last_restore_outcomes"]
     assert "items" in outcomes_dict

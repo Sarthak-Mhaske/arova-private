@@ -76,6 +76,11 @@ class ArovaDaemon:
         if payload.get("type") == "user.message":
             text = payload.get("text", "")
             vocalize = payload.get("vocalize", True)
+            mentions = payload.get("mentions", []) or payload.get("mentioned_resources", []) or []
+            # Also parse @mentions from text as fallback (@file.py -> mention)
+            if not mentions and "@" in text:
+                import re
+                mentions = re.findall(r'@([\w./\-\\:]+)', text)
             
             if self.runtime and self.runtime.session:
                 turn = self.runtime.session.start_new_turn(text)
@@ -83,14 +88,16 @@ class ArovaDaemon:
             else:
                 turn_id = f"turn_{uuid.uuid4().hex[:8]}"
                 
-            logging.info(f"Main: Received user.message. Assigned turn_id={turn_id}. text='{text}', vocalize={vocalize}")
+            logging.info(f"Main: Received user.message. Assigned turn_id={turn_id}. text='{text}', vocalize={vocalize}, mentions={mentions}")
             
-            # Inject transcript to IntentRuntime
+            # Inject transcript to IntentRuntime — with mentions for grounded @-tag
             payload_dict = {
                 "transcript": text,
                 "turn_id": turn_id,
                 "source": "chat",
-                "vocalize": vocalize
+                "vocalize": vocalize,
+                "mentions": mentions,
+                "raw_text": text
             }
             if self.runtime and self.runtime.event_bus:
                 logging.info(f"Main: Injecting TRANSCRIPT_FINAL to EventBus for {turn_id}")

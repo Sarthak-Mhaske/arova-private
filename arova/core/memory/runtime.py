@@ -31,6 +31,14 @@ class MemoryRuntime:
         self.policy_engine = MemoryPolicyEngine(get_config_manager())
         self.session_only_memories: List[MemoryEntry] = []
         self._loop = None
+        # === TIER 1 Vector: Hybrid semantic memory (QdrantLocal + HybridRetrieval) ===
+        try:
+            from arova.core.cognition.memory.vector import QdrantLocal
+            self.vector_store = QdrantLocal()
+            logging.info("MemoryRuntime: Vector store initialized (hybrid retrieval enabled)")
+        except Exception as e:
+            logging.warning(f"MemoryRuntime: Vector store init failed ({e}) — heuristic fallback only")
+            self.vector_store = None
             
         # We hook into capabilities to log them to episodic memory
         self.event_bus.subscribe("capabilities", "CAPABILITY_EXECUTION_COMPLETED", self._on_capability_completed)
@@ -124,6 +132,7 @@ class MemoryRuntime:
                     
                 mut_id = str(uuid.uuid4())
                 await self.storage.store_semantic_memory(duplicate, mut_id)
+                self._vector_insert_entry(duplicate)
                 continue
                 
             # First time Tier 2 contextual dialog
@@ -133,6 +142,7 @@ class MemoryRuntime:
                 cand.approval_state = "pending"
                 mut_id = str(uuid.uuid4())
                 await self.storage.store_semantic_memory(cand, mut_id)
+                self._vector_insert_entry(cand)
                 self.event_bus.emit("memory", "MEMORY_PENDING_REVIEW", {"memory": asdict(cand)})
                 continue
                 
@@ -142,6 +152,7 @@ class MemoryRuntime:
             if route == StorageRoute.AUTO_SAVE:
                 cand.approval_state = "saved"
                 await self.storage.store_semantic_memory(cand, mut_id)
+                self._vector_insert_entry(cand)
                 self.event_bus.emit("memory", "MEMORY_SAVED", {"memory": asdict(cand)})
                 self.event_bus.emit("timeline", "create", {
                     "category": "memory",
@@ -156,6 +167,7 @@ class MemoryRuntime:
             elif route == StorageRoute.REVIEW_QUEUE:
                 cand.approval_state = "pending"
                 await self.storage.store_semantic_memory(cand, mut_id)
+                self._vector_insert_entry(cand)
                 self.event_bus.emit("memory", "MEMORY_PENDING_REVIEW", {"memory": asdict(cand)})
                 logging.info(f"Memory Sent to Inbox: {cand.content}")
                 
@@ -247,4 +259,28 @@ class MemoryRuntime:
                     "semantic_type": "MEMORY_RECALLED",
                     "source": "memory_runtime"
                 })
-                break
+                break # Only surface the single highest confidence match per turn
+    def _vector_insert_entry(self, entry):
+        if not getattr(self, 'vector_store', None):
+            return
+        try:
+            from arova.core.cognition.memory.schema import VectorMemory, MemoryMetadata
+            import time
+            meta = MemoryMetadata(
+                semantic_type=entry.type or "fact",
+                source_context=entry.category or "general",
+                confidence=float(getattr(entry, 'confidence', 0.8)),
+                attention_weight=float(getattr(entry, 'continuity_value', 0.5)),
+                retrieval_frequency=int(getattr(entry, 'reinforcement_count', 0)),
+                last_retrieved=getattr(entry, 'last_reinforced_at', None)
+            )
+            vm = VectorMemory(
+                id=entry.id,
+                content=entry.content,
+                metadata=meta,
+                timestamp=float(getattr(entry, 'created_at', time.time()))
+            )
+            self.vector_store.insert(vm)
+        except Exception as e:
+            import logging
+            logging.debug(f"Vector insert failed (non-fatal): {e}")
