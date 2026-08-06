@@ -412,7 +412,7 @@ class RuntimeContainer:
                                       
         from arova.core.automation.dispatcher import ActionDispatcher
         from arova.core.automation.execution_runtime import ExecutionRuntime
-        self.action_dispatcher = ActionDispatcher(orchestrator=self.model_runtime)
+        self.action_dispatcher = ActionDispatcher(orchestrator=self.model_runtime, workspace_manager=self.workspace_manager)
         self.execution_runtime = ExecutionRuntime(event_bus=self.event_bus, dispatcher=self.action_dispatcher)
         self.runtime_projector.execution_runtime = self.execution_runtime
         

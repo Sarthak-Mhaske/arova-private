@@ -892,8 +892,9 @@ class ActionDispatcher:
     """
     Routes abstract CapabilityRequests to their concrete backend implementations.
     """
-    def __init__(self, orchestrator: Optional[Any] = None):
+    def __init__(self, orchestrator: Optional[Any] = None, workspace_manager: Optional[Any] = None):
         self.orchestrator = orchestrator
+        self.workspace_manager = workspace_manager
         self._backends: Dict[str, ActionBackend] = {
             "CommandBackend": CommandBackend(),
             "run_command": CommandBackend(),
@@ -918,4 +919,17 @@ class ActionDispatcher:
             return BackendObservation("", False, error_msg)
             
         logger.info(f"ActionDispatcher: Routing {request.action} -> {request.capability}")
-        return await backend.execute(request, simulation_mode=simulation_mode)
+        res = await backend.execute(request, simulation_mode=simulation_mode)
+        if res and res.success and self.workspace_manager:
+            try:
+                payload = request.payload if hasattr(request, 'payload') and isinstance(request.payload, dict) else {}
+                target_id = payload.get("path") or payload.get("url") or payload.get("app") or payload.get("query") or payload.get("command") or request.action
+                if target_id:
+                    self.workspace_manager.ingest_fragment({
+                        "source_identity": str(target_id),
+                        "provider_id": request.capability,
+                        "activity_summary": f"Executed action {request.action}: {target_id}"
+                    })
+            except Exception as e:
+                logger.debug(f"ActionDispatcher fragment ingest warning: {e}")
+        return res

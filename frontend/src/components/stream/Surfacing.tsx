@@ -56,8 +56,33 @@ const formatMarkdownText = (text: string): string => {
     // For non-code prose text:
     let formatted = part;
 
+    // Clean up orphan bold asterisks around URLs & absolute file paths
+    formatted = formatted.replace(/\*\*\s*(https?:\/\/[^\s]+)/g, '$1');
+    formatted = formatted.replace(/(https?:\/\/[^\s*]+)\s*\*\*/g, '$1');
+    formatted = formatted.replace(/\*\*\s*(\/[a-zA-Z0-9_.~/-]+|\~\/[a-zA-Z0-9_.~/-]+)/g, '$1');
+    formatted = formatted.replace(/(\/[a-zA-Z0-9_.~/-]+|\~\/[a-zA-Z0-9_.~/-]+)\s*\*\*/g, '$1');
+
     // Fix LLM quirk where opening bold ** is placed before a newline (e.g. "text.**\n\nTitle**:")
     formatted = formatted.replace(/\*\*\s*\n+\s*([a-zA-Z0-9\[])/g, '\n\n**$1');
+
+    // Process paragraph by paragraph to guarantee ** never leaks across double newlines
+    const paragraphs = formatted.split(/\n\n+/);
+    const cleanedParagraphs = paragraphs.map(p => {
+      let pClean = p.trim();
+      const boldCount = (pClean.match(/\*\*/g) || []).length;
+      if (boldCount % 2 !== 0) {
+        if (pClean.startsWith('**')) {
+          pClean = pClean.slice(2).trim();
+        } else if (pClean.endsWith('**')) {
+          pClean = pClean.slice(0, -2).trim();
+        } else {
+          pClean = pClean.replace(/\*\*/, '');
+        }
+      }
+      return pClean;
+    });
+
+    formatted = cleanedParagraphs.join('\n\n');
 
     // Fix missing newlines before list items ("factors:1.**Data Modeling**" -> "factors:\n\n1. **Data Modeling**")
     formatted = formatted.replace(/([^\n])(\d+)\.\s*(\*{0,2}|_{0,2}|`{0,3})([A-Za-z0-9])/g, '$1\n\n$2. $3$4');

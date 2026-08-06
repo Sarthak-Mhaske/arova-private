@@ -239,14 +239,16 @@ class IntentRuntime:
                             final_msg = info_output.strip()
                         else:
                             # Generate refined LLM response that directly answers the user's prompt & summarizes actions
+                            user_home = os.path.expanduser("~")
                             prompt = (
                                 f"The user asked: '{transcript}'.\n"
                                 f"I executed these background actions for them: {results}.\n"
                                 "Instructions:\n"
                                 "1. If the user asked a question or wanted advice, a roadmap, or recommendations, ANSWER THEM directly, warmly, and completely.\n"
                                 "2. Briefly mention what actions were taken for them (e.g. 'I've also opened the link in your browser').\n"
-                                "3. EXPLICIT FOLDER / PATH MENTION: If a folder, directory, file, or project was created or opened, EXPLICITLY state its exact path (e.g. '~/PythonLearning' or '/home/sarthak/PythonLearning') in your response so the user knows where it is.\n"
-                                "4. Respond in natural conversational text."
+                                f"3. EXPLICIT FOLDER / PATH MENTION: If a folder, directory, file, or project was created or opened, EXPLICITLY state its exact real path e.g. '{user_home}/PythonLearning' or '~/PythonLearning'. NEVER use fake paths like '/home/user'.\n"
+                                "4. FORMATTING RULE: Do NOT wrap URLs or file paths in broken bold asterisks `**` across line breaks. Write URLs as plain `https://...` or standard markdown links [text](url). Write file paths in plain text or code ticks e.g. `~/PythonLearning`.\n"
+                                "5. Respond in natural conversational text."
                             )
                             try:
                                 final_msg = await self._router.models.generate(
