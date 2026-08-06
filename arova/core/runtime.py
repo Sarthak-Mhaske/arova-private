@@ -452,6 +452,10 @@ class RuntimeContainer:
     def shutdown(self):
         """Gracefully shut down all thread pools and event buses."""
         execution_logger.log("RUNTIME_SHUTDOWN", message="Shutting down runtime container")
+        try:
+            self._persist_runtime()
+        except Exception as e:
+            logging.error(f"Failed to persist runtime during shutdown: {e}")
         if self.watchdog:
             self.watchdog.stop()
         if self.ambient_observer:
