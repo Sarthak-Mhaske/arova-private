@@ -18,6 +18,7 @@ interface TimelineEvent {
 export const TimelineSurface: React.FC = () => {
   const { openSurface } = useSurfaceState();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [timeInsights, setTimeInsights] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [importantOnly, setImportantOnly] = useState(false);
   const [narrativeMode, setNarrativeMode] = useState(true);
@@ -32,10 +33,7 @@ export const TimelineSurface: React.FC = () => {
   };
 
   useEffect(() => {
-    // Request initial timeline state
     fetchTimeline();
-
-    // 10s periodic refresh for live updates
     const interval = setInterval(fetchTimeline, 10000);
 
     const handleFocusOrVisible = () => {
@@ -49,6 +47,9 @@ export const TimelineSurface: React.FC = () => {
       
       if (payload.type === 'timeline.query_response') {
         setEvents(payload.events || []);
+        if (payload.time_insights) {
+          setTimeInsights(payload.time_insights);
+        }
         setIsLoading(false);
       } else if (payload.type === 'TIMELINE_EVENT') {
         const newEvent = payload.event;
@@ -91,7 +92,7 @@ export const TimelineSurface: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <SurfaceHeader 
           title="Cognitive Timeline" 
-          sub="Transparent view of Arova's internal cognition and state transitions" 
+          sub="Transparent view of Arova's internal cognition, time insights, and state transitions" 
         />
         <button
           onClick={() => openSurface('session_timeline')}
@@ -114,6 +115,40 @@ export const TimelineSurface: React.FC = () => {
           <span>→</span>
         </button>
       </div>
+
+      {/* Transparent Time Insights Banner */}
+      {timeInsights && (
+        <div style={{
+          background: 'rgba(20, 18, 28, 0.8)',
+          border: '1px solid var(--hairline-2)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '24px'
+        }}>
+          <div>
+            <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Active Focus Duration Today</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#60a5fa' }}>{timeInsights.total_active_time}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Recorded Telemetry Signals</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#34d399' }}>{timeInsights.today_event_count} events</div>
+          </div>
+          {timeInsights.category_breakdown && (
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Time Allocation</div>
+              <div style={{ fontSize: '13px', color: 'var(--ink-1)', fontWeight: 500, display: 'flex', gap: '12px' }}>
+                <span>💻 Code: <strong style={{ color: '#d4a878' }}>{timeInsights.category_breakdown.coding}%</strong></span>
+                <span>🐚 CLI: <strong style={{ color: '#60a5fa' }}>{timeInsights.category_breakdown.terminal}%</strong></span>
+                <span>🌐 Web: <strong style={{ color: '#a78bfa' }}>{timeInsights.category_breakdown.browsing}%</strong></span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
       <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
         <label style={{ color: 'var(--ink-1)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>

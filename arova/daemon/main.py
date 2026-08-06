@@ -813,6 +813,19 @@ class ArovaDaemon:
         while True:
             await asyncio.sleep(3600)
 
+    async def _handle_timeline_query(self, payload: dict):
+        req_id = payload.get("req_id", "")
+        limit = payload.get("limit", 50)
+        events = await self.runtime.timeline.get_timeline(limit=limit)
+        time_insights = self.runtime.timeline.get_time_insights()
+        self.ws_manager.broadcast({
+            "v": 1,
+            "type": "timeline.query_response",
+            "req_id": req_id,
+            "events": events,
+            "time_insights": time_insights
+        })
+
     async def _proactive_loop(self):
         """Background loop that periodically checks telemetry for proactive interventions."""
         logging.info("Started proactive investigation loop.")

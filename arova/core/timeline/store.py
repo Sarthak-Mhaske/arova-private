@@ -200,3 +200,49 @@ class TimelineStore:
         )
         await self.emit(event)
         return event_id
+
+    def get_time_insights(self) -> Dict[str, Any]:
+        """
+        Calculates empirical time metrics and transparent decision explanations.
+        """
+        import time
+        now = time.time()
+        today_start = now - (time.localtime().tm_hour * 3600 + time.localtime().tm_min * 60 + time.localtime().tm_sec)
+
+        today_events = [e for e in self.events if e.timestamp >= today_start]
+
+        categories = {"coding": 0, "terminal": 0, "browsing": 0, "system": 0}
+        sources_count = {}
+
+        for ev in today_events:
+            src = (ev.source or "").lower()
+            cat = (ev.category or "").lower()
+            title = (ev.title or "").lower()
+
+            sources_count[src] = sources_count.get(src, 0) + 1
+
+            if any(k in src or k in title for k in ["code", "antigravity", "cursor", "ide"]):
+                categories["coding"] += 1
+            elif any(k in src or k in title for k in ["kitty", "terminal", "alacritty", "bash"]):
+                categories["terminal"] += 1
+            elif any(k in src or k in title for k in ["brave", "chrome", "firefox", "search", "youtube"]):
+                categories["browsing"] += 1
+            else:
+                categories["system"] += 1
+
+        total_evs = sum(categories.values()) or 1
+        breakdown = {k: round((v / total_evs) * 100) for k, v in categories.items()}
+
+        active_minutes = min(len(today_events) * 2, 480) # estimated focus minutes based on signal density
+        hours = active_minutes // 60
+        mins = active_minutes % 60
+        time_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+
+        return {
+            "total_active_time": time_str,
+            "active_minutes": active_minutes,
+            "today_event_count": len(today_events),
+            "category_breakdown": breakdown,
+            "top_sources": sorted(sources_count.items(), key=lambda x: x[1], reverse=True)[:3],
+            "transparency_notice": "Arova observes workspace processes, active CWDs, and open windows locally on disk."
+        }
