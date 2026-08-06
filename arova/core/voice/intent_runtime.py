@@ -278,6 +278,34 @@ class IntentRuntime:
                     self._event_bus.emit("state", "EXECUTION_STATE_CHANGED", {"state": "IDLE", "turn_id": turn_id})
                     
                     if self._event_bus:
+                        # Build interactive action pills for suggestions or permission requests
+                        actions = []
+                        results_str = str(results)
+                        if "YouTube Music Desktop App is not installed" in results_str:
+                            actions = [
+                                {
+                                    "label": "Install YT Music App",
+                                    "primary": True,
+                                    "eventType": "user.message",
+                                    "eventPayload": {"text": "install youtube music app", "vocalize": True}
+                                },
+                                {
+                                    "label": "Keep Playing in Browser",
+                                    "primary": False,
+                                    "eventType": "user.message",
+                                    "eventPayload": {"text": "keep using browser for music", "vocalize": False}
+                                }
+                            ]
+                        elif "close_app" in results_str or "close_window" in results_str:
+                            actions = [
+                                {
+                                    "label": "Undo / Reopen App",
+                                    "primary": False,
+                                    "eventType": "user.message",
+                                    "eventPayload": {"text": "reopen app", "vocalize": False}
+                                }
+                            ]
+
                         # For voice TTS, extract a clean 1-2 sentence spoken summary if output is long
                         vocal_text = final_msg
                         if len(final_msg) > 200 and "\n" in final_msg:
@@ -289,9 +317,10 @@ class IntentRuntime:
                             "turn_id": turn_id,
                             "vocalize": vocalize,
                             "spoken_text": vocal_text,
+                            "actions": actions,
                             "seq": 2
                         })
-                        self._event_bus.emit("voice", "TEXT_RESPONSE_GENERATED", {"turn_id": turn_id, "text": final_msg})
+                        self._event_bus.emit("voice", "TEXT_RESPONSE_GENERATED", {"turn_id": turn_id, "text": final_msg, "actions": actions})
                     if self._session:
                         self._session.add_assistant_message(final_msg)
                     return

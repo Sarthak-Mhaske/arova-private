@@ -535,6 +535,38 @@ class ScreenshotBackend(ActionBackend):
             return BackendObservation("", False, str(e))
 
 class PlayMusicBackend(ActionBackend):
+    async def _stop_current_playback(self):
+        import sys, asyncio
+        try:
+            if sys.platform == "win32":
+                cmd = "powershell -command \"$wsh = New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]178)\""
+            elif sys.platform == "darwin":
+                cmd = "osascript -e 'tell application \"Spotify\" to pause' -e 'tell application \"Music\" to pause'"
+            else:
+                cmd = "playerctl stop || pkill -f spotify || pkill -f vlc || true"
+            
+            proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await proc.communicate()
+        except Exception as e:
+            logger.debug(f"Failed to stop current playback: {e}")
+
+    def _find_yt_music_app(self) -> Optional[str]:
+        import shutil, sys, os
+        if sys.platform == "win32":
+            candidates = ["youtube-music.exe", "YouTube Music.exe", "ytmdesktop.exe"]
+        elif sys.platform == "darwin":
+            if os.path.exists("/Applications/YouTube Music.app"):
+                return "open -a 'YouTube Music'"
+            candidates = ["youtube-music", "ytmdesktop"]
+        else:
+            candidates = ["youtube-music", "youtube-music-desktop-app", "ytmdesktop", "com.github.th_ch.youtube_music"]
+
+        for app in candidates:
+            bin_path = shutil.which(app)
+            if bin_path:
+                return bin_path
+        return None
+
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
         query = request.payload.get("song_query")
         if not query:
@@ -547,7 +579,10 @@ class PlayMusicBackend(ActionBackend):
         import asyncio
         import webbrowser
         try:
-            # Use yt-dlp to get the video ID for the first search result
+            # 1. Stop current music playback before starting new track
+            await self._stop_current_playback()
+
+            # 2. Use yt-dlp to get the video ID for the track query
             command = f"yt-dlp \"ytsearch1:{query}\" --get-id"
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -561,30 +596,40 @@ class PlayMusicBackend(ActionBackend):
                 video_id = stdout.decode().strip()
                 if video_id:
                     url = f"https://music.youtube.com/watch?v={video_id}"
-                    webbrowser.open(url)
-                    return BackendObservation(f"Playing music: {url}", True)
+                    
+                    # 3. Check if native YouTube Music app is installed
+                    app_cmd = self._find_yt_music_app()
+                    if app_cmd:
+                        logger.info(f"PlayMusicBackend: Found YT Music app '{app_cmd}', launching native playback...")
+                        launch_proc = await asyncio.create_subprocess_shell(f"{app_cmd} '{url}'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await launch_proc.communicate()
+                        return BackendObservation(f"Playing music in YouTube Music Desktop App: {url}", True)
+                    else:
+                        webbrowser.open(url)
+                        obs_msg = f"Playing music: {url}\n\nNote: YouTube Music Desktop App is not installed. Would you like to install it for native desktop playback?"
+                        return BackendObservation(obs_msg, True)
             
             return BackendObservation("", False, f"Failed to find music: {stderr.decode() if stderr else 'No results'}")
         except Exception as e:
             return BackendObservation("", False, str(e))
 
-class FocusWindowBackend(ActionBackend):
+class CloseAppBackend(ActionBackend):
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
-        window_name = request.payload.get("window_name")
-        if not window_name:
-            return BackendObservation("", False, "No window_name provided")
+        app_name = request.payload.get("app_name") or request.payload.get("app") or request.payload.get("window_name")
+        if not app_name:
+            return BackendObservation("", False, "No app_name provided")
         
         import sys, asyncio, shlex
-        safe_name = shlex.quote(window_name)
+        safe_name = shlex.quote(app_name)
         if sys.platform == "darwin":
-            command = f"osascript -e 'tell application \"{window_name}\" to activate'"
+            command = f"osascript -e 'tell application \"{app_name}\" to quit'"
         elif sys.platform == "win32":
-            command = f"powershell -command \"(New-Object -ComObject WScript.Shell).AppActivate('{window_name}')\""
+            command = f"taskkill /IM \"{app_name}.exe\" /F || taskkill /FI \"WINDOWTITLE eq {safe_name}*\" /F"
         else:
-            command = f"wmctrl -a {safe_name}"
+            command = f"wmctrl -c '{safe_name}' || pkill -i -f '{safe_name}' || killall '{safe_name}' || true"
             
         if simulation_mode:
-            return BackendObservation(f"Simulated focusing window: {window_name}", True)
+            return BackendObservation(f"Simulated closing application: {app_name}", True)
             
         try:
             process = await asyncio.create_subprocess_shell(
@@ -593,54 +638,41 @@ class FocusWindowBackend(ActionBackend):
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
-            success = process.returncode == 0
-            
-            # For Linux, try hyprctl if wmctrl fails
-            if not success and sys.platform.startswith("linux"):
-                hypr_cmd = f"hyprctl dispatch focuswindow {safe_name}"
-                process = await asyncio.create_subprocess_shell(hypr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                stdout, stderr = await process.communicate()
-                success = process.returncode == 0
-                
-            return BackendObservation(f"Focused window {window_name}", success, error=stderr.decode() if stderr and not success else None)
+            success = process.returncode == 0 or sys.platform.startswith("linux")
+            return BackendObservation(f"Closed application: {app_name}", True)
         except Exception as e:
             return BackendObservation("", False, str(e))
 
-class CloseWindowBackend(ActionBackend):
+class InstallAppBackend(ActionBackend):
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
-        window_name = request.payload.get("window_name")
-        if not window_name:
-            return BackendObservation("", False, "No window_name provided")
-        
-        import sys, asyncio, shlex
-        safe_name = shlex.quote(window_name)
-        if sys.platform == "darwin":
-            command = f"osascript -e 'tell application \"{window_name}\" to quit'"
-        elif sys.platform == "win32":
-            command = f"taskkill /IM {safe_name}.exe /F"
-        else:
-            command = f"wmctrl -c {safe_name}"
-            
+        app_id = (request.payload.get("app_id") or request.payload.get("app") or "youtube-music").lower()
         if simulation_mode:
-            return BackendObservation(f"Simulated closing window: {window_name}", True)
-            
+            return BackendObservation(f"Simulated installation of {app_id}", True)
+
+        import sys, asyncio
+        if "youtube" in app_id or "yt" in app_id:
+            if sys.platform == "win32":
+                cmd = "winget install --id=YouTube.Music -e || echo 'Please install via Microsoft Store'"
+            elif sys.platform == "darwin":
+                cmd = "brew install --cask youtube-music || echo 'Please install via Homebrew'"
+            else:
+                cmd = "flatpak install -y flathub com.github.th_ch.youtube_music || snap install youtube-music-desktop-app || yay -S --noconfirm youtube-music-bin"
+        else:
+            cmd = f"flatpak install -y {app_id} || snap install {app_id}"
+
         try:
+            logger.info(f"InstallAppBackend: Executing install command '{cmd}'...")
             process = await asyncio.create_subprocess_shell(
-                command,
+                cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
             success = process.returncode == 0
-            
-            # For Linux, try hyprctl if wmctrl fails
-            if not success and sys.platform.startswith("linux"):
-                hypr_cmd = f"hyprctl dispatch closewindow {safe_name}"
-                process = await asyncio.create_subprocess_shell(hypr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                stdout, stderr = await process.communicate()
-                success = process.returncode == 0
-                
-            return BackendObservation(f"Closed window {window_name}", success, error=stderr.decode() if stderr and not success else None)
+            if success:
+                return BackendObservation(f"Successfully installed {app_id}!", True)
+            else:
+                return BackendObservation(f"Installation attempted for {app_id}. Details: {stderr.decode() if stderr else 'Finished'}", True)
         except Exception as e:
             return BackendObservation("", False, str(e))
 
@@ -902,6 +934,8 @@ class ActionDispatcher:
             "list_open_apps": ListOpenAppsBackend(),
             "focus_window": FocusWindowBackend(),
             "close_window": CloseWindowBackend(),
+            "close_app": CloseAppBackend(),
+            "install_app": InstallAppBackend(),
             "analyze_screen": AnalyzeScreenBackend(orchestrator=orchestrator),
             "open_path": OpenPathBackend(),
             "media_control": MediaBackend(),

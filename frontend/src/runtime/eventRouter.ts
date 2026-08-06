@@ -206,6 +206,16 @@ export function routeEvent(event: any) {
       if (event.execution_metadata) {
         useCognitionState.getState().setLastExecutionMetadata(event.execution_metadata);
       }
+      if (event.text) {
+        useCognitionState.getState().addItems([{
+          id: event.turn_id || Math.random().toString(36).substring(7),
+          type: 'surfacing',
+          timestamp: Date.now(),
+          from: 'Arova',
+          paragraphs: [event.text],
+          actions: event.actions || []
+        }]);
+      }
       break;
 
     case 'memory.sensitive_candidate':
