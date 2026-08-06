@@ -1021,6 +1021,20 @@ class ActionDispatcher:
             
         logger.info(f"ActionDispatcher: Routing {request.action} -> {request.capability}")
         res = await backend.execute(request, simulation_mode=simulation_mode)
+        
+        # Run BlockerResolver analysis on action outputs for proactive fix pills
+        if res and res.output:
+            try:
+                from arova.core.automation.blocker_resolver import BlockerResolver
+                payload = request.payload if hasattr(request, 'payload') and isinstance(request.payload, dict) else {}
+                cmd = payload.get("command", request.action)
+                blocker_fix = BlockerResolver.analyze_output(str(cmd), res.output)
+                if blocker_fix:
+                    res.output += f"\n\n[Proactive Fix Available]: {blocker_fix['summary']}"
+                    setattr(res, "actions", blocker_fix["actions"])
+            except Exception as e:
+                logger.debug(f"BlockerResolver analysis error: {e}")
+
         if res and res.success and self.workspace_manager:
             try:
                 payload = request.payload if hasattr(request, 'payload') and isinstance(request.payload, dict) else {}

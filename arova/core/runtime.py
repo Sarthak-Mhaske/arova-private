@@ -206,12 +206,26 @@ class RuntimeContainer:
         self.ambient_observer = AmbientObserver(event_bus=self.event_bus, provider=self.ambient_provider, stability_window_seconds=2.0)
         self.ambient_observer.start()
         
-        from arova.core.platform.windowing.manager import WindowingManager
-        self.window_backend = WindowingManager.get_backend()
+        # Core Pillars (Phase 12 Core Capabilities)
+        from arova.core.audio.media_ducking import MediaDuckingEngine
+        from arova.core.cognition.routine_tracker import RoutineTracker
+        from arova.core.cognition.context_graph import ContextKnowledgeGraph
         
-        # Register core providers
-        from arova.core.cognition.providers.window_provider import WindowObserverProvider
-        self.provider_manager.register(WindowObserverProvider(self.window_backend))
+        self.media_ducking = MediaDuckingEngine()
+        self.routine_tracker = RoutineTracker()
+        self.context_graph = ContextKnowledgeGraph()
+
+        # Wire MediaDuckingEngine to Orb & Voice states
+        def _on_orb_state(payload):
+            p = payload.__dict__ if hasattr(payload, '__dict__') else payload
+            state_str = str(p.get("state") or p.get("data", {}).get("state") or "").lower()
+            if any(s in state_str for s in ["thinking", "speaking", "listening"]):
+                asyncio.create_task(self.media_ducking.duck())
+            elif "idle" in state_str:
+                asyncio.create_task(self.media_ducking.restore())
+
+        self.event_bus.subscribe("orb", "COGNITION_STATE_CHANGED", _on_orb_state)
+        self.event_bus.subscribe("state", "EXECUTION_STATE_CHANGED", _on_orb_state)
 
         # Semantic Environment Pipeline (Phase 4 / 6)WorkspaceSemanticAnalyzer()
         self.semantic_provider = WorkspaceSemanticAnalyzer()
