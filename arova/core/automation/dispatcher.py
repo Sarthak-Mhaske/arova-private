@@ -550,6 +550,69 @@ class PlayMusicBackend(ActionBackend):
         except Exception as e:
             logger.debug(f"Failed to stop current playback: {e}")
 
+    async def _navigate_or_replace_browser_tab(self, url: str) -> bool:
+        """
+        Reuses existing YouTube browser tab or closes the old music tab so duplicate tabs don't pile up.
+        """
+        import sys, os, asyncio, shlex
+        try:
+            if sys.platform == "darwin":
+                # macOS: AppleScript same-tab URL update for Chrome/Brave/Safari
+                script = f'''
+                try
+                    tell application "Google Chrome"
+                        repeat with w in windows
+                            repeat with t in tabs of w
+                                if URL of t contains "youtube.com" or URL of t contains "music.youtube" then
+                                    set URL of t to "{url}"
+                                    set active tab index of w to (index of t)
+                                    return "reused"
+                                end if
+                            end repeat
+                        end repeat
+                    end tell
+                end try
+                try
+                    tell application "Brave Browser"
+                        repeat with w in windows
+                            repeat with t in tabs of w
+                                if URL of t contains "youtube.com" or URL of t contains "music.youtube" then
+                                    set URL of t to "{url}"
+                                    set active tab index of w to (index of t)
+                                    return "reused"
+                                end if
+                            end repeat
+                        end repeat
+                    end tell
+                end try
+                return "none"
+                '''
+                proc = await asyncio.create_subprocess_shell(f"osascript -e {shlex.quote(script)}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                out, _ = await proc.communicate()
+                if "reused" in out.decode().lower():
+                    return True
+
+            elif sys.platform.startswith("linux"):
+                from arova.core.platform.services.backend import PlatformBackend
+                backend = PlatformBackend.create()
+                windows = backend.get_open_windows()
+                yt_windows = [w for w in windows if "youtube" in w.lower() or "music.youtube" in w.lower()]
+                if yt_windows:
+                    for win in yt_windows:
+                        safe_w = shlex.quote(win)
+                        close_cmd = f"wmctrl -c {safe_w} || hyprctl dispatch closewindow {safe_w} || true"
+                        p = await asyncio.create_subprocess_shell(close_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await p.communicate()
+                    await asyncio.sleep(0.25)
+
+            elif sys.platform == "win32":
+                cmd = "powershell -command \"Get-Process | Where-Object {$_.MainWindowTitle -like '*YouTube*'} | Stop-Process -Force\""
+                p = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await p.communicate()
+        except Exception as e:
+            logger.debug(f"Tab navigation/replacement notice: {e}")
+        return False
+
     def _find_yt_music_app(self) -> Optional[str]:
         import shutil, sys, os
         if sys.platform == "win32":
@@ -597,7 +660,7 @@ class PlayMusicBackend(ActionBackend):
                 if video_id:
                     url = f"https://music.youtube.com/watch?v={video_id}"
                     
-                    # 3. Check if native YouTube Music app is installed
+                    # 3. Check if native YouTube Music desktop app is installed
                     app_cmd = self._find_yt_music_app()
                     if app_cmd:
                         logger.info(f"PlayMusicBackend: Found YT Music app '{app_cmd}', launching native playback...")
@@ -605,7 +668,11 @@ class PlayMusicBackend(ActionBackend):
                         await launch_proc.communicate()
                         return BackendObservation(f"Playing music in YouTube Music Desktop App: {url}", True)
                     else:
-                        webbrowser.open(url)
+                        # 4. Same-tab reuse or close old music tab before opening new URL
+                        reused = await self._navigate_or_replace_browser_tab(url)
+                        if not reused:
+                            webbrowser.open(url)
+                        
                         obs_msg = f"Playing music: {url}\n\nNote: YouTube Music Desktop App is not installed. Would you like to install it for native desktop playback?"
                         return BackendObservation(obs_msg, True)
             
