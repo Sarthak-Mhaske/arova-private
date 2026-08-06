@@ -52,8 +52,8 @@ class RoutineTracker:
 
         self._save_stats()
 
-    def predict_next_workspace(() -> Optional[Dict[str, Any]]:
-        pass
+    def predict_next_workspace(self) -> Optional[Dict[str, Any]]:
+        return self.get_preflight_recommendation()
 
     def get_preflight_recommendation(self) -> Optional[Dict[str, Any]]:
         hour = time.localtime().tm_hour

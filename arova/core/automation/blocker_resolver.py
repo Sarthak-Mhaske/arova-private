@@ -53,20 +53,38 @@ class BlockerResolver:
                 ]
             }
 
-        # 3. Python ImportError / NameError
-        py_match = re.search(r"(NameError|ImportError|ModuleNotFoundError): (.*)", output)
+        # 3. Python / Node ImportError, NameError, SyntaxError
+        py_match = re.search(r"(NameError|ImportError|ModuleNotFoundError|SyntaxError|TypeError|ReferenceError|AssertionError): (.*)", output)
         if py_match:
             err_type = py_match.group(1)
-            err_detail = py_match.group(2)
+            err_detail = py_match.group(2).strip()
             return {
                 "error_type": err_type,
-                "summary": f"Python {err_type}: {err_detail}",
+                "summary": f"{err_type}: {err_detail}",
                 "actions": [
                     {
                         "label": f"Auto-Fix {err_type}",
                         "primary": True,
                         "eventType": "user.message",
                         "eventPayload": {"text": f"fix {err_type} {err_detail}", "vocalize": True}
+                    }
+                ]
+            }
+
+        # 4. Generic TypeScript / Compiler Error Fallback
+        generic_ts = re.search(r"error (TS\d+): (.*)", output)
+        if generic_ts:
+            code = generic_ts.group(1)
+            msg = generic_ts.group(2).strip()
+            return {
+                "error_type": code,
+                "summary": f"Compiler {code}: {msg}",
+                "actions": [
+                    {
+                        "label": f"Auto-Fix Compiler Error {code}",
+                        "primary": True,
+                        "eventType": "user.message",
+                        "eventPayload": {"text": f"fix compiler error {code} {msg}", "vocalize": True}
                     }
                 ]
             }
