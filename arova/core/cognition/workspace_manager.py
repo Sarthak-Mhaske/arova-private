@@ -723,9 +723,17 @@ class WorkspaceManager:
             self.search_index.index_workspace(active_ws)
         if self.event_bus:
             workspaces_data = [w.to_dict() for w in self._workspaces.values()]
+            active_dict = active_ws.to_dict() if active_ws else None
+            if active_dict and active_ws:
+                try:
+                    continue_ctx = self.get_continue_context(active_ws.workspace_id)
+                    if isinstance(continue_ctx, dict):
+                        active_dict.update(continue_ctx)
+                except Exception as e:
+                    logger.debug(f"sync_to_bus continue_context enrichment warning: {e}")
             self.event_bus.emit("workspace", "sync", {
                 "active_workspace_id": self._active_workspace_id,
-                "active_workspace": active_ws.to_dict() if active_ws else None,
+                "active_workspace": active_dict,
                 "workspaces": workspaces_data,
                 "completed_work": self._completed_work
             })
