@@ -23,6 +23,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const [calibrationRated, setCalibrationRated] = useState<string | null>(null);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [copiedCmd, setCopiedCmd] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     if (workspace && (workspace.id || workspace.workspace_id)) {
@@ -73,6 +74,69 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const trajectoryStory = continueData?.trajectory_story || workspace?.understanding?.trajectory_story || '';
 
   const urlResources: string[] = associated_resources.filter((k: string) => k.startsWith('http') || k.startsWith('https') || k.includes('youtube'));
+
+  const formatUrlContext = (u: string): string => {
+    try {
+      const parsed = new URL(u);
+      const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+
+      // 1. Google / Search Engines
+      if (host.includes('google.com') || host.includes('bing.com') || host.includes('duckduckgo.com')) {
+        const query = parsed.searchParams.get('q') || parsed.searchParams.get('query');
+        if (query) {
+          const cleanQ = decodeURIComponent(query.replace(/\+/g, ' '));
+          return `🔍 Search: "${cleanQ.length > 40 ? cleanQ.slice(0, 37) + '...' : cleanQ}"`;
+        }
+        return `🔍 Web Search`;
+      }
+
+      // 2. YouTube
+      if (host.includes('youtube.com') || host.includes('youtu.be')) {
+        const v = parsed.searchParams.get('v');
+        if (v) {
+          return `▶️ YouTube Video (${v})`;
+        }
+        return `▶️ YouTube`;
+      }
+
+      // 3. GitHub
+      if (host.includes('github.com')) {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2) {
+          return `📦 GitHub: ${parts[0]}/${parts[1]}`;
+        }
+        return `📦 GitHub`;
+      }
+
+      // 4. Stack Overflow
+      if (host.includes('stackoverflow.com')) {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2 && parts[0] === 'questions') {
+          const rawTitle = parts[2] ? parts[2].replace(/-/g, ' ') : parts[1];
+          const cleanT = decodeURIComponent(rawTitle);
+          return `💬 Stack Overflow: ${cleanT.length > 35 ? cleanT.slice(0, 32) + '...' : cleanT}`;
+        }
+        return `💬 Stack Overflow`;
+      }
+
+      // 5. Localhost / Local Dev
+      if (host.includes('localhost') || host === '127.0.0.1') {
+        return `💻 Local App (localhost${parsed.port ? ':' + parsed.port : ''})`;
+      }
+
+      // Default: Domain + Path
+      let label = host + (parsed.pathname !== '/' ? parsed.pathname : '');
+      if (label.length > 55) label = label.slice(0, 52) + '...';
+      return label;
+    } catch {
+      return u.length > 55 ? u.slice(0, 52) + '...' : u;
+    }
+  };
+
+  const filteredUrlResources = urlResources.filter((u: string) => {
+    const uLower = u.toLowerCase();
+    return !["instagram.com", "facebook.com", "tiktok.com", "twitter.com", "x.com", "google.com/sorry", "/accounts/setosid", "/servicelogin"].some(skip => uLower.includes(skip));
+  });
 
   const confBreakdown = continueData?.confidence_breakdown || {
     "Repository": workspace?.interpretation?.repo_paths?.length > 0 ? 100 : 0,
@@ -125,7 +189,8 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
     setTimeout(() => setCopiedCmd(false), 2000);
   };
 
-  const handleResume = (restoreAll = true) => {
+  const handleResume = () => {
+    setRestoring(true);
     socket.sendEvent({
       type: 'dogfooding.record_acceptance',
       event: 'clicked'
@@ -134,7 +199,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         type: 'workspace.continue',
         workspace_id: workspace.workspace_id || workspace.id || 'ws_default',
         options: {
-          restore_all: restoreAll && !showOptions,
+          restore_all: !showOptions,
           restore_vscode: restoreEditors,
           restore_editors: restoreEditors,
           restore_terminal: restoreTerminal,
@@ -151,67 +216,69 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const recentCommand = workspace?.recent_command;
 
   return (
-    <div className="surfacing momentum" style={{ animation: 'surface-in 900ms cubic-bezier(0.32, 0.72, 0.24, 1) both' }}>
-      <div className="from">AROVA · CONTEXT RECOVERY</div>
-      
-      <div className="lede">
-        {greeting}. Ready to resume {title}?
+    <div className="continue-card glass-panel" style={{ padding: '24px', borderRadius: '18px', border: '1px solid var(--hairline-2)', background: 'var(--glass-2)', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+        <div>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-mute)', fontWeight: 600, marginBottom: '4px' }}>
+            AROVA · CONTEXT RECOVERY
+          </div>
+          <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--ink)', margin: 0 }}>
+            {greeting}. Ready to resume {title}?
+          </h3>
+        </div>
+        {confidence !== null && (
+          <div style={{ padding: '4px 10px', borderRadius: '12px', background: confidence >= 85 ? 'rgba(74, 222, 128, 0.12)' : 'rgba(250, 204, 21, 0.12)', color: confidence >= 85 ? 'var(--accent-sage)' : 'var(--accent-gold)', fontSize: '12px', fontWeight: 600, border: `1px solid ${confidence >= 85 ? 'rgba(74, 222, 128, 0.25)' : 'rgba(250, 204, 21, 0.25)'}` }}>
+            {confidence}% Confident
+          </div>
+        )}
       </div>
 
-      {storyNarrative.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
-          {storyNarrative.map((line, idx) => (
-            <p key={idx} style={{ margin: 0 }}>
-              • {line}
-            </p>
-          ))}
+      {/* Story Narrative bullet points */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--ink-2)', marginBottom: '18px' }}>
+        {storyNarrative.map((item, idx) => (
+          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: 'var(--accent-gold)' }}>•</span>
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+
+      {reasons.length > 0 && (
+        <div style={{ fontSize: '12px', color: 'var(--ink-mute)', marginBottom: '20px', fontStyle: 'italic' }}>
+          While you were away, {preparedList.length} files observed in working set ({preparedList.slice(0, 3).join(', ')}...). Arova is currently {confidence}% confident with {accuracyScore}/{accuracyTotal} verified context dimensions.
         </div>
-      ) : (
-        <p style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-          Still learning your workspace...
-        </p>
       )}
 
-      {(deltaChanges.length > 0 || preparedList.length > 0) && (
-        <p className="quiet">
-          While you were away, {deltaChanges.length > 0 ? deltaChanges[0] : `${preparedList.length} files observed in working set (${preparedList.slice(0, 3).join(', ')}${preparedList.length > 3 ? '...' : ''})`}.{' '}
-          {confidence !== null ? (
-            <>Arova is currently <strong style={{ color: 'var(--ink)' }}>{confidence}% confident</strong> with {accuracyScore}/{accuracyTotal} verified context dimensions.</>
-          ) : (
-            <>Context recovery accuracy: {accuracyScore}/{accuracyTotal} verified dimensions.</>
-          )}
-        </p>
-      )}
-
-      {workspace?.understanding?.decisions && workspace.understanding.decisions.length > 0 && (
-        <p className="quiet">
-          Decision already settled: <em>{workspace.understanding.decisions[0].rationale || workspace.understanding.decisions[0]}</em>
-        </p>
-      )}
-
-      {/* Inline action buttons directly inside the message */}
-      <div className="actions-inline" style={{ marginTop: '22px' }}>
-        <button
-          className="action-chip primary"
-          onClick={() => handleResume(!showOptions)}
+      {/* Primary Actions */}
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button 
+          className="action-chip primary" 
+          onClick={handleResume}
+          disabled={restoring}
+          style={{ padding: '8px 18px', fontSize: '13px', fontWeight: 600 }}
         >
-          <span>{showOptions ? 'Restore Selected' : 'Resume & Restore All'}</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          {restoring ? 'Restoring Context...' : 'Restore Selected'}
         </button>
-        <button
-          className="action-chip"
+        
+        <button 
+          className="action-chip" 
           onClick={() => setShowOptions(!showOptions)}
+          style={{ padding: '8px 14px', fontSize: '13px' }}
         >
-          {showOptions ? 'Hide Options' : 'Choose What To Restore'}
+          {showOptions ? 'Hide Options' : 'Customize Restoration'}
         </button>
-        <button
-          className="action-chip"
+
+        <button 
+          className="action-chip" 
           onClick={() => setShowTrajectory(!showTrajectory)}
+          style={{ padding: '8px 14px', fontSize: '13px' }}
         >
-          {showTrajectory ? 'Hide Scorecard & Story' : 'Scorecard & Confidence'}
+          {showTrajectory ? 'Hide Scorecard & Story' : 'Why Arova is Confident'}
         </button>
-        <button
-          className="action-chip"
+
+        <button 
+          className="action-chip" 
+          style={{ padding: '8px 14px', fontSize: '13px', marginLeft: 'auto', color: 'var(--ink-mute)' }}
           onClick={() => dismissContinueCard()}
         >
           Dismiss
@@ -255,18 +322,11 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
               )}
             </div>
           )}
-          {urlResources.length > 0 && (
+          {filteredUrlResources.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-2)' }}>Documentation & browser tabs:</div>
-              {urlResources.map((u, idx) => {
-                let displayLabel = u;
-                try {
-                  const parsed = new URL(u);
-                  displayLabel = parsed.hostname.replace(/^www\./, '') + (parsed.pathname !== '/' ? parsed.pathname : '');
-                  if (displayLabel.length > 55) displayLabel = displayLabel.slice(0, 52) + '...';
-                } catch {
-                  if (displayLabel.length > 55) displayLabel = displayLabel.slice(0, 52) + '...';
-                }
+              {filteredUrlResources.map((u, idx) => {
+                const displayLabel = formatUrlContext(u);
                 return (
                   <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink-3)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u}>
                     <input type="checkbox" checked={selectedUrls.includes(u)} onChange={() => toggleUrl(u)} style={{ accentColor: 'var(--accent-gold)', flexShrink: 0 }} />
