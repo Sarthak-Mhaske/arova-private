@@ -13,6 +13,7 @@ export const CommandZone: React.FC = () => {
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { activeWorkspace } = useAwarenessState();
 
   // Build suggestion list from verbatim RealityLayer.resources + search index fallback
@@ -25,8 +26,8 @@ export const CommandZone: React.FC = () => {
   const filteredSuggestions = (() => {
     if (!showMentions) return [];
     const q = mentionQuery.toLowerCase();
-    if (!q) return allResources.slice(0, 8);
-    return allResources.filter(r => r.toLowerCase().includes(q)).slice(0, 8);
+    if (!q) return allResources.slice(0, 50);
+    return allResources.filter(r => r.toLowerCase().includes(q)).slice(0, 50);
   })();
 
   const clearChat = () => {
@@ -161,6 +162,15 @@ export const CommandZone: React.FC = () => {
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
+  React.useEffect(() => {
+    if (showMentions && dropdownRef.current) {
+      const selectedEl = dropdownRef.current.children[selectedIdx + 1] as HTMLElement;
+      if (selectedEl && typeof selectedEl.scrollIntoView === 'function') {
+        selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedIdx, showMentions]);
+
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (showMentions && filteredSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -216,21 +226,25 @@ export const CommandZone: React.FC = () => {
       )}
       {/* TIER 1.3: @-mention autocomplete dropdown */}
       {showMentions && (
-        <div style={{
-          position: 'absolute',
-          bottom: '62px',
-          left: '12px',
-          right: '12px',
-          background: 'var(--glass-1, rgba(30,30,40,0.95))',
-          border: '1px solid var(--hairline-2, rgba(255,255,255,0.1))',
-          borderRadius: '12px',
-          padding: '6px',
-          maxHeight: '180px',
-          overflowY: 'auto',
-          zIndex: 50,
-          backdropFilter: 'blur(12px)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
-        }}>
+        <div 
+          ref={dropdownRef}
+          style={{
+            position: 'absolute',
+            bottom: '62px',
+            left: '12px',
+            right: '12px',
+            background: 'var(--glass-1, rgba(30,30,40,0.95))',
+            border: '1px solid var(--hairline-2, rgba(255,255,255,0.1))',
+            borderRadius: '12px',
+            padding: '6px',
+            maxHeight: '240px',
+            overflowY: 'auto',
+            pointerEvents: 'auto',
+            zIndex: 50,
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+          }}
+        >
           <div style={{ fontSize: '11px', color: 'var(--ink-3)', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {mentionQuery ? `Mention matching "${mentionQuery}"` : 'Your verbatim workspace resources — @ to ground'}
           </div>
