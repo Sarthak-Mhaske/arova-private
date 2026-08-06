@@ -225,23 +225,55 @@ class WorkspaceManager:
 
     def perform_ambient_scan(self):
         """
-        Performs an immediate, authentic scan of open windows, active media, and recent browser tabs/URLs.
+        Performs an immediate, authentic scan of open windows, running terminal CWDs,
+        IDE project paths, active media, and recent browser tabs/URLs.
         Populates active_ws.reality.resources with real observed items.
         """
         active = self.get_active_workspace()
         if not active:
             return
 
-        # 1. Scan recent browser tabs/history
+        # 1. Scan running process CWDs (Kitty, Alacritty, Antigravity IDE, VS Code, Cursor)
+        try:
+            from arova.core.ambience.process_tracker import ProcessContextTracker
+            proc_ctx = ProcessContextTracker.get_active_process_contexts()
+            
+            for p_path in proc_ctx.get("editor_projects", []):
+                if os.path.isdir(p_path) and p_path not in active.interpretation.repo_paths:
+                    active.interpretation.repo_paths.append(p_path)
+                active.reality.resources[p_path] = {
+                    "identity": p_path,
+                    "type": "vscode",
+                    "last_seen": time.time(),
+                    "summary": f"Active project: {os.path.basename(p_path)}"
+                }
+
+            for t_cwd in proc_ctx.get("terminal_cwds", []):
+                if os.path.isdir(t_cwd):
+                    term_key = f"terminal://{t_cwd}"
+                    active.reality.resources[term_key] = {
+                        "identity": t_cwd,
+                        "type": "terminal",
+                        "last_seen": time.time(),
+                        "summary": f"Terminal CWD: {t_cwd}"
+                    }
+                    if not active.interpretation.repo_paths and t_cwd != os.path.expanduser("~"):
+                        active.interpretation.repo_paths.append(t_cwd)
+        except Exception as e:
+            logger.debug(f"WorkspaceManager perform_ambient_scan process error: {e}")
+
+        # 2. Scan recent browser tabs/history
         try:
             from arova.core.ambience.browser_tracker import BrowserTabCapture
             urls = BrowserTabCapture.get_recent_browser_history(limit=10)
             for item in urls:
                 u = item["url"]
                 t = item["title"]
+                cat = item.get("category", "general")
                 active.reality.resources[u] = {
                     "identity": u,
                     "type": "browser",
+                    "category": cat,
                     "last_seen": time.time(),
                     "summary": t
                 }
@@ -250,7 +282,7 @@ class WorkspaceManager:
         except Exception as e:
             logger.debug(f"WorkspaceManager perform_ambient_scan browser error: {e}")
 
-        # 2. Scan live open windows & media
+        # 3. Scan live open windows & media
         try:
             from arova.core.ambience.provider import LiveOSAmbientProvider
             provider = LiveOSAmbientProvider()
