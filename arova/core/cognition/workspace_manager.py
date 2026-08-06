@@ -79,6 +79,17 @@ class WorkspaceManager:
         logger.info(f"WorkspaceManager: Initialized default workspace '{ws.title}' ({ws.workspace_id}) with project resources at {cwd}")
         return ws
 
+    @staticmethod
+    def _classify_app_type(text: str) -> str:
+        t = str(text).lower()
+        if any(w in t for w in ["code", "vscode", "antigravity", "cursor", "pycharm", "intellij", "idea", "sublime", "zed", "neovim", "fleet", "emacs", "kate"]):
+            return "vscode"
+        if any(w in t for w in ["kitty", "alacritty", "gnome-terminal", "konsole", "xterm", "wezterm", "foot", "tilix", "ghostty", "terminal", "warp", "cmd", "powershell"]):
+            return "terminal"
+        if any(w in t for w in ["chrome", "firefox", "brave", "chromium", "edge", "safari", "zen", "youtube"]):
+            return "browser"
+        return "window"
+
     def _on_context_changed(self, event: Any):
         payload = event.data if hasattr(event, "data") else event
         snapshot = payload.get("snapshot", {}) if isinstance(payload, dict) and "snapshot" in payload else (payload if isinstance(payload, dict) else {})
@@ -90,7 +101,7 @@ class WorkspaceManager:
         playing_media = snapshot.get("playing_media", [])
 
         if window_title or active_app:
-            provider = "vscode" if any(w in str(window_title or active_app).lower() for w in ["code", "vscode"]) else ("browser" if any(w in str(window_title or active_app).lower() for w in ["chrome", "firefox", "brave", "youtube"]) else "desktop")
+            provider = self._classify_app_type(f"{active_app} {window_title}")
             self.ingest_fragment({
                 "source_identity": str(window_title or active_app),
                 "provider_id": provider,
@@ -99,7 +110,7 @@ class WorkspaceManager:
 
         for win in open_windows:
             if isinstance(win, str) and win and win != window_title:
-                provider = "vscode" if any(w in win.lower() for w in ["code", "vscode"]) else ("browser" if any(w in win.lower() for w in ["chrome", "firefox", "brave", "youtube"]) else "window")
+                provider = self._classify_app_type(win)
                 self.ingest_fragment({
                     "source_identity": win,
                     "provider_id": provider,
@@ -267,17 +278,19 @@ class WorkspaceManager:
         if not ctx or not active:
             return
         if ctx.window_title:
+            w_type = self._classify_app_type(f"{ctx.active_app} {ctx.window_title}")
             active.reality.resources[ctx.window_title] = {
                 "identity": ctx.window_title,
-                "type": "vscode" if "code" in str(ctx.active_app or "").lower() else "window",
+                "type": w_type,
                 "last_seen": time.time(),
                 "summary": f"Active window: {ctx.window_title}"
             }
         for win in (ctx.open_windows or []):
             if win:
+                w_type = self._classify_app_type(win)
                 active.reality.resources[win] = {
                     "identity": win,
-                    "type": "window",
+                    "type": w_type,
                     "last_seen": time.time(),
                     "summary": f"Open window: {win}"
                 }

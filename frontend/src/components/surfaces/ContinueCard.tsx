@@ -258,12 +258,22 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
           {urlResources.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-2)' }}>Documentation & browser tabs:</div>
-              {urlResources.map((u, idx) => (
-                <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink-3)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={selectedUrls.includes(u)} onChange={() => toggleUrl(u)} style={{ accentColor: 'var(--accent-gold)' }} />
-                  <span>{u}</span>
-                </label>
-              ))}
+              {urlResources.map((u, idx) => {
+                let displayLabel = u;
+                try {
+                  const parsed = new URL(u);
+                  displayLabel = parsed.hostname.replace(/^www\./, '') + (parsed.pathname !== '/' ? parsed.pathname : '');
+                  if (displayLabel.length > 55) displayLabel = displayLabel.slice(0, 52) + '...';
+                } catch {
+                  if (displayLabel.length > 55) displayLabel = displayLabel.slice(0, 52) + '...';
+                }
+                return (
+                  <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink-3)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u}>
+                    <input type="checkbox" checked={selectedUrls.includes(u)} onChange={() => toggleUrl(u)} style={{ accentColor: 'var(--accent-gold)', flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayLabel}</span>
+                  </label>
+                );
+              })}
             </div>
           )}
         </div>
