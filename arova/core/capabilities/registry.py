@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from arova.core.capabilities.schema import CapabilityDefinition, CapabilityState, CapabilityHealth
 
 class CapabilityRegistry:
