@@ -47,21 +47,23 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const title = workspace?.title || 'Current Workspace';
   const continueData = workspace as any;
   
-  const rawResources = continueData?.associated_resources || 
+  const associated_resources: string[] = continueData?.associated_resources || 
     (workspace?.reality?.resources ? Object.keys(workspace.reality.resources) : []);
-  const associated_resources = rawResources.length > 0 ? rawResources : ['~/PythonLearning'];
   const preparedList = associated_resources.map((r: string) => r.split('/').pop() || r);
 
-  const confidence = workspace?.confidence_score !== undefined ? workspace?.confidence_score : (workspace?.understanding?.confidence?.score ?? 92);
+  const confidence = workspace?.confidence_score !== undefined ? workspace?.confidence_score : (workspace?.understanding?.confidence?.score ?? (associated_resources.length > 0 ? 85 : 0));
   
   const storyNarrative: string[] = (workspace?.story_narrative && workspace.story_narrative.length > 0)
     ? workspace.story_narrative
     : ((workspace?.understanding?.story_narrative && workspace.understanding.story_narrative.length > 0)
     ? workspace.understanding.story_narrative
-    : [
+    : (associated_resources.length > 0 ? [
         `Active focus on working set: ${preparedList.slice(0, 3).join(', ')}`,
         `Tracked workspace environment: ${title}`
-      ]);
+      ] : [
+        'No active working set items captured yet.',
+        'Open your browser, editor, or terminal to track your workspace context.'
+      ]));
       
   const whatChanged = '';
   const deltaChanges = continueData?.delta_changes || [];
@@ -73,12 +75,12 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const urlResources: string[] = associated_resources.filter((k: string) => k.startsWith('http') || k.startsWith('https') || k.includes('youtube'));
 
   const confBreakdown = continueData?.confidence_breakdown || {
-    "Repository": 100,
-    "Open files": preparedList.length > 0 ? 100 : 80,
-    "Goal": workspace?.understanding?.momentum?.goal ? 100 : 80,
-    "Blocker": workspace?.understanding?.momentum?.current_blocker ? 100 : 80,
-    "Browser docs": urlResources.length > 0 ? 100 : 80,
-    "Terminal": 100
+    "Repository": workspace?.interpretation?.repo_paths?.length > 0 ? 100 : 0,
+    "Open files": preparedList.length > 0 ? 100 : 0,
+    "Goal": workspace?.understanding?.momentum?.goal ? 100 : 0,
+    "Blocker": workspace?.understanding?.momentum?.current_blocker ? 100 : 0,
+    "Browser docs": urlResources.length > 0 ? 100 : 0,
+    "Terminal": 0
   };
 
   const recAcc = {
@@ -101,7 +103,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const groupedChanges = rawChanges.filter(item => item.text);
 
   const lastOutcomes = workspace?.last_restore_outcomes?.items || [];
-  const explainabilityReasons: string[] = workspace?.understanding?.explainability_reasons || workspace?.explainability_reasons || [`Active working set verified across ${preparedList.length} items`];
+  const explainabilityReasons: string[] = workspace?.understanding?.explainability_reasons || workspace?.explainability_reasons || (associated_resources.length > 0 ? [`Active working set verified across ${preparedList.length} items`] : ['No activity observed yet']);
   const reasons = workspace?.understanding?.confidence?.reasons || explainabilityReasons;
 
   const handleCalibrate = (rating: string) => {

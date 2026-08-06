@@ -212,6 +212,84 @@ class WorkspaceManager:
                     url = f"https://{domain}" if not domain.startswith("http") else domain
                     self.event_bus.emit("environment", "OPEN_URL_REQUESTED", {"url": url})
 
+    def perform_ambient_scan(self):
+        """
+        Performs an immediate, authentic scan of open windows, active media, and recent browser tabs/URLs.
+        Populates active_ws.reality.resources with real observed items.
+        """
+        active = self.get_active_workspace()
+        if not active:
+            return
+
+        # 1. Scan recent browser tabs/history
+        try:
+            from arova.core.ambience.browser_tracker import BrowserTabCapture
+            urls = BrowserTabCapture.get_recent_browser_history(limit=10)
+            for item in urls:
+                u = item["url"]
+                t = item["title"]
+                active.reality.resources[u] = {
+                    "identity": u,
+                    "type": "browser",
+                    "last_seen": time.time(),
+                    "summary": t
+                }
+                if u not in active.interpretation.browser_domains:
+                    active.interpretation.browser_domains.append(u)
+        except Exception as e:
+            logger.debug(f"WorkspaceManager perform_ambient_scan browser error: {e}")
+
+        # 2. Scan live open windows & media
+        try:
+            from arova.core.ambience.provider import LiveOSAmbientProvider
+            provider = LiveOSAmbientProvider()
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self._async_scan_os(provider, active))
+                else:
+                    ctx = loop.run_until_complete(provider.get_current_context())
+                    self._apply_os_context(ctx, active)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.debug(f"WorkspaceManager perform_ambient_scan OS window error: {e}")
+
+    async def _async_scan_os(self, provider: Any, active: CognitiveWorkspace):
+        try:
+            ctx = await provider.get_current_context()
+            self._apply_os_context(ctx, active)
+        except Exception as e:
+            logger.debug(f"Async OS scan failed: {e}")
+
+    def _apply_os_context(self, ctx: Any, active: CognitiveWorkspace):
+        if not ctx or not active:
+            return
+        if ctx.window_title:
+            active.reality.resources[ctx.window_title] = {
+                "identity": ctx.window_title,
+                "type": "vscode" if "code" in str(ctx.active_app or "").lower() else "window",
+                "last_seen": time.time(),
+                "summary": f"Active window: {ctx.window_title}"
+            }
+        for win in (ctx.open_windows or []):
+            if win:
+                active.reality.resources[win] = {
+                    "identity": win,
+                    "type": "window",
+                    "last_seen": time.time(),
+                    "summary": f"Open window: {win}"
+                }
+        for media in (ctx.playing_media or []):
+            if media:
+                active.reality.resources[media] = {
+                    "identity": media,
+                    "type": "media",
+                    "last_seen": time.time(),
+                    "summary": f"Playing media: {media}"
+                }
+
     def get_continue_context(self, workspace_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Generates narrative Story-First continue context, [Why?] explainability reasons,
@@ -220,6 +298,10 @@ class WorkspaceManager:
         ws = self.get_workspace(workspace_id) if workspace_id else self.get_active_workspace()
         if not ws:
             return {}
+
+        # If no resources are stored, run an immediate ambient scan of open windows, browser tabs & media
+        if not ws.reality.resources:
+            self.perform_ambient_scan()
         
         story = ws.understanding.story_narrative
         if not story:
@@ -235,12 +317,7 @@ class WorkspaceManager:
                 res_names = [os.path.basename(str(k)) for k in list(ws.reality.resources.keys())[:3]]
                 empirical_story.append(f"Active focus on working set: {', '.join(res_names)}")
             else:
-                user_home = os.path.expanduser("~")
-                py_dir = os.path.join(user_home, "PythonLearning")
-                if os.path.exists(py_dir):
-                    empirical_story.append("Tracked workspace: Python learning environment at ~/PythonLearning")
-                else:
-                    empirical_story.append("Active development trajectory in Arova workspace")
+                empirical_story.append("No active working set items captured yet.")
             story = empirical_story
 
         reasons = ws.understanding.explainability_reasons
@@ -249,63 +326,43 @@ class WorkspaceManager:
             if len(ws.reality.resources) > 0:
                 empirical_reasons.append(f"Active working resources observed ({len(ws.reality.resources)} items)")
             else:
-                empirical_reasons.append("Primary workspace environment verified")
+                empirical_reasons.append("Primary workspace environment initialized")
             if ws.understanding.momentum.current_blocker:
                 empirical_reasons.append("Active blocker recorded in workspace state")
             if ws.understanding.momentum.goal:
                 empirical_reasons.append(f"Active objective tracked: {ws.understanding.momentum.goal}")
-            else:
-                empirical_reasons.append("Continuous background ambient monitoring active")
             reasons = empirical_reasons
 
         # Evidence-Based Observation Scorecard (`Phase 7 Point 4 & HYP-01 Reality Guarantee`)
-        valid_repos = [p for p in ws.interpretation.repo_paths if os.path.isdir(p) or p == "/home/sarthak/arova"]
-        if not valid_repos:
-            user_home = os.path.expanduser("~")
-            py_dir = os.path.join(user_home, "PythonLearning")
-            if os.path.exists(py_dir):
-                valid_repos.append(py_dir)
-            valid_repos.append("/home/sarthak/arova")
-        repo_score = 100 if valid_repos else 80
+        valid_repos = [p for p in ws.interpretation.repo_paths if os.path.isdir(p)]
+        repo_score = 100 if valid_repos else 0
         
         total_file_resources = [
             k for k, v in ws.reality.resources.items()
-            if (isinstance(v, dict) and v.get("type") in ("file", "vscode", "desktop", "window")) or str(k).startswith("/") or any(w in str(k).lower() for w in [".py", ".ts", ".rs", "code", "vscode"])
+            if (isinstance(v, dict) and v.get("type") in ("file", "vscode")) or (str(k).startswith("/") and not str(k).startswith("http"))
         ]
-        if not total_file_resources:
-            user_home = os.path.expanduser("~")
-            py_dir = os.path.join(user_home, "PythonLearning")
-            if os.path.exists(py_dir):
-                total_file_resources.append(py_dir)
-                ws.reality.resources[py_dir] = {"identity": py_dir, "type": "file", "summary": "Python Learning Workspace"}
-
         valid_files = [
             f for f in total_file_resources
             if os.path.exists(f) or any(
                 r.file == f and getattr(r, 'exists', False) for r in self.restoration_engine.resource_registry.all_resources()
-            ) or (
-                self.restoration_engine.last_outcome and any(
-                    i.status == "restored" and (os.path.basename(f) in (i.detail or "") or os.path.basename(f) == i.name)
-                    for i in self.restoration_engine.last_outcome.items
-                )
             )
         ]
-        open_files_score = int((len(valid_files) / len(total_file_resources)) * 100) if total_file_resources else 100
+        open_files_score = int((len(valid_files) / len(total_file_resources)) * 100) if total_file_resources else 0
             
-        goal_score = 100 if ws.understanding.momentum.goal else 80
-        blk_score = 100 if ws.understanding.momentum.current_blocker else 80
+        goal_score = 100 if ws.understanding.momentum.goal else 0
+        blk_score = 100 if ws.understanding.momentum.current_blocker else 0
         
         url_keys = [
             k for k, v in ws.reality.resources.items()
-            if str(k).startswith("http") or any(domain in str(k).lower() for domain in ["youtube", "chrome", "firefox", "brave", "music", "python"]) or (isinstance(v, dict) and v.get("type") in ("url", "browser", "media"))
+            if str(k).startswith("http") or (isinstance(v, dict) and v.get("type") in ("url", "browser", "media"))
         ]
-        docs_score = 100 if url_keys else 80
+        docs_score = 100 if url_keys else 0
         
         term_res = [v for k, v in ws.reality.resources.items() if isinstance(v, dict) and v.get("type") == "terminal"]
-        term_cwd = term_res[0].get("identity") if term_res else (valid_repos[0] if valid_repos else "/home/sarthak/arova")
+        term_cwd = term_res[0].get("identity") if term_res else (valid_repos[0] if valid_repos else None)
         if term_cwd and term_cwd.startswith("terminal://"):
             term_cwd = term_cwd.replace("terminal://", "")
-        term_score = 100 if (term_cwd and os.path.isdir(term_cwd)) else 100
+        term_score = 100 if (term_cwd and os.path.isdir(term_cwd)) else 0
         recent_command = term_res[0].get("recent_command") if term_res else None
 
         confidence_breakdown = {
