@@ -680,6 +680,82 @@ class PlayMusicBackend(ActionBackend):
         except Exception as e:
             return BackendObservation("", False, str(e))
 
+class FocusWindowBackend(ActionBackend):
+    async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
+        window_name = request.payload.get("window_name") or request.payload.get("app")
+        if not window_name:
+            return BackendObservation("", False, "No window_name provided")
+        
+        import sys, asyncio, shlex
+        safe_name = shlex.quote(window_name)
+        if sys.platform == "darwin":
+            command = f"osascript -e 'tell application \"{window_name}\" to activate'"
+        elif sys.platform == "win32":
+            command = f"powershell -command \"(New-Object -ComObject WScript.Shell).AppActivate('{window_name}')\""
+        else:
+            command = f"wmctrl -a {safe_name}"
+            
+        if simulation_mode:
+            return BackendObservation(f"Simulated focusing window: {window_name}", True)
+            
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            success = process.returncode == 0
+            
+            # For Linux, try hyprctl if wmctrl fails
+            if not success and sys.platform.startswith("linux"):
+                hypr_cmd = f"hyprctl dispatch focuswindow {safe_name}"
+                process = await asyncio.create_subprocess_shell(hypr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                stdout, stderr = await process.communicate()
+                success = process.returncode == 0
+                
+            return BackendObservation(f"Focused window {window_name}", success, error=stderr.decode() if stderr and not success else None)
+        except Exception as e:
+            return BackendObservation("", False, str(e))
+
+class CloseWindowBackend(ActionBackend):
+    async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
+        window_name = request.payload.get("window_name") or request.payload.get("app")
+        if not window_name:
+            return BackendObservation("", False, "No window_name provided")
+        
+        import sys, asyncio, shlex
+        safe_name = shlex.quote(window_name)
+        if sys.platform == "darwin":
+            command = f"osascript -e 'tell application \"{window_name}\" to quit'"
+        elif sys.platform == "win32":
+            command = f"taskkill /IM {safe_name}.exe /F"
+        else:
+            command = f"wmctrl -c {safe_name}"
+            
+        if simulation_mode:
+            return BackendObservation(f"Simulated closing window: {window_name}", True)
+            
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            success = process.returncode == 0
+            
+            # For Linux, try hyprctl if wmctrl fails
+            if not success and sys.platform.startswith("linux"):
+                hypr_cmd = f"hyprctl dispatch closewindow {safe_name}"
+                process = await asyncio.create_subprocess_shell(hypr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                stdout, stderr = await process.communicate()
+                success = process.returncode == 0
+                
+            return BackendObservation(f"Closed window {window_name}", success, error=stderr.decode() if stderr and not success else None)
+        except Exception as e:
+            return BackendObservation("", False, str(e))
+
 class CloseAppBackend(ActionBackend):
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
         app_name = request.payload.get("app_name") or request.payload.get("app") or request.payload.get("window_name")
