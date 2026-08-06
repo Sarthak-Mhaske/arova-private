@@ -433,7 +433,8 @@ class RuntimeContainer:
         self.cognitive_trace = CognitiveTraceEngine(event_bus=self.event_bus)
         self.memory_retrieval = MemoryRetrievalEngine(memory_runtime=self.memory_runtime)
         
-        self.ambient_observer.narrative_generator = self.narrative_generator
+        if self.ambient_observer:
+            self.ambient_observer.narrative_generator = self.narrative_generator
 
         self.context_synthesizer = ContextSynthesizer(
             provider_manager=self.provider_manager,
