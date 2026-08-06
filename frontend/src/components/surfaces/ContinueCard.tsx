@@ -75,7 +75,20 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
 
   const urlResources: string[] = associated_resources.filter((k: string) => k.startsWith('http') || k.startsWith('https') || k.includes('youtube'));
 
+  const resourceSummaries = continueData?.resource_summaries || workspace?.resource_summaries || {};
+
   const formatUrlContext = (u: string): string => {
+    // Check if we have an authentic page/video title recorded in resource_summaries
+    const exactTitle = resourceSummaries[u];
+    if (exactTitle && typeof exactTitle === 'string' && exactTitle.trim() && exactTitle !== u) {
+      let cleanT = exactTitle.trim();
+      // Clean up common suffix clutter
+      cleanT = cleanT.replace(/ - YouTube Music$/i, ' (YouTube Music)')
+                     .replace(/ - YouTube$/i, ' (YouTube)');
+      if (cleanT.length > 60) cleanT = cleanT.slice(0, 57) + '...';
+      return cleanT;
+    }
+
     try {
       const parsed = new URL(u);
       const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
@@ -85,27 +98,24 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         const query = parsed.searchParams.get('q') || parsed.searchParams.get('query');
         if (query) {
           const cleanQ = decodeURIComponent(query.replace(/\+/g, ' '));
-          return `🔍 Search: "${cleanQ.length > 40 ? cleanQ.slice(0, 37) + '...' : cleanQ}"`;
+          return `Search: "${cleanQ.length > 45 ? cleanQ.slice(0, 42) + '...' : cleanQ}"`;
         }
-        return `🔍 Web Search`;
+        return `Web Search`;
       }
 
       // 2. YouTube
       if (host.includes('youtube.com') || host.includes('youtu.be')) {
         const v = parsed.searchParams.get('v');
-        if (v) {
-          return `▶️ YouTube Video (${v})`;
-        }
-        return `▶️ YouTube`;
+        return v ? `YouTube Video: ${v}` : `YouTube`;
       }
 
       // 3. GitHub
       if (host.includes('github.com')) {
         const parts = parsed.pathname.split('/').filter(Boolean);
         if (parts.length >= 2) {
-          return `📦 GitHub: ${parts[0]}/${parts[1]}`;
+          return `GitHub: ${parts[0]}/${parts[1]}`;
         }
-        return `📦 GitHub`;
+        return `GitHub`;
       }
 
       // 4. Stack Overflow
@@ -114,14 +124,14 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         if (parts.length >= 2 && parts[0] === 'questions') {
           const rawTitle = parts[2] ? parts[2].replace(/-/g, ' ') : parts[1];
           const cleanT = decodeURIComponent(rawTitle);
-          return `💬 Stack Overflow: ${cleanT.length > 35 ? cleanT.slice(0, 32) + '...' : cleanT}`;
+          return `Stack Overflow: ${cleanT.length > 40 ? cleanT.slice(0, 37) + '...' : cleanT}`;
         }
-        return `💬 Stack Overflow`;
+        return `Stack Overflow`;
       }
 
       // 5. Localhost / Local Dev
       if (host.includes('localhost') || host === '127.0.0.1') {
-        return `💻 Local App (localhost${parsed.port ? ':' + parsed.port : ''})`;
+        return `Local App: localhost${parsed.port ? ':' + parsed.port : ''}`;
       }
 
       // Default: Domain + Path

@@ -431,6 +431,11 @@ class WorkspaceManager:
 
         last_outcomes = self.restoration_engine.last_outcome.to_dict() if self.restoration_engine.last_outcome else None
 
+        resource_summaries = {}
+        for k, v in ws.reality.resources.items():
+            if isinstance(v, dict) and v.get("summary"):
+                resource_summaries[k] = v.get("summary")
+
         return {
             "workspace_id": ws.workspace_id,
             "title": ws.title,
@@ -444,6 +449,7 @@ class WorkspaceManager:
             "current_blocker": ws.understanding.momentum.current_blocker,
             "next_action": ws.understanding.momentum.next_action,
             "associated_resources": list(ws.reality.resources.keys())[:10],
+            "resource_summaries": resource_summaries,
             "terminal_cwd": term_cwd,
             "recent_command": recent_command,
             "options": {
