@@ -68,14 +68,14 @@ class X11Backend(WindowingBackend):
         logger.info("X11 Windowing Observer started.")
         
         # Emit initial workspace
-        await self._emit_event(WorkspaceEvent(workspace_id=self._workspace_id))
+        await self._emit(WorkspaceEvent(workspace_id=self._workspace_id))
         
         while self._running:
             win_data = await self.get_active_window()
             if win_data and win_data.window_id != self._last_window_id:
                 self._last_window_id = win_data.window_id
                 logger.info(f"X11 Focus Changed: {win_data.app_name} - {win_data.title}")
-                await self._emit_event(FocusedWindowEvent(window_data=win_data))
+                await self._emit(FocusedWindowEvent(window_data=win_data))
                 
             await asyncio.sleep(1.0) # Poll every 1 second
             

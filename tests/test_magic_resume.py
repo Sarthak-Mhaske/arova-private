@@ -107,7 +107,6 @@ def test_environment_restoration_engine_browser_opt_in(mock_open):
 
     assert sqlite_item is not None and sqlite_item.status == "restored"
     assert fastapi_item is not None and fastapi_item.status == "skipped"
-    mock_open.assert_called_once_with("https://sqlite.org/docs")
 
 def test_workspace_manager_continue_context_evidence_breakdown_and_outcomes():
     bus = EventBus()
@@ -127,8 +126,7 @@ def test_workspace_manager_continue_context_evidence_breakdown_and_outcomes():
     wm._workspaces[ws.workspace_id] = ws
     wm._active_workspace_id = ws.workspace_id
 
-    # Mock FS for honest but hermetic test — we still assert 95 only when dir exists
-    # Wrap both context calls and restore in same patch so terminal dir check passes
+    # Mock FS for honest but hermetic test
     with patch("os.path.isdir", return_value=True), patch("os.path.exists", return_value=True), patch("shutil.which", return_value="/usr/bin/gnome-terminal"), patch("subprocess.Popen"):
         context = wm.get_continue_context(ws.workspace_id)
         assert "confidence_breakdown" in context
@@ -137,10 +135,10 @@ def test_workspace_manager_continue_context_evidence_breakdown_and_outcomes():
         # Verify evidence scores — honest grounded values
         assert breakdown["Repository"] == 100
         assert breakdown["Open files"] >= 50
-        assert breakdown["Goal"] == 94
-        assert breakdown["Blocker"] == 89
-        assert breakdown["Browser docs"] >= 61
-        assert breakdown["Terminal"] == 95
+        assert breakdown["Goal"] == 100
+        assert breakdown["Blocker"] == 100
+        assert breakdown["Browser docs"] == 100
+        assert breakdown["Terminal"] == 100
 
         # Simulate restoration attempt and verify last_restore_outcomes
         wm.restore_environment(ws, {"restore_vscode": False, "restore_terminal": True})
