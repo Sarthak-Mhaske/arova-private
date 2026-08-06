@@ -207,7 +207,7 @@ export const CommandZone: React.FC = () => {
   const activeAction = useCognitionState(s => s.activeAction);
 
   return (
-    <div className="command-zone" style={{ position: 'relative' }}>
+    <div className="command-zone">
       {activeAction && (
         <div className="active-action-overlay">
           <span className="spinner">⚙️</span>
