@@ -42,6 +42,93 @@ To maintain momentum and prevent cosmetic polish from delaying core stability wo
 
 ---
 
+## TEAM CONSTITUTION: REALITY BEFORE CODE
+
+Every engineering task, bug fix, or architectural change must adhere to this 7-part constitution before writing code:
+
+### 1. Is this a real bug or a hypothesis?
+Can it be empirically reproduced, recorded, and observed by another engineer across a live runtime session?
+If not, **it is not yet a bug—it is a verification hypothesis.**
+
+### 2. What runtime evidence proves it?
+We reject static code assumptions, comments, and architectural diagrams as proof. Evidence must consist exclusively of:
+- Event bus traces (`arova.kpi`)
+- Precise timestamps & latency metrics
+- System logs (`/tmp/arova.sock`, daemon output)
+- Screen/video recordings
+- Profiler / memory snapshots
+- IPC payload dumps
+- SQLite database row inspection
+
+### 3. Where does truth originate?
+Every UI element must trace back to exactly one authoritative, live runtime source of truth.
+```text
+Continue Card → WorkspaceManager → Workspace Graph → Working Memory Runtime → CanonicalActivityEvents → Capture Providers
+```
+**NEVER ALLOWED:** Fallback default values or hardcoded estimates replacing missing runtime state.
+
+### 4. Can this become stale? (Staleness & Expiry Guarantee)
+Every state object must declare explicit lifecycle metadata:
+```json
+{
+  "created_at": 1784623120.0,
+  "updated_at": 1784623142.0,
+  "source": "VSCodeExtension",
+  "refresh_trigger": "workspace.summary.updated",
+  "ttl": 300
+}
+```
+If an object exceeds its `ttl` or misses its refresh window, the UI must explicitly state:
+> *"Last updated 18 minutes ago"* or *"Still learning..."* instead of pretending it is live.
+
+### 5. Every UI Component Gets a Reality Contract
+Before modifying or shipping any UI element, its exact **Reality Contract** must be documented and enforced:
+```markdown
+| Component | Purpose | Source Object | Refresh Trigger | Expected Rate | Max Staleness | Fallback | Owner |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Continue Card** | Task continuity & recovery | `WorkspaceSummary` | `workspace.summary.updated` | < 2 seconds | 60 seconds | *"Still learning..."* | Workspace Runtime |
+| **Vision UI** | Screen & layout awareness | `AmbientContext` | `ambience.CONTEXT_CHANGED` | < 1 second | 5 seconds | *"Observing screen..."* | Vision Runtime |
+| **Attention Orb**| Cognitive modulation state | `OrbState` | `cognition.MODULATION_SYNC`| < 500 ms | 2 seconds | *"Present"* | Cognition Runtime |
+```
+
+### 6. Every Background Runtime Answers Exactly One Question
+Runtimes must not exist merely for architectural symmetry; they must continuously answer one fundamental user question:
+- **Vision Runtime**: *"What is on the screen right now?"*
+- **Memory Runtime**: *"What should be remembered across sessions?"*
+- **Attention Runtime**: *"What matters right now?"*
+- **Workspace Runtime**: *"What is the user actually doing right now?"*
+- **Working Memory Runtime**: *"What is the active working set (files, errors, docs, goals) right now?"*
+- **Resume Runtime**: *"What physical environment should be restored right now?"*
+
+### 7. Kill the "Feature Completed" Mentality
+A feature is **not** complete because code exists, tests pass, or a UI card renders.
+A feature is complete when **a real software engineer, using a real machine, across an 8-hour workday, actively trusts it without verifying against manual tools.**
+
+---
+
+## The Continuous Cognition Loop & Working Memory Architecture
+
+We reject the reactive `User asks → LLM thinks` paradigm. We enforce an inverted, continuously alive reasoning pipeline decoupled by a **Working Memory Runtime** to prevent inference fatigue and cost spikes:
+```text
+Capture → Canonical Events → Workspace Graph → Working Memory Runtime → Reasoning Runtime → Memory Runtime → Search Runtime → UI
+```
+*Why Working Memory?* Continuous LLM evaluation over every granular keystroke/event is noisy and expensive. The **Working Memory Runtime** maintains an always-current, compact representation of active files, recent browser docs, terminal cwd, compiler tracebacks, and goal momentum—triggering heavier **Reasoning & Memory Formation** only when the working set shifts meaningfully.
+
+---
+
+## Verification Hypotheses (`Pre-Feature Purge Checklist`)
+
+Before building new capabilities, the following code-inspected findings must be verified against live runtime evidence (`event traces, DB dumps, IPC logs`). Once empirically proven, they graduate to P0 bugs and must be purged:
+
+| ID | Hypothesis / Component | Observation / Risk | Required Runtime Verification Evidence | Action Plan Upon Confirmation |
+| :--- | :--- | :--- | :--- | :--- |
+| **HYP-01** | **Continue Card Hardcoding** | `WorkspaceManager.get_continue_context` appears to emit fallback scores (`blk_score=89`, `goal_score=100`) and default narratives when no session history exists. | Record WebSocket payload (`workspace.sync`) on a fresh workspace with zero capture events. | Purge default fallback scores/strings; enforce Reality Contract (`Fallback: "Still learning your workspace..."`). |
+| **HYP-02** | **Startup Mock Threads** | `ThreadManager.__init__` appears to inject a hardcoded `Memory Consent System` thread (`t1`) on daemon boot. | Dump `threads.list` IPC payload on daemon startup before any activity occurs. | Delete `t1` injection; ensure `ThreadsSurface` renders only genuine latent threads from `CognitiveThread` table. |
+| **HYP-03** | **Presence vs. Vision Boundary** | `LiveOSAmbientProvider` appears to poll `hyprctl`/`xdotool` window titles rather than performing deep OCR/layout screen inference. | Inspect `AmbientContext` payload attributes across multi-window switching. | Explicitly label window-title data as `Presence/OS Awareness` and separate it cleanly from visual `Screen OCR/Layout Vision`. |
+| **HYP-04** | **Snapshot vs. Continuous Memory** | Deep Context and Memory appear to form during boundaries (chat turns, session exit) rather than continuously evolving via Working Memory. | Monitor `memory.saved` events during a 60-minute coding session with zero chat interaction. | Wire `Working Memory Runtime` diffs into background `MemoryRuntime` evaluation. |
+
+---
+
 ## The Operational Quality Loop
 
 We strictly follow this closed-loop engineering process for all modifications:
