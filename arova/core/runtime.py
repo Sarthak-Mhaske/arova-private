@@ -206,6 +206,12 @@ class RuntimeContainer:
         self.ambient_observer = AmbientObserver(event_bus=self.event_bus, provider=self.ambient_provider, stability_window_seconds=2.0)
         self.ambient_observer.start()
         
+        from arova.core.platform.windowing.manager import WindowingManager
+        self.window_backend = WindowingManager.get_backend()
+        
+        from arova.core.cognition.providers.window_provider import WindowObserverProvider
+        self.provider_manager.register(WindowObserverProvider(self.window_backend))
+
         # Core Pillars (Phase 12 Core Capabilities)
         from arova.core.audio.media_ducking import MediaDuckingEngine
         from arova.core.cognition.routine_tracker import RoutineTracker
