@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Room } from './components/layout/Room';
 import { Environment } from './components/layout/Environment';
 import { SpatialRail } from './components/layout/SpatialRail';
@@ -13,40 +13,16 @@ import { CursorBleed } from './components/effects/CursorBleed';
 import { MemoryConsentPopup } from './components/effects/MemoryConsentPopup';
 import { PersonalMemoryPolicyDialog } from './components/effects/PersonalMemoryPolicyDialog';
 import { StartupOverlay } from './components/effects/StartupOverlay';
-import { OnboardingFlow } from './surfaces/onboarding/OnboardingFlow';
 import { useCognitionState, useEnvironmentState, usePresenceState, useSurfaceState } from './state';
 import { fetchStreamItems, fetchAwareness } from './ipc';
 import { socket } from './runtime/socket';
 
 const DEMO_MODE = false;
-const ONBOARDING_LS_KEY = 'arova_onboarding_complete';
-
-/** True when no cloud API keys are present (fresh install / defaults only). */
-function needsProviderSetup(providers: Record<string, any> | null | undefined): boolean {
-  if (!providers) return true;
-  const hasKey = (id: string) => {
-    const keys = providers?.[id]?.api_keys;
-    return Array.isArray(keys) && keys.some((k: string) => typeof k === 'string' && k.trim().length > 0);
-  };
-  if (hasKey('groq') || hasKey('openai') || hasKey('anthropic') || hasKey('gemini')) return false;
-  return true;
-}
-
-function readOnboardingBypass(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDING_LS_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
 
 function App() {
   const { setItems } = useCognitionState();
   const { setFragments } = useEnvironmentState();
   const { atmosphere, mode } = usePresenceState();
-
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !readOnboardingBypass());
-  const [onboardingResolved, setOnboardingResolved] = useState<boolean>(() => readOnboardingBypass());
 
   useEffect(() => {
     // ONLY load placeholder content if explicit demo mode is on
@@ -73,46 +49,14 @@ function App() {
     };
     document.addEventListener('click', handleGlobalLinkClick, true);
 
+    // Request config once on boot
+    socket.sendEvent({ type: 'config.get_request' });
+
     return () => {
       document.removeEventListener('click', handleGlobalLinkClick, true);
       socket.disconnect();
     };
   }, [setItems, setFragments]);
-
-  // Zero-terminal first-run gate
-  useEffect(() => {
-    if (readOnboardingBypass()) {
-      setShowOnboarding(false);
-      setOnboardingResolved(true);
-      return;
-    }
-
-    let sawConfig = false;
-    const applyGate = (show: boolean) => {
-      setShowOnboarding(show);
-      setOnboardingResolved(true);
-    };
-
-    const handleConfig = (event: Event) => {
-      const ev = (event as CustomEvent).detail;
-      if (!ev || ev.type !== 'config.sync') return;
-      sawConfig = true;
-      applyGate(needsProviderSetup(ev.providers));
-    };
-
-    window.addEventListener('arova-event', handleConfig as EventListener);
-
-    const requestConfig = () => socket.sendEvent({ type: 'config.get_request' });
-    requestConfig();
-    const fallback = window.setTimeout(() => {
-      if (!sawConfig) applyGate(true);
-    }, 2500);
-
-    return () => {
-      window.removeEventListener('arova-event', handleConfig as EventListener);
-      window.clearTimeout(fallback);
-    };
-  }, []);
 
   const isInitialMount = useRef(true);
 
@@ -267,16 +211,6 @@ function App() {
     };
   }, []);
 
-  const handleOnboardingComplete = () => {
-    try {
-      localStorage.setItem(ONBOARDING_LS_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-    setShowOnboarding(false);
-    setOnboardingResolved(true);
-  };
-
   return (
     <>
       <StartupOverlay />
@@ -295,28 +229,6 @@ function App() {
       </Environment>
       <MemoryConsentPopup />
       <PersonalMemoryPolicyDialog />
-
-      {onboardingResolved && showOnboarding && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Welcome to Arova"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            overflowY: 'auto',
-            background: 'rgba(6, 6, 10, 0.82)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-          }}
-        >
-          <OnboardingFlow onComplete={handleOnboardingComplete} />
-        </div>
-      )}
     </>
   );
 }
