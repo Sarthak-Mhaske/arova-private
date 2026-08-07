@@ -34,12 +34,17 @@ class WindowingBackend(abc.ABC):
         self._listeners.append(callback)
         
     async def _emit(self, event: Any):
+        import asyncio
+        import logging
+        tasks = []
         for listener in self._listeners:
-            try:
-                await listener(event)
-            except Exception as e:
-                import logging
-                logging.error(f"Error in windowing listener: {e}")
+            tasks.append(asyncio.create_task(asyncio.wait_for(listener(event), timeout=0.5)))
+            
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    logging.error(f"Error in windowing listener: {r}")
     
     @abc.abstractmethod
     async def get_active_window(self) -> Optional[RawWindowData]:

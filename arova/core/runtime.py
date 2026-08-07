@@ -520,7 +520,18 @@ class RuntimeContainer:
                     recovered=False
                 )
                 
-            self.runtime_store.save(self.runtime_snapshot)
+            # Hash to avoid redundant fsync disk I/O
+            import hashlib
+            import json
+            from dataclasses import asdict
+            
+            snap_dict = asdict(self.runtime_snapshot)
+            snap_hash = hashlib.md5(json.dumps(snap_dict, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+            last_hash = getattr(self, '_last_persist_hash', None)
+            
+            if snap_hash != last_hash:
+                self.runtime_store.save(self.runtime_snapshot)
+                self._last_persist_hash = snap_hash
         except Exception as e:
             import logging
             import traceback

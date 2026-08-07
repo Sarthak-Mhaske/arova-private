@@ -140,8 +140,11 @@ class MemoryStorage:
         
         await self._execute_transaction([(query_mem, params_mem), (query_mut, params_mut)])
 
-    async def get_all_semantic_memory(self) -> List[MemoryEntry]:
-        rows = await self._fetch("SELECT * FROM semantic_memory WHERE decay_score < 10.0 ORDER BY created_at DESC")
+    async def get_all_semantic_memory(self, limit: int = None) -> List[MemoryEntry]:
+        query = "SELECT * FROM semantic_memory WHERE decay_score < 10.0 ORDER BY last_reinforced_at DESC"
+        if limit is not None:
+            query += f" LIMIT {limit}"
+        rows = await self._fetch(query)
         results = []
         for r in rows:
             # sqlite3.Row supports bracket access but not .get()

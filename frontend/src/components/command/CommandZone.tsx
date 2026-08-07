@@ -17,18 +17,21 @@ export const CommandZone: React.FC = () => {
   const { activeWorkspace } = useAwarenessState();
 
   // Build suggestion list from verbatim RealityLayer.resources + search index fallback
-  const resourcesObj = (activeWorkspace as any)?.reality?.resources || {};
-  const allResources: string[] = Object.keys(resourcesObj).map((k: string) => {
-    const r: any = resourcesObj[k];
-    return r?.identity || k;
-  });
+  const allResources = React.useMemo(() => {
+    const resourcesObj = (activeWorkspace as any)?.reality?.resources || {};
+    return Object.keys(resourcesObj).map((k: string) => {
+      const r: any = resourcesObj[k];
+      return r?.identity || k;
+    });
+  }, [activeWorkspace]);
+  
   // Filter by mention query
-  const filteredSuggestions = (() => {
+  const filteredSuggestions = React.useMemo(() => {
     if (!showMentions) return [];
     const q = mentionQuery.toLowerCase();
     if (!q) return allResources.slice(0, 50);
     return allResources.filter(r => r.toLowerCase().includes(q)).slice(0, 50);
-  })();
+  }, [showMentions, mentionQuery, allResources]);
 
   const clearChat = () => {
     socket.sendEvent({ type: 'client.new_thread' });

@@ -38,14 +38,28 @@ class SearchIndex:
     def __init__(self):
         self._items: Dict[str, SearchableItem] = {}
         # Initial additive weights (`Phase 7 Point 2`), dynamically tunable by telemetry
-        self.weights = {
-            "text_match": 0.35,
-            "recency": 0.20,
-            "time_spent": 0.15,
-            "revisit_count": 0.15,
-            "decision_weight": 0.10,
-            "pin": 0.05
-        }
+        try:
+            from arova.core.config.loader import load_config
+            cfg = load_config()
+            self.weights = cfg.get("search_weights", {
+                "text_match": 0.35,
+                "recency": 0.20,
+                "time_spent": 0.15,
+                "revisit_count": 0.15,
+                "decision_weight": 0.10,
+                "pin": 0.05
+            })
+        except Exception:
+            self.weights = {
+                "text_match": 0.35,
+                "recency": 0.20,
+                "time_spent": 0.15,
+                "revisit_count": 0.15,
+                "decision_weight": 0.10,
+                "pin": 0.05
+            }
+        
+        self._last_workspace_idx_ts: Dict[str, float] = {}
 
     def calibrate_search_weights(self, telemetry_adjustments: Dict[str, float]) -> None:
         """Adjust search ranking weights empirically from click telemetry."""
@@ -58,6 +72,21 @@ class SearchIndex:
             for k in self.weights:
                 self.weights[k] /= total
         logger.info(f"SearchIndex: Calibrated additive ranking weights -> {self.weights}")
+
+    def index_workspace(self, workspace: Any) -> None:
+        """Inject active workspace reality context into unified search index."""
+        if not workspace or not hasattr(workspace, "reality") or not workspace.reality.resources:
+            return
+            
+        last_synth = getattr(workspace, "last_synthesized_at", 0.0)
+        cached_ts = self._last_workspace_idx_ts.get(workspace.workspace_id, -1)
+        if last_synth > 0 and last_synth == cached_ts:
+            return # Skip if already indexed for this synthesis turn
+            
+        self._last_workspace_idx_ts[workspace.workspace_id] = last_synth
+        
+        for k, v in workspace.reality.resources.items():
+            self.index_item(v)
 
     def index_item(self, item: SearchableItem) -> None:
         """Add or update an item in the unified search index."""

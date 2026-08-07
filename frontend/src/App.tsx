@@ -104,16 +104,12 @@ function App() {
 
     const requestConfig = () => socket.sendEvent({ type: 'config.get_request' });
     requestConfig();
-    const retry1 = window.setTimeout(requestConfig, 800);
-    const retry2 = window.setTimeout(requestConfig, 1600);
     const fallback = window.setTimeout(() => {
       if (!sawConfig) applyGate(true);
     }, 2500);
 
     return () => {
       window.removeEventListener('arova-event', handleConfig as EventListener);
-      window.clearTimeout(retry1);
-      window.clearTimeout(retry2);
       window.clearTimeout(fallback);
     };
   }, []);
@@ -130,11 +126,6 @@ function App() {
 
     document.documentElement.setAttribute('data-theme', atmosphere);
     document.documentElement.setAttribute('data-mode', mode);
-    
-    const timer = setTimeout(() => {
-    }, 1600);
-
-    return () => clearTimeout(timer);
   }, [atmosphere, mode]);
 
   // Page Visibility API & Rest Timer

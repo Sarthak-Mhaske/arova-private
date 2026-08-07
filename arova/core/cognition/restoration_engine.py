@@ -94,7 +94,7 @@ class EnvironmentRestorationEngine:
         interpretation = getattr(workspace, "interpretation", None)
         if interpretation and getattr(interpretation, "repo_paths", None):
             for rp in interpretation.repo_paths:
-                if os.path.exists(rp) or rp == "/home/sarthak/arova":
+                if os.path.exists(rp) or rp == os.path.expanduser("~/arova"):
                     self.resource_registry.register_repository(rp, exists=True)
 
         # 1. Generate LaunchPlan via RestorePlanner

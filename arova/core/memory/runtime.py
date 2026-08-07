@@ -280,7 +280,13 @@ class MemoryRuntime:
                 metadata=meta,
                 timestamp=float(getattr(entry, 'created_at', time.time()))
             )
-            self.vector_store.insert(vm)
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, self.vector_store.insert, vm)
+            except RuntimeError:
+                # If no loop is running, run synchronously
+                self.vector_store.insert(vm)
         except Exception as e:
             import logging
             logging.debug(f"Vector insert failed (non-fatal): {e}")

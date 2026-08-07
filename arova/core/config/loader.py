@@ -102,6 +102,29 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enable_presence": False,
         "enable_ambience": False,
         "enable_warmup": False
+    },
+    "stuckness": {
+        "error_penalty": 35.0,
+        "repeat_visit_rate": 20.0,
+        "max_repeat_penalty": 50.0,
+        "stagnant_focus_penalty": 25.0,
+        "stagnant_time_threshold_seconds": 1800.0,
+    },
+    "scoring": {
+        "goal_focused": 60,
+        "blocker_detected": 75,
+        "terminal_active": 85,
+    },
+    "workspace": {
+        "known_repos": ["arova"],
+    },
+    "search_weights": {
+        "text_match": 0.35,
+        "recency": 0.20,
+        "time_spent": 0.15,
+        "revisit_count": 0.15,
+        "decision_weight": 0.10,
+        "pin": 0.05
     }
 }
 
@@ -109,7 +132,9 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
     """Load configuration from a YAML or JSON file, falling back to safe defaults."""
     if config_path is None:
         home = Path.home()
-        path = home / ".config" / "hyprvoice" / "config.yml"
+        path = home / ".config" / "arova" / "config.json"
+        if not path.exists():
+            path = home / ".config" / "hyprvoice" / "config.yml"
         if not path.exists():
             path = home / ".config" / "hyprvoice" / "config.json"
     else:

@@ -73,11 +73,11 @@ class MemoryRetrievalEngine:
             if self._hybrid:
                 try:
                     hybrid_scored = {vm.id: s for vm, s in self._hybrid.score(raw_mems, attention_state)}
-                    # Blend: 0.7 * cosine rank + 0.3 * hybrid
+                    # Blend: 0.85 * cosine rank + 0.15 * hybrid
                     blended = []
                     for i, (vm, rank_score) in enumerate(scored):
                         h_score = hybrid_scored.get(vm.id, 0.5)
-                        blended_score = rank_score * 0.7 + (h_score / 1.0) * 0.3
+                        blended_score = rank_score * 0.85 + (h_score / 1.0) * 0.15
                         blended.append((vm, blended_score))
                     blended.sort(key=lambda x: x[1], reverse=True)
                     scored = blended
@@ -118,8 +118,8 @@ class MemoryRetrievalEngine:
 
     async def _heuristic_retrieve(self, query: str, limit: int) -> List[RetrievedMemory]:
         """Heuristic fallback pipeline (original)."""
-        # 1. Fetch all candidates (in a real system, we'd pre-filter via SQL FTS)
-        all_memories = await self.memory.storage.get_all_semantic_memory()
+        # 1. Fetch top candidates (pre-filtered via SQL limit/order)
+        all_memories = await self.memory.storage.get_all_semantic_memory(limit=100)
         if not all_memories:
             return []
             

@@ -61,7 +61,7 @@ class RestorePlanner:
             if not rp:
                 continue
             abs_rp = os.path.abspath(os.path.expanduser(rp))
-            if os.path.isdir(abs_rp) or abs_rp == "/home/sarthak/arova":
+            if os.path.isdir(abs_rp) or abs_rp == os.path.expanduser("~/arova"):
                 key = ("repository", abs_rp)
                 if key not in seen_keys:
                     seen_keys.add(key)

@@ -17,8 +17,21 @@ logging.basicConfig(level=logging.INFO)
 class ArovaDaemon:
     def __init__(self):
         self.runtime = None
-        self.transport = UnixSocketTransport("/tmp/arova.sock")
-        self.ws_manager = WebSocketManager(host="127.0.0.1", port=8765)
+        import os
+        sock_path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "arova.sock")
+        self.transport = UnixSocketTransport(sock_path)
+        ws_port = int(os.environ.get("WS_PORT", 8765))
+        try:
+            from arova.core.config.loader import load_config
+            cfg = load_config()
+            ws_host = cfg.get("daemon", {}).get("ws_host", "127.0.0.1")
+            ws_port_cfg = cfg.get("daemon", {}).get("ws_port")
+            if ws_port_cfg:
+                ws_port = int(ws_port_cfg)
+        except Exception:
+            ws_host = "127.0.0.1"
+            
+        self.ws_manager = WebSocketManager(host=ws_host, port=ws_port)
         
         self.investigation_ledger = InvestigationLedger()
         self.proactive_investigator = ProactiveInvestigator(self.investigation_ledger)
@@ -685,7 +698,9 @@ class ArovaDaemon:
         import subprocess
         import time
 
-        for sock_file in ["/tmp/arova.sock", "/var/tmp/arova.sock"]:
+        import os
+        xdg_sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "arova.sock")
+        for sock_file in [xdg_sock, "/tmp/arova.sock", "/var/tmp/arova.sock"]:
             if os.path.exists(sock_file):
                 try:
                     os.remove(sock_file)

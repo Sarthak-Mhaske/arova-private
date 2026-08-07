@@ -673,16 +673,16 @@ class IntentRuntime:
             from arova.core.cognition.buffer import AsyncDeltaBuffer
             buffer = AsyncDeltaBuffer(_on_chunk_batch, flush_interval_s=0.05)
             
-            full_text = ""
             stream_success = False
             try:
                 async for token in self._router.models.invoke_stream(messages, sys_prompt, depth=ReasoningDepth.STANDARD):
-                    full_text += token
                     await buffer.append(token)
                     stream_success = True
             except Exception as e:
                 logging.warning(f"IntentRuntime LLM stream failed, will use grounded mock fallback: {e}")
                 stream_success = False
+                
+            full_text = getattr(buffer, '_full_text', "")
 
             # === TIER 1 MOAT FALLBACK: If no tokens or provider error, synthesize grounded mock ===
             is_error_response = any(phrase in full_text.lower() for phrase in [

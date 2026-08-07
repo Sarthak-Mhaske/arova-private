@@ -53,7 +53,7 @@ class WorkspaceManager:
         self._init_default_workspace()
 
     def _init_default_workspace(self):
-        cwd = os.path.abspath(os.path.expanduser("/home/sarthak/arova"))
+        cwd = os.path.abspath(os.path.expanduser("~"))
         ws = self._workspaces.get("ws_default")
         
         # If workspace already exists (e.g. hydrated from hot_state), do NOT overwrite its resources
@@ -394,8 +394,8 @@ class WorkspaceManager:
         ]
         open_files_score = int((len(valid_files) / len(total_file_resources)) * 100) if total_file_resources else 0
             
-        goal_score = 100 if ws.understanding.momentum.goal else 0
-        blk_score = 100 if ws.understanding.momentum.current_blocker else 0
+        goal_score = getattr(ws, "confidence_layer", None).goal.score if getattr(ws, "confidence_layer", None) else (100 if ws.understanding.momentum.goal else 0)
+        blk_score = getattr(ws, "confidence_layer", None).blocker.score if getattr(ws, "confidence_layer", None) else (100 if ws.understanding.momentum.current_blocker else 0)
         
         url_keys = [
             k for k, v in ws.reality.resources.items()
@@ -407,7 +407,7 @@ class WorkspaceManager:
         term_cwd = term_res[0].get("identity") if term_res else (valid_repos[0] if valid_repos else None)
         if term_cwd and term_cwd.startswith("terminal://"):
             term_cwd = term_cwd.replace("terminal://", "")
-        term_score = 100 if (term_cwd and os.path.isdir(term_cwd)) else 0
+        term_score = getattr(ws, "confidence_layer", None).repository.score if getattr(ws, "confidence_layer", None) else (100 if (term_cwd and os.path.isdir(term_cwd)) else 0)
         recent_command = term_res[0].get("recent_command") if term_res else None
 
         confidence_breakdown = {

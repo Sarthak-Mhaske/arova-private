@@ -203,8 +203,9 @@ class ContextSynthesizer:
         search_results_str = None
         if self.search_index and query and len(query.strip()) > 2:
             try:
+                import re
                 q_lower = query.lower()
-                is_search_like = any(w in q_lower for w in ["find", "search", "lookup", "where is", "where's", "show me", "docs", "documentation", "file", "decision", "open", "locate", "how to"])
+                is_search_like = bool(re.search(r'\b(find|search|look up|where is|where\'s|show me|locate|how to)\b', q_lower))
                 is_long_query = len(q_lower.split()) >= 3 and not any(g in q_lower for g in ["hello", "hi ", "hey ", "thanks", "thank you", "where was i", "what was i"])
                 if is_search_like or is_long_query:
                     # Ensure active workspace indexed for fresh hits
@@ -214,7 +215,8 @@ class ContextSynthesizer:
                         except:
                             pass
                     hits = self.search_index.search(query, limit=3)
-                    if hits:
+                    # Require hits to exist and have a minimum score threshold (e.g. 0.5)
+                    if hits and hits[0].score > 0.5:
                         lines = []
                         for h in hits:
                             # Use payload for file path if available
@@ -311,8 +313,10 @@ class ContextSynthesizer:
 
         try:
             if active_ws:
+                is_greeting = query and any(g == query.lower().strip() for g in ["hello", "hi", "hey", "thanks", "thank you", "sup"])
+                
                 # A. Verbatim resources from RealityLayer
-                if hasattr(active_ws, 'reality') and active_ws.reality.resources:
+                if hasattr(active_ws, 'reality') and active_ws.reality.resources and not is_greeting:
                     res_lines = []
                     # Sort by last_seen if available, else insertion order
                     resources_items = list(active_ws.reality.resources.items())
