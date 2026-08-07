@@ -261,7 +261,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const recentCommand: string | null = workspace?.recent_command || null;
 
   return (
-    <div className="continue-card glass-panel" style={{ padding: '24px', borderRadius: '18px', border: '1px solid var(--hairline-2)', background: 'var(--glass-2)', marginBottom: '32px', animation: 'surface-in 900ms cubic-bezier(0.32, 0.72, 0.24, 1) both' }}>
+    <div className="surfacing momentum continue-card glass-panel" style={{ padding: '24px', borderRadius: '18px', border: '1px solid var(--hairline-2)', background: 'var(--glass-2)', marginBottom: '32px', animation: 'surface-in 900ms cubic-bezier(0.32, 0.72, 0.24, 1) both' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
         <div>
           <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-mute)', fontWeight: 600, marginBottom: '4px' }}>

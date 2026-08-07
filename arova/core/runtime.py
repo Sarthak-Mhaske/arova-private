@@ -503,7 +503,7 @@ class RuntimeContainer:
                 t.to_dict() if (hasattr(t, 'to_dict') and callable(getattr(t, 'to_dict'))) else t for t in self.session.thread_manager.get_all_threads()
             ]
             self.runtime_snapshot.hot_state.active_intents = [
-                i.to_dict() if (hasattr(i, 'to_dict') and callable(getattr(t, 'to_dict'))) else i for i in self.intent_graph.get_all_intents()
+                i.to_dict() if (hasattr(i, 'to_dict') and callable(getattr(i, 'to_dict'))) else i for i in self.intent_graph.get_all_intents()
             ]
             if hasattr(self, 'workspace_manager') and self.workspace_manager:
                 self.runtime_snapshot.hot_state.workspaces = {
