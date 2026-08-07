@@ -433,7 +433,8 @@ class RuntimeContainer:
         self.cognitive_trace = CognitiveTraceEngine(event_bus=self.event_bus)
         self.memory_retrieval = MemoryRetrievalEngine(memory_runtime=self.memory_runtime)
         
-        self.ambient_observer.narrative_generator = self.narrative_generator
+        if self.ambient_observer:
+            self.ambient_observer.narrative_generator = self.narrative_generator
 
         self.context_synthesizer = ContextSynthesizer(
             provider_manager=self.provider_manager,
@@ -488,17 +489,25 @@ class RuntimeContainer:
     def _persist_runtime(self):
         """Serializes hot runtime state into the canonical RuntimeSnapshot and saves it."""
         try:
-            # Update Hot State
-            self.runtime_snapshot.hot_state.recent_turns = self.session._legacy_messages[-20:] # Keep last 20 turns
+            turns = []
+            for t in getattr(self.session, '_legacy_messages', [])[-20:]:
+                if hasattr(t, 'to_dict') and callable(getattr(t, 'to_dict')):
+                    turns.append(t.to_dict())
+                elif isinstance(t, dict):
+                    turns.append(t)
+                else:
+                    turns.append(str(t))
+            self.runtime_snapshot.hot_state.recent_turns = turns
+
             self.runtime_snapshot.hot_state.active_threads = [
-                t.to_dict() if hasattr(t, 'to_dict') else t for t in self.session.thread_manager.get_all_threads()
+                t.to_dict() if (hasattr(t, 'to_dict') and callable(getattr(t, 'to_dict'))) else t for t in self.session.thread_manager.get_all_threads()
             ]
             self.runtime_snapshot.hot_state.active_intents = [
-                i.to_dict() if hasattr(i, 'to_dict') else i for i in self.intent_graph.get_all_intents()
+                i.to_dict() if (hasattr(i, 'to_dict') and callable(getattr(t, 'to_dict'))) else i for i in self.intent_graph.get_all_intents()
             ]
-            if hasattr(self, 'workspace_manager'):
+            if hasattr(self, 'workspace_manager') and self.workspace_manager:
                 self.runtime_snapshot.hot_state.workspaces = {
-                    wid: w.to_dict() if hasattr(w, 'to_dict') else w
+                    wid: (w.to_dict() if (hasattr(w, 'to_dict') and callable(getattr(w, 'to_dict'))) else w)
                     for wid, w in self.workspace_manager._workspaces.items()
                 }
                 self.runtime_snapshot.hot_state.active_workspace_id = self.workspace_manager._active_workspace_id
