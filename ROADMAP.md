@@ -7,12 +7,12 @@ We have officially **frozen core architectural expansion** (`Phase 1–12` compl
 ## Phase 0: Ship Beta Checklist
 
 ### Week 1: One-Click Installer & Single-Process Management
-- [ ] **Single Executable Packaging**: Configure Tauri build pipeline (`npm run tauri build`) to produce double-click installers (`.AppImage`, `.dmg`, `.exe`).
-- [ ] **Daemon Auto-Start & Recovery**: When the desktop UI launches, automatically spawn `arovad` (`python -m arova.daemon.main`) in the background. Auto-create SQLite stores (`~/.arova/data/`) and auto-restart the daemon if it encounters an unhandled exception.
-- [ ] **No-Terminal First Run**: Replace terminal environment setup (`venv`, `pip install`) with a clean 3-step UI modal:
+- [x] **Single Executable Packaging**: Configure Tauri build pipeline (`npm run tauri build`) to produce double-click installers (`.AppImage`, `.dmg`, `.exe`). Bundle targets + AppImage paths wired in `tauri.conf.json` / `supervisor.rs`.
+- [x] **Daemon Auto-Start & Recovery**: When the desktop UI launches, automatically spawn `arovad` (`python -m arova.daemon.main`) in the background. Auto-create SQLite stores (`~/.arova/data/`) and auto-restart the daemon if it encounters an unhandled exception. Supervisor AppImage/`APPDIR` fallback paths included.
+- [x] **No-Terminal First Run**: Replace terminal environment setup (`venv`, `pip install`) with a clean 3-step UI modal (`App.tsx` z-index 9999 overlay + `OnboardingFlow`):
   1. *Welcome to Arova*
-  2. *Choose AI Provider* (`OpenAI`, `Groq`, or local `Ollama`)
-  3. *Continue to Workspace*
+  2. *Choose AI Provider* (`OpenAI`, `Groq`, `Gemini`, `Anthropic`, or local `Ollama`)
+  3. *Continue to Workspace* (`config.update_request` hot-reload + `localStorage arova_onboarding_complete` bypass)
 
 ### Week 2: Public Repository Polish & Diagnostics
 - [ ] **Debug Report Export**: Add a one-click `Export Debug Report` button in Settings that bundles local runtime logs (`daemon.log`, `daemon_audit.log`, recent telemetry events) into a sanitized `.zip` for instant troubleshooting.

@@ -1,4 +1,8 @@
 import logging
+import os
+import re
+import webbrowser
+import subprocess
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from arova.core.events import RuntimeEventBus
@@ -7,6 +11,20 @@ from arova.core.models.schema import ReasoningDepth, ReasoningBudget
 from arova.core.cognition.router import CognitiveRouter
 from arova.core.cognition.context import ContextSynthesizer
 from arova.core.cognition.planner import CognitivePlanner
+
+# URLs and named study resources from assistant replies
+_URL_RE = re.compile(r"https?://[^\s\)\]\>\"']+", re.IGNORECASE)
+_NAMED_RESOURCE_URLS = {
+    "3blue1brown": "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab",
+    "3b1b": "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab",
+    "gilbert strang": "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/",
+    "strang": "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/",
+    "mit opencourseware": "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/",
+    "mit ocw": "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/",
+    "introduction to linear algebra": "https://math.mit.edu/~gs/linearalgebra/",
+    "khan academy linear algebra": "https://www.khanacademy.org/math/linear-algebra",
+    "khan academy": "https://www.khanacademy.org/math/linear-algebra",
+}
 
 @dataclass(frozen=True)
 class Intent:
@@ -136,7 +154,111 @@ class IntentRuntime:
         else:
             import logging
             logging.error("IntentRuntime: No event loop captured at initialization!")
-        
+
+    # ------------------------------------------------------------------
+    # Open prior resources (from last assistant message)
+    # ------------------------------------------------------------------
+    def _extract_urls_from_text(self, text: str) -> List[str]:
+        if not text:
+            return []
+        found = _URL_RE.findall(text)
+        cleaned = []
+        for u in found:
+            u = u.rstrip(".,;:)]}'\"")
+            if u and u not in cleaned:
+                cleaned.append(u)
+        return cleaned
+
+    def _extract_named_resource_urls(self, text: str) -> List[str]:
+        if not text:
+            return []
+        lower = text.lower()
+        urls: List[str] = []
+        for name in sorted(_NAMED_RESOURCE_URLS.keys(), key=len, reverse=True):
+            if name in lower:
+                url = _NAMED_RESOURCE_URLS[name]
+                if url not in urls:
+                    urls.append(url)
+        return urls
+
+    def _open_url(self, url: str) -> bool:
+        """Best-effort open URL in default browser. Never raises."""
+        try:
+            if os.name != "nt":
+                try:
+                    subprocess.Popen(
+                        ["xdg-open", url],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
+                    return True
+                except FileNotFoundError:
+                    pass
+            webbrowser.open(url)
+            return True
+        except Exception as e:
+            logging.warning(f"IntentRuntime: failed to open url {url}: {e}")
+            return False
+
+    async def _handle_open_prior_resources(self, transcript: str, turn_id: str, vocalize: bool = True):
+        """Open URLs / named resources from the last assistant message. Never launch snap."""
+        logging.info("IntentRuntime: open_prior_resources path")
+        last = ""
+        try:
+            if self._session:
+                last = self._session.last_assistant_message() or ""
+        except Exception:
+            last = ""
+
+        urls = self._extract_urls_from_text(last)
+        if not urls:
+            urls = self._extract_named_resource_urls(last)
+        urls = urls[:5]
+
+        self._event_bus.emit("voice", "TEXT_STREAM_STARTED", {"turn_id": turn_id})
+
+        if not urls:
+            msg = (
+                "I don't see any openable links in my last reply. "
+                "Ask me for resources again and I'll include direct URLs, then say open these."
+            )
+            self._event_bus.emit("voice", "TEXT_CHUNK_GENERATED", {
+                "text": msg, "turn_id": turn_id, "vocalize": vocalize, "seq": 1
+            })
+            self._event_bus.emit("voice", "TEXT_RESPONSE_GENERATED", {
+                "text": msg, "turn_id": turn_id, "vocalize": vocalize
+            })
+            if self._session:
+                self._session.add_assistant_message(msg)
+            return
+
+        opened, failed = [], []
+        for u in urls:
+            if self._open_url(u):
+                opened.append(u)
+            else:
+                failed.append(u)
+
+        if opened and not failed:
+            msg = f"Opened {len(opened)} resource{'s' if len(opened) != 1 else ''} in your browser."
+        elif opened and failed:
+            msg = f"Opened {len(opened)}, but couldn't open {len(failed)}."
+        else:
+            msg = "I found links but couldn't open them from this environment. Here they are:\n" + "\n".join(urls)
+
+        if opened:
+            msg = f"{msg}\n" + "\n".join(f"• {u}" for u in opened)
+
+        self._event_bus.emit("voice", "TEXT_CHUNK_GENERATED", {
+            "text": msg, "turn_id": turn_id, "vocalize": vocalize, "seq": 1
+        })
+        self._event_bus.emit("voice", "TEXT_RESPONSE_GENERATED", {
+            "text": msg, "turn_id": turn_id, "vocalize": vocalize
+        })
+        if self._session:
+            self._session.add_assistant_message(msg)
+
     async def _process_transcript_cognition(self, transcript: str, turn_id: str, vocalize: bool = True, mentions: list = None):
         logging.info(f"IntentRuntime: _process_transcript_cognition entered. transcript='{transcript}', turn_id={turn_id}")
         self._event_bus.emit("state", "EXECUTION_STATE_CHANGED", {"state": "THINKING", "turn_id": turn_id})
@@ -208,7 +330,15 @@ class IntentRuntime:
                 active_ws._restored = True
             
             logging.info(f"IntentRuntime: Router returned category={intent_class.category}, depth={intent_class.depth}")
-            
+
+            # --- Open resources mentioned in the previous assistant turn ---
+            if (
+                intent_class.category == "open_prior_resources"
+                or getattr(intent_class, "action_hint", None) == "open_prior_resources"
+            ):
+                await self._handle_open_prior_resources(transcript, turn_id, vocalize)
+                return
+
             if intent_class.category in ("fast_action", "action"):
                 graph = None
                 feedback_message = "Executing action..."
@@ -474,7 +604,10 @@ class IntentRuntime:
                 "  Don't execute the correction as a new command.\n"
                 f"• {verbosity_directive}\n"
                 "• When explaining yourself to new users ('what can you do?'), give a thorough answer with concrete examples.\n"
-                "• Keep markdown minimal in spoken responses. Use it only for code blocks if sharing code."
+                "• Keep markdown minimal in spoken responses. Use it only for code blocks if sharing code.\n"
+                "• When you recommend external resources (courses, docs, videos, textbooks), ALWAYS include a full "
+                "https:// URL on its own line so the user can say 'open these resources' and Arova can open them. "
+                "Never recommend a resource by name only."
             )
 
             memory_context = ""
@@ -552,7 +685,15 @@ class IntentRuntime:
                 stream_success = False
 
             # === TIER 1 MOAT FALLBACK: If no tokens or provider error, synthesize grounded mock ===
-            is_error_response = any(phrase in full_text.lower() for phrase in ["unable to connect", "no inference provider", "max retries exceeded", "connection refused"])
+            is_error_response = any(phrase in full_text.lower() for phrase in [
+                "unable to connect", "no inference provider", "max retries exceeded",
+                "connection refused", "encountered an unexpected error", "name 'os' is not defined",
+            ])
+            if is_error_response:
+                # Drop error text so we don't stream "error + grounded" duplicate garbage
+                logging.warning("IntentRuntime: clearing error provider text before grounded fallback")
+                full_text = ""
+                stream_success = False
             if not stream_success or not full_text.strip() or is_error_response:
                 grounded = getattr(cognitive_context, 'grounded_resources', None) if 'cognitive_context' in locals() else None
                 active_ws = None

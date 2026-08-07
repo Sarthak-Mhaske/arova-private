@@ -8,11 +8,13 @@ from arova.core.events import RuntimeEventBus, EventPayload
 
 @dataclass
 class IntentClassification:
-    category: str # "action", "chat", "search", "ambient_reflex", "fast_action"
+    category: str # "action", "chat", "search", "ambient_reflex", "fast_action", "open_prior_resources"
     confidence: float
     depth: ReasoningDepth
     fast_path_graph: Optional[GraphDefinition] = None
     reasoning: str = ""
+    action_hint: Optional[str] = None
+    action_payload: Optional[Dict[str, Any]] = None
 
 class CognitiveRouter:
     """
@@ -159,13 +161,70 @@ class CognitiveRouter:
                 return None  # Let LLM resolve from conversation context
             return self._build_fast_graph("Web Search", "search_web", {"query": search_query})
 
+        # ── OPEN PRIOR RESOURCES (links from last assistant message) ──
+        # "open these resources for me" must NEVER become open_app("these resources...")
+        # which previously launched /bin/snap with score 60.
+        open_prior_pats = [
+            r"\bopen\s+(these|those|the|that|this)\s+(resources?|links?|urls?|tabs?|pages?|docs?|sites?)\b",
+            r"\bopen\s+(the\s+)?(resources?|links?|urls?)\s+(for\s+me|please)?\b",
+            r"\b(can\s+you\s+)?open\s+(them|those|these)\b",
+            r"\blaunch\s+(these|those|the)\s+(resources?|links?|urls?)\b",
+        ]
+        for pat in open_prior_pats:
+            if re.search(pat, norm):
+                # Signal via special graph name — IntentRuntime handles open_prior_resources
+                return self._build_fast_graph(
+                    "Open Prior Resources",
+                    "open_prior_resources",
+                    {},
+                )
+
         # ── APP LAUNCH ──
-        app_match = re.match(r'^(?:can\s+you\s+)?(?:open(?:\s+up)?|launch|start|fire\s+up|run)\s+(.+)', norm)
+        # Only known desktop apps. Reject multi-word deictic garbage.
+        KNOWN_APPS = {
+            "kitty", "brave", "firefox", "chrome", "chromium", "spotify", "code",
+            "vscode", "cursor", "slack", "discord", "telegram", "obsidian", "notion",
+            "terminal", "gnome-terminal", "alacritty", "wezterm", "nautilus", "files",
+            "calculator", "settings", "thunderbird", "zoom", "figma", "postman",
+            "docker", "steam", "vlc", "mpv", "gedit", "nvim", "vim", "emacs",
+            "edge", "opera", "arc", "youtube", "yt music", "youtube music",
+        }
+        DEICTIC = {
+            "it", "that", "this", "the", "a", "an", "one", "them", "those", "these",
+            "my", "your", "our", "some", "any", "all", "resources", "resource",
+            "links", "link", "urls", "url", "tabs", "pages", "docs", "sites",
+        }
+        app_match = re.match(
+            r'^(?:can\s+you\s+)?(?:please\s+)?(?:open(?:\s+up)?|launch|start|fire\s+up|run)\s+(.+)',
+            norm,
+        )
         if app_match:
             app = app_match.group(1).strip()
-            # Don't match pronouns — need LLM to resolve "open it", "open that"
-            if app and app not in ("it", "that", "this", "the", "a", "one"):
-                return self._build_fast_graph("Launch App", "open_app", {"app_name": app})
+            # Strip trailing polite fluff
+            app = re.sub(r"\s+(please|for\s+me|thanks|thank\s+you)\s*$", "", app).strip()
+            app = app.strip("'\"")
+            # Direct URL → open as URL via open_app path (dispatcher handles http)
+            if app.startswith("http://") or app.startswith("https://"):
+                return self._build_fast_graph("Open URL", "open_app", {"app_name": app})
+            first = app.split()[0] if app else ""
+            first_clean = re.sub(r"[^a-z0-9\-_+]", "", first)
+            # Pronouns / deictics → let LLM or open_prior handle
+            if not app or app in DEICTIC or first_clean in DEICTIC:
+                return None
+            # Multi-word non-apps ("these resources for me") → reject
+            if len(app.split()) > 3:
+                return None
+            # Known apps only (conservative). Unknown single tokens still allowed
+            # if short (e.g. "slack") — dispatcher resolves; multi-word unknown rejected.
+            if app in KNOWN_APPS or first_clean in KNOWN_APPS:
+                return self._build_fast_graph(
+                    "Launch App", "open_app", {"app_name": first_clean if first_clean in KNOWN_APPS else app}
+                )
+            # Single short token unknown app — allow (brave, spotify variants)
+            if len(app.split()) == 1 and 2 < len(first_clean) < 24:
+                return self._build_fast_graph("Launch App", "open_app", {"app_name": first_clean})
+            # Multi-word unknown ("these resources for me'") → DO NOT launch
+            return None
 
         return None
 
@@ -203,12 +262,22 @@ class CognitiveRouter:
         fast_graph = self._get_fast_path(text)
         if fast_graph:
             self._emit_state("EXECUTING_FAST_PATH", f"Matched route: {fast_graph.name}")
+            # Special category for opening links from prior assistant turn
+            if getattr(fast_graph, "name", "") == "Open Prior Resources":
+                return IntentClassification(
+                    category="open_prior_resources",
+                    confidence=1.0,
+                    depth=ReasoningDepth.FAST,
+                    fast_path_graph=None,
+                    reasoning="User asked to open previously mentioned resources/links.",
+                    action_hint="open_prior_resources",
+                )
             return IntentClassification(
-                category="fast_action", 
-                confidence=1.0, 
-                depth=ReasoningDepth.FAST, 
+                category="fast_action",
+                confidence=1.0,
+                depth=ReasoningDepth.FAST,
                 fast_path_graph=fast_graph,
-                reasoning="Matched fast-path heuristic."
+                reasoning="Matched fast-path heuristic.",
             )
 
         self._emit_state("CLASSIFYING_INTENT", "Consulting LLM router...")
