@@ -694,6 +694,8 @@ class IntentRuntime:
                 logging.warning("IntentRuntime: clearing error provider text before grounded fallback")
                 full_text = ""
                 stream_success = False
+                if hasattr(buffer, '_full_text'):
+                    buffer._full_text = ""
             if not stream_success or not full_text.strip() or is_error_response:
                 grounded = getattr(cognitive_context, 'grounded_resources', None) if 'cognitive_context' in locals() else None
                 active_ws = None
