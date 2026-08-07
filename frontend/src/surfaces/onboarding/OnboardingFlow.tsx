@@ -10,16 +10,18 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    const handleEvent = (event: any) => {
-      const { type, payload } = event.detail;
-      if (type === 'provider.test_result') {
+    const handleEvent = (event: Event) => {
+      const ev = (event as CustomEvent).detail;
+      if (!ev) return;
+      // Mirror SettingsLayout: event.detail IS the daemon payload
+      if (ev.type === 'provider.test_result') {
         setTesting(false);
-        setTestResult(payload.result);
+        setTestResult(ev.result ?? null);
       }
     };
-    
-    window.addEventListener('runtime_event', handleEvent);
-    return () => window.removeEventListener('runtime_event', handleEvent);
+
+    window.addEventListener('arova-event', handleEvent as EventListener);
+    return () => window.removeEventListener('arova-event', handleEvent as EventListener);
   }, []);
 
   const testConnection = () => {
@@ -67,6 +69,13 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
       config: appConfig,
       providers: providersConfig
     });
+
+    try {
+      localStorage.setItem('arova_onboarding_complete', '1');
+      localStorage.setItem('arova_onboarding_provider', intelligenceSource);
+    } catch {
+      // private mode — still continue
+    }
 
     onComplete();
   };

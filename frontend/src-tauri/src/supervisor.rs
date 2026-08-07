@@ -53,26 +53,54 @@ impl SupervisorState {
                     break;
                 }
 
-                // Resolve bundled binary or python runtime across Deb, RPM, AppImage, and local dev
+                // Resolve bundled binary or python runtime across Deb, RPM, AppImage, and local dev.
+                // AppImage mounts at $APPDIR; Tauri 2 resource dir varies by target.
                 let exe_dir = std::env::current_exe()
                     .ok()
                     .and_then(|p| p.parent().map(|p| p.to_path_buf()))
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-                let candidate_paths = vec![
+                let appdir = std::env::var_os("APPDIR").map(std::path::PathBuf::from);
+                let resource_dir = std::env::var_os("TAURI_RESOURCE_DIR")
+                    .map(std::path::PathBuf::from)
+                    .or_else(|| {
+                        let cands = [
+                            exe_dir.join("resources"),
+                            exe_dir.join("../resources"),
+                            exe_dir.join("../lib/Arova/resources"),
+                        ];
+                        cands.into_iter().find(|p| p.exists())
+                    });
+
+                let mut candidate_paths = vec![
                     exe_dir.join("arovad"),
                     exe_dir.join("resources").join("arovad"),
+                    exe_dir.join("../resources").join("arovad"),
                     exe_dir.join("../lib/Arova/resources/arovad"),
                     exe_dir.join("../lib/Arova/_up_/_up_/dist/arovad"),
                     exe_dir.join("../../dist/arovad"),
+                    exe_dir.join("../../../dist/arovad"),
                     std::path::PathBuf::from("/usr/lib/Arova/resources/arovad"),
                     std::path::PathBuf::from("/usr/lib/Arova/_up_/_up_/dist/arovad"),
                     std::path::PathBuf::from("/usr/lib/arova/resources/arovad"),
                     std::path::PathBuf::from("/opt/arova/arovad"),
                 ];
 
+                if let Some(ref rd) = resource_dir {
+                    candidate_paths.insert(0, rd.join("arovad"));
+                    candidate_paths.insert(1, rd.join("dist").join("arovad"));
+                }
+                if let Some(ref ad) = appdir {
+                    candidate_paths.insert(0, ad.join("usr/bin/arovad"));
+                    candidate_paths.insert(1, ad.join("usr/lib/Arova/resources/arovad"));
+                    candidate_paths.insert(2, ad.join("resources/arovad"));
+                    candidate_paths.insert(3, ad.join("arovad"));
+                }
+
                 let found_binary = candidate_paths.into_iter().find(|p| p.exists());
-                let resource_py_dir = exe_dir.join("resources");
+                let resource_py_dir = resource_dir
+                    .clone()
+                    .unwrap_or_else(|| exe_dir.join("resources"));
 
                 // Clean up any stale PyInstaller temp folders before launching daemon to prevent tmpfs quota exhaustion
                 for dir_path in &["/tmp", "/var/tmp"] {
@@ -95,12 +123,17 @@ impl SupervisorState {
                     c.env("TMPDIR", "/var/tmp");
                     c
                 } else {
-                    let venv_candidates = vec![
+                    let mut venv_candidates = vec![
                         std::path::PathBuf::from("/home/sarthak/arova/venv/bin/python"),
                         std::path::PathBuf::from("../venv/bin/python"),
                         std::path::PathBuf::from("../../venv/bin/python"),
                         std::path::PathBuf::from("./venv/bin/python"),
+                        exe_dir.join("../lib/Arova/_up_/_up_/venv/bin/python"),
                     ];
+                    if let Some(ref ad) = appdir {
+                        venv_candidates.insert(0, ad.join("usr/lib/Arova/venv/bin/python"));
+                        venv_candidates.insert(1, ad.join("venv/bin/python"));
+                    }
                     let py_bin = venv_candidates
                         .into_iter()
                         .find(|p| p.exists())
@@ -111,13 +144,18 @@ impl SupervisorState {
                     c.env_remove("PYTHONHOME");
                     c.env("TMPDIR", "/var/tmp");
 
-                    let py_dir_candidates = vec![
+                    let mut py_dir_candidates = vec![
                         std::path::PathBuf::from("/home/sarthak/arova"),
                         std::path::PathBuf::from(".."),
                         std::path::PathBuf::from("../.."),
                         resource_py_dir.clone(),
                         exe_dir.join("../lib/Arova/_up_/_up_"),
+                        exe_dir.join("../../.."),
                     ];
+                    if let Some(ref ad) = appdir {
+                        py_dir_candidates.insert(0, ad.join("usr/lib/Arova/resources"));
+                        py_dir_candidates.insert(1, ad.join("resources"));
+                    }
 
                     if let Some(target_dir) = py_dir_candidates.into_iter().find(|d| d.join("arova").exists()) {
                         c.env("PYTHONPATH", &target_dir);
