@@ -109,7 +109,8 @@ class ModelOrchestrator:
                                 messages: List[Dict[str, Any]], 
                                 system_prompt: str, 
                                 depth: ReasoningDepth = ReasoningDepth.STANDARD,
-                                budget: Optional[ReasoningBudget] = None) -> Dict[str, Any]:
+                                budget: Optional[ReasoningBudget] = None,
+                                model: str = "") -> Dict[str, Any]:
         # Map ReasoningDepth to Capability
         cap = Capability.REASONING if depth in (ReasoningDepth.DEEP, ReasoningDepth.REFLECTIVE) else Capability.CHAT
         
@@ -117,7 +118,7 @@ class ModelOrchestrator:
         
         # Delegate to router
         import json
-        text = await self.router.generate(messages, system_prompt, capability=cap, max_tokens=max_tokens)
+        text = await self.router.generate(messages, system_prompt, capability=cap, model=model, max_tokens=max_tokens)
         
         if text.strip() == "I'm currently unable to connect to my cognitive providers. Please check the network or provider settings.":
             raise RuntimeError("Cognitive providers offline")
@@ -143,7 +144,7 @@ class ModelOrchestrator:
                             depth: ReasoningDepth = ReasoningDepth.STANDARD, 
                             budget: Optional[ReasoningBudget] = None):
         cap = Capability.REASONING if depth in (ReasoningDepth.DEEP, ReasoningDepth.REFLECTIVE) else Capability.CHAT
-        max_tokens = budget.max_tokens if budget else 512
+        max_tokens = budget.max_tokens if budget else 4096
         
         async for chunk in self.router.stream(messages, system_prompt, capability=cap, max_tokens=max_tokens):
             yield chunk

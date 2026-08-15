@@ -130,15 +130,29 @@ class ActionPlanner:
         if not nodes:
             return None
 
-        # Safeguard: If the user is asking for advice, roadmaps, or learning strategy (e.g., "make a plan", "what if I watch"),
-        # and the ActionPlanner generated open_app/search_web nodes without explicit user command words ("open", "launch", "search"),
-        # reject the action plan so it falls back to Chat for a full conversational response.
+        # Safeguard 1: Gratitude / Acknowledgement messages must NEVER execute actions
         latest_user_text = ""
         for m in reversed(messages):
             if m.get("role") == "user":
                 latest_user_text = m.get("content", "").lower()
                 break
 
+        pleasantry_signals = [
+            "thanks", "thank you", "dhanyavad", "shukriya", "good job", "awesome", 
+            "sounds good", "looks good", "no thanks", "thats all", "that's all", "nothing else",
+            "theek hai", "ok thanks", "okay thanks", "got it"
+        ]
+        action_keywords = ["play ", "open ", "search ", "run ", "close ", "kill ", "set volume", "launch ", "code "]
+        is_pleasantry = any(p in latest_user_text for p in pleasantry_signals)
+        has_new_action = any(c in latest_user_text for c in action_keywords)
+        
+        if is_pleasantry and not has_new_action:
+            logger.info("ActionPlanner: Query is gratitude/acknowledgement without new action command. Rejecting action graph to fall back to Chat.")
+            return None
+
+        # Safeguard 2: If the user is asking for advice, roadmaps, or learning strategy (e.g., "make a plan", "what if I watch"),
+        # and the ActionPlanner generated open_app/search_web nodes without explicit user command words ("open", "launch", "search"),
+        # reject the action plan so it falls back to Chat for a full conversational response.
         advice_signals = ["roadmap", "make a plan", "study plan", "how to start", "what if i", "which sequence", "recommend", "advice"]
         explicit_cmd_signals = ["open ", "launch ", "search for ", "google ", "go to ", "run ", "play "]
         

@@ -46,7 +46,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "wake": {
         "enabled": True,
         "wake_word": "alexa",
-        "model_path": "~/.config/hyprvoice/models/alexa.onnx",
+        "model_path": "~/.config/arova/models/alexa.onnx",
         "threshold": 0.5,
         "sample_rate": 16000,
         "frame_length": 1280,
@@ -59,15 +59,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "sample_rate": 16000,
         "channels": 1,
         "duration_seconds": 5.0,
-        "output_dir": "~/.cache/hyprvoice",
+        "output_dir": "~/.cache/arova",
         "filename_prefix": "voice_command",
         "frame_ms": 30,
-        "speech_threshold": 800.0,
+        "speech_threshold": 806.0,
         "silence_threshold": 500.0,
         "silence_duration_ms": 600,
         "min_speech_duration_ms": 250,
         "max_duration_seconds": 8.0,
-        "start_timeout_seconds": 4.0,
+        "start_timeout_seconds": 6.0,
         "pre_speech_buffer_ms": 300,
     },
     "conversation": {
@@ -79,14 +79,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "llm": {
         "provider": "groq",
         "model": "llama-3.3-70b-versatile",
-        "temperature": 0.3,
-        "max_tokens": 512,
-        "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "fallback_models": [
             "llama-3.3-70b-versatile",
             "meta-llama/llama-4-scout-17b-16e-instruct",
             "meta-llama/llama-4-maverick-17b-128e-instruct"
         ],
+        "temperature": 0.3,
+        "max_tokens": 512,
+        "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "retry_on_rate_limit": True,
         "max_attempts": 3
     },
@@ -134,9 +134,9 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
         home = Path.home()
         path = home / ".config" / "arova" / "config.json"
         if not path.exists():
-            path = home / ".config" / "hyprvoice" / "config.yml"
+            path = home / ".config" / "arova" / "config.yml"
         if not path.exists():
-            path = home / ".config" / "hyprvoice" / "config.json"
+            path = home / ".config" / "arova" / "config.yaml"
     else:
         path = Path(config_path)
 
@@ -164,6 +164,7 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
                     cfg[k] = {**cfg[k], **v}
                 else:
                     cfg[k] = v
+
             return cfg
             
     except Exception:
@@ -198,7 +199,7 @@ def pick_groq_api_key(config: dict[str, Any]) -> str | None:
     return random.choice(keys)
 
 def get_default_config_path() -> Path:
-    return Path.home() / ".config" / "hyprvoice" / "config.yml"
+    return Path.home() / ".config" / "arova" / "config.json"
 
 def dump_default_config_yaml() -> str:
     if HAS_YAML:

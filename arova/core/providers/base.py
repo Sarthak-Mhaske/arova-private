@@ -62,6 +62,11 @@ class ProviderHealth:
 
     @property
     def is_available(self) -> bool:
+        # Auto-recover from rate limit lockout after cooldown expires
+        if not self.available and self.rate_limited_until > 0 and time.time() > self.rate_limited_until:
+            self.available = True
+            self.status = "ok (recovered)"
+            self.consecutive_failures = 0
         return self.available and time.time() > self.rate_limited_until
 
     @property
@@ -93,12 +98,15 @@ class ProviderHealth:
         is_auth_error = "401" in reason or "invalid" in reason_lower
         is_rate_limit = "429" in reason or "rate limit" in reason_lower or "too many requests" in reason_lower
 
-        if self.consecutive_failures >= 3 or is_auth_error:
+        if is_auth_error:
+            self.available = False
+            self.status = reason if reason else "unreachable"
+        elif self.consecutive_failures >= 10:
             self.available = False
             self.status = reason if reason else "unreachable"
 
         if is_rate_limit:
-            self.rate_limited_until = time.time() + 300
+            self.rate_limited_until = time.time() + 30
             self.status = "Rate Limited"
 
     def to_dict(self) -> dict:

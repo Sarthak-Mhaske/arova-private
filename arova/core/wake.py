@@ -50,7 +50,7 @@ def get_wake_config(config: dict[str, Any]) -> dict[str, Any]:
     # Defaults
     enabled = bool(wake_cfg.get("enabled", True))
     wake_word = str(wake_cfg.get("wake_word", "alexa"))
-    model_path = str(wake_cfg.get("model_path", "~/.config/hyprvoice/models/alexa.onnx"))
+    model_path = str(wake_cfg.get("model_path", "~/.config/arova/models/alexa.onnx"))
     
     try:
         threshold = float(wake_cfg.get("threshold", 0.5))

@@ -124,8 +124,13 @@ class ArovaDaemon:
         elif payload.get("type") == "voice.set_mic":
             enabled = payload.get("enabled", True)
             logging.info(f"Main: Received voice.set_mic via WebSocket: enabled={enabled}")
-            if self.runtime and self.runtime.event_bus:
-                self.runtime.event_bus.emit("voice", "MIC_TOGGLED", {"enabled": enabled})
+            if self.runtime and hasattr(self.runtime, 'voice_loop') and self.runtime.voice_loop:
+                if enabled:
+                    self.runtime.voice_loop.start_listening()
+                else:
+                    self.runtime.voice_loop.stop_listening()
+            else:
+                logging.error("Main: voice_loop is not available! Voice pipeline may not be initialized.")
         elif payload.get("type") == "client.new_thread":
             logging.info("Main: Received client.new_thread via WebSocket.")
             if self.runtime and self.runtime.session:
@@ -791,9 +796,13 @@ class ArovaDaemon:
 
         # Subscribe WS and UDS to the event bus
         _subscribe("cognition", "COGNITION_STATE_CHANGED")
-        _subscribe("automation", "NODE_STATE_CHANGED")
+        # Voice & Cognition events for the UI
         _subscribe("voice", "TRANSCRIPT_FINAL")
+        _subscribe("voice", "PARTIAL_TRANSCRIPT")
         _subscribe("voice", "TEXT_STREAM_STARTED")
+        _subscribe("voice", "TTS_STARTED")
+        _subscribe("voice", "TTS_COMPLETED")
+        _subscribe("voice", "TTS_INTERRUPTED")
         _subscribe("voice", "TEXT_CHUNK_GENERATED")
         _subscribe("voice", "TEXT_RESPONSE_GENERATED")
         _subscribe("cognition", "STREAM_INTERRUPTED")
@@ -817,14 +826,15 @@ class ArovaDaemon:
         _subscribe("cognition", "WORKING_MEMORY_CHANGED")
         _subscribe("reasoning", "REASONING_STEP_COMPLETED")
 
-        # Start WakeWord background service
-        try:
-            from arova.core.wake import WakeWordService
-            wake_cfg = self.runtime.config if hasattr(self.runtime, 'config') and isinstance(self.runtime.config, dict) else {}
-            self.wake_service = WakeWordService(self.runtime.event_bus, wake_cfg)
-            self.wake_service.start()
-        except Exception as e:
-            logging.warning(f"Failed to start WakeWordService: {e}")
+        # Wire VoiceConversationLoop mic state callback to broadcast to UI
+        if hasattr(self.runtime, 'voice_loop') and self.runtime.voice_loop:
+            def _mic_state_callback(enabled: bool):
+                self.ws_manager.broadcast({
+                    "type": "voice.mic_state",
+                    "enabled": enabled,
+                    "listening": enabled
+                })
+            self.runtime.voice_loop._on_mic_state = _mic_state_callback
 
         logging.info("Arova Daemon is running.")
         

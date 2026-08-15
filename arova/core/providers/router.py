@@ -43,15 +43,15 @@ class CapabilityRouter:
         if self._event_bus:
             self._event_bus.emit("providers", event_type, payload)
 
-    def _resolve(self, capability: Capability) -> CognitiveProvider:
+    def _resolve(self, capability: Capability, exclude: Optional[List[str]] = None) -> CognitiveProvider:
         """
         Walk the policy's preferred provider order for the requested capability.
-        Return the first healthy provider. Emit PROVIDER_FALLBACK if we had to skip.
+        Return the first healthy provider not in exclude. Emit PROVIDER_FALLBACK if we had to skip.
         """
         order = self._policy.get_provider_order(capability)
         primary_name = order[0] if order else None
 
-        provider = self._providers.get_for_capability(capability, order)
+        provider = self._providers.get_for_capability(capability, order, exclude=exclude)
 
         if provider.name == "mock":
             logger.warning(f"CapabilityRouter: ALL providers exhausted for {capability.value}. Using MockProvider.")
@@ -63,48 +63,12 @@ class CapabilityRouter:
             })
         elif primary_name and provider.name != primary_name:
             logger.info(f"CapabilityRouter: Fallback for {capability.value}: {primary_name} -> {provider.name}")
-            
-            # Track consecutive fallbacks away from the primary
-            if not hasattr(self, "_consecutive_fallbacks"):
-                self._consecutive_fallbacks = {}
-                
-            count = self._consecutive_fallbacks.get(primary_name, 0) + 1
-            self._consecutive_fallbacks[primary_name] = count
-            
-            # If the primary provider has failed consecutively 3 times, permanently change the default
-            if count >= 3:
-                try:
-                    from arova.core.config.manager import get_config_manager
-                    cfg_mgr = get_config_manager()
-                    cfg = cfg_mgr.load_config()
-                    cfg["preferred_provider"] = provider.name
-                    cfg_mgr.save_config(cfg)
-                    self._policy.set_presence_style(
-                        self._policy._presence_style, 
-                        self._policy._custom_routing, 
-                        provider.name, 
-                        self._policy._allow_fallback
-                    )
-                    logger.info(f"CapabilityRouter: Automatically switched preferred_provider to {provider.name} after 3 consecutive failures of {primary_name}")
-                    self._consecutive_fallbacks.clear()
-                    
-                    self._emit("PROVIDER_CHANGED", {
-                        "provider": provider.name,
-                        "reason": f"{primary_name} failed consecutively, automatically switching default to {provider.name}"
-                    })
-                except Exception as e:
-                    logger.error(f"CapabilityRouter: Failed to update default config: {e}")
-            else:
-                self._emit("PROVIDER_FALLBACK", {
-                    "capability": capability.value,
-                    "primary": primary_name,
-                    "fallback": provider.name,
-                    "reason": "primary_unhealthy"
-                })
-        elif primary_name and provider.name == primary_name:
-            # Reset counter on success
-            if hasattr(self, "_consecutive_fallbacks") and primary_name in self._consecutive_fallbacks:
-                self._consecutive_fallbacks[primary_name] = 0
+            self._emit("PROVIDER_FALLBACK", {
+                "capability": capability.value,
+                "primary": primary_name,
+                "fallback": provider.name,
+                "reason": "primary_unhealthy"
+            })
 
         return provider
 
@@ -112,7 +76,7 @@ class CapabilityRouter:
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        capability: Capability = Capability.CHAT,
-                       model: str = "", max_tokens: int = 512) -> str:
+                       model: str = "", max_tokens: int = 4096) -> str:
         import time
         start_t = time.time()
         order = self._policy.get_provider_order(capability)
@@ -153,16 +117,16 @@ class CapabilityRouter:
             return result
         except Exception as e:
             logger.error(f"CapabilityRouter: {provider.name} failed for {capability.value}: {e}")
-            provider.health.record_failure()
+            provider.health.record_failure(str(e))
             if not self._policy._allow_fallback:
                 return f"⚠ Request failed on {requested_model} (Strict Mode enabled): {e}"
-            fallback = self._resolve(capability)
-            if fallback.name != provider.name:
+            fallback = self._resolve(capability, exclude=[provider.name])
+            if fallback.name != provider.name and fallback.name != "mock":
                 self._emit("PROVIDER_FALLBACK", {
                     "capability": capability.value,
                     "primary": provider.name,
                     "fallback": fallback.name,
-                    "reason": "runtime_failure"
+                    "reason": f"runtime_failure: {e}"
                 })
                 try:
                     result = await fallback.generate(messages, system_prompt, model, max_tokens)
@@ -183,7 +147,7 @@ class CapabilityRouter:
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      capability: Capability = Capability.CHAT,
-                     model: str = "", max_tokens: int = 512) -> AsyncGenerator[str, None]:
+                     model: str = "", max_tokens: int = 4096) -> AsyncGenerator[str, None]:
         import time
         start_t = time.time()
         order = self._policy.get_provider_order(capability)
@@ -208,9 +172,11 @@ class CapabilityRouter:
         fallback_occ = (provider.name != primary_name)
         fallback_reason = f"{requested_model} was unavailable or key missing. Fallback is enabled." if fallback_occ else None
 
+        streamed_text = ""
         logger.info(f"CapabilityRouter: stream {capability.value} -> {provider.name}")
         try:
             async for chunk in provider.stream(messages, system_prompt, model, max_tokens):
+                streamed_text += chunk
                 yield chunk
             elapsed_ms = int((time.time() - start_t) * 1000)
             self.last_execution_metadata = {
@@ -222,21 +188,27 @@ class CapabilityRouter:
                 "fallback_reason": fallback_reason
             }
         except Exception as e:
-            logger.error(f"CapabilityRouter: stream {provider.name} failed: {e}")
-            provider.health.record_failure()
+            logger.error(f"CapabilityRouter: stream {provider.name} failed (partial length {len(streamed_text)}): {e}")
+            provider.health.record_failure(str(e))
             if not self._policy._allow_fallback:
                 yield f"\n\n⚠ Stream failed on {requested_model} (Strict Mode enabled): {e}"
                 return
-            fallback = self._resolve(capability)
-            if fallback.name != provider.name:
+            fallback = self._resolve(capability, exclude=[provider.name])
+            if fallback.name != provider.name and fallback.name != "mock":
                 self._emit("PROVIDER_FALLBACK", {
                     "capability": capability.value,
                     "primary": provider.name,
                     "fallback": fallback.name,
-                    "reason": "stream_failure"
+                    "reason": f"stream_failure: {e}"
                 })
                 try:
-                    async for chunk in fallback.stream(messages, system_prompt, model, max_tokens):
+                    fallback_messages = list(messages)
+                    fallback_sys_prompt = system_prompt
+                    if streamed_text.strip():
+                        fallback_messages.append({"role": "assistant", "content": streamed_text})
+                        fallback_sys_prompt += "\nIMPORTANT: The assistant response was interrupted mid-stream. CONTINUE generating seamlessly from where the assistant message ends. Do NOT repeat text already generated."
+
+                    async for chunk in fallback.stream(fallback_messages, fallback_sys_prompt, model, max_tokens):
                         yield chunk
                     elapsed_ms = int((time.time() - start_t) * 1000)
                     self.last_execution_metadata = {
@@ -245,13 +217,15 @@ class CapabilityRouter:
                         "provider_id": fallback.name,
                         "latency_ms": elapsed_ms,
                         "fallback": True,
-                        "fallback_reason": f"{requested_model} returned an error ({e}). Fallback is enabled. {MODEL_NAMES.get(fallback.name, fallback.name)} generated this response."
+                        "fallback_reason": f"{requested_model} was interrupted mid-response. {MODEL_NAMES.get(fallback.name, fallback.name)} seamlessly continued the response."
                     }
                 except Exception as fb_e:
                     logger.error(f"CapabilityRouter: fallback stream {fallback.name} also failed: {fb_e}")
-                    yield "\n\nI'm currently unable to connect to my cognitive providers. Please check the network or provider settings."
+                    if not streamed_text:
+                        yield "\n\nI'm currently unable to connect to my cognitive providers. Please check the network or provider settings."
             else:
-                yield "\n\nI'm currently unable to connect to my cognitive providers. Please check the network or provider settings."
+                if not streamed_text:
+                    yield "\n\nI'm currently unable to connect to my cognitive providers. Please check the network or provider settings."
 
     async def embed(self, text: str, capability: Capability = Capability.EMBEDDINGS) -> List[float]:
         provider = self._resolve(capability)

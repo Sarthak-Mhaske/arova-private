@@ -17,6 +17,10 @@ class OllamaProvider(CognitiveProvider):
 
     def __init__(self, host: str = "http://localhost:11434", default_model: str = ""):
         super().__init__()
+        if not host or not str(host).strip():
+            host = "http://localhost:11434"
+        elif not str(host).startswith(("http://", "https://")):
+            host = f"http://{host}"
         self._adapter = OllamaAdapter(host=host)
 
     @property

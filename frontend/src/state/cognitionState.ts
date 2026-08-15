@@ -28,6 +28,7 @@ export interface SurfacingItem extends BaseStreamItem {
 export interface UserSaidItem extends BaseStreamItem {
   type: 'userSaid';
   text: string;
+  isLive?: boolean;
 }
 
 export interface CognitionEventItem extends BaseStreamItem {
@@ -49,6 +50,9 @@ interface CognitionState {
   addItems: (items: StreamItem[]) => void;
   removeItems: (ids: string[]) => void;
   addUserInput: (text: string) => void;
+  updateLiveUserInput: (text: string, turnId?: string) => void;
+  finalizeLiveUserInput: (text: string, turnId?: string) => void;
+  cancelLiveUserInput: () => void;
   
   activeStreamId: string | null;
   
@@ -160,6 +164,84 @@ export const useCognitionState = create<CognitionState>((set) => ({
         timestamp: now,
         text
       }]
+    };
+  }),
+
+  updateLiveUserInput: (text, turnId) => set((state) => {
+    if (!text || !text.trim()) return state;
+    const cleanText = text.trim();
+    const existingIndex = state.items.findIndex(
+      (item) => item.type === 'userSaid' && ((item as UserSaidItem).isLive === true || item.id === (turnId ? `user_${turnId}` : 'live_user_input'))
+    );
+    if (existingIndex !== -1) {
+      const existing = state.items[existingIndex] as UserSaidItem;
+      const updated = [...state.items];
+      const updatedItem: UserSaidItem = {
+        ...existing,
+        type: 'userSaid',
+        text: cleanText,
+        timestamp: Date.now()
+      };
+      updated[existingIndex] = updatedItem;
+      return { items: updated };
+    }
+    const newItem: UserSaidItem = {
+      id: turnId ? `user_${turnId}` : 'live_user_input',
+      type: 'userSaid',
+      timestamp: Date.now(),
+      text: cleanText,
+      isLive: true
+    };
+    return { items: [...state.items, newItem] };
+  }),
+
+  finalizeLiveUserInput: (text, turnId) => set((state) => {
+    if (!text || !text.trim()) return state;
+    const cleanText = text.trim();
+    const existingIndex = state.items.findIndex(
+      (item) => item.type === 'userSaid' && ((item as UserSaidItem).isLive === true || item.id === (turnId ? `user_${turnId}` : 'live_user_input'))
+    );
+    if (existingIndex !== -1) {
+      const existing = state.items[existingIndex] as UserSaidItem;
+      const updated = [...state.items];
+      const updatedItem: UserSaidItem = {
+        ...existing,
+        id: turnId ? `user_${turnId}` : existing.id,
+        type: 'userSaid',
+        text: cleanText,
+        isLive: false
+      };
+      updated[existingIndex] = updatedItem;
+      return { items: updated };
+    }
+    const now = Date.now();
+    const isDuplicate = state.items.some(
+      (item) => item.type === 'userSaid' && item.text === cleanText && now - item.timestamp < 2000
+    );
+    if (isDuplicate) return state;
+    return {
+      items: [
+        ...state.items,
+        {
+          id: turnId ? `user_${turnId}` : Math.random().toString(36).substring(7),
+          type: 'userSaid',
+          timestamp: now,
+          text: cleanText,
+          isLive: false
+        }
+      ]
+    };
+  }),
+
+  cancelLiveUserInput: () => set((state) => {
+    const hasLive = state.items.some(
+      (item) => item.type === 'userSaid' && (item as UserSaidItem).isLive === true
+    );
+    if (!hasLive) return state;
+    return {
+      items: state.items.filter(
+        (item) => !(item.type === 'userSaid' && (item as UserSaidItem).isLive === true)
+      )
     };
   }),
   

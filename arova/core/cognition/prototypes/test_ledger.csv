@@ -1,0 +1,3 @@
+date,active_question_inferred,active_question_actual,overall_confidence_reported,hallucination_risk,accuracy_score,confident_hallucination,failure_type,notes
+2025-01-15,,,0,high,,,,
+2025-01-15,Why is Stripe webhook signature validation failing intermittently?,,90,low,,,,

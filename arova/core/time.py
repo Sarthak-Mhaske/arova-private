@@ -3,7 +3,7 @@ from typing import Dict
 
 class RuntimeClock:
     """
-    Centralized monotonic timing source for the HyprVoice runtime.
+    Centralized monotonic timing source for the Arova runtime.
     Use this instead of time.time() for all runtime coordination, silence detection, 
     latency tracking, and timeouts to ensure stability against system clock drifts.
     """

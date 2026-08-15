@@ -6,6 +6,7 @@ export const CommandZone: React.FC = () => {
   const [val, setVal] = useState('');
   const [vocalize, setVocalize] = useState(false); // MUTED BY DEFAULT ALWAYS
   const [micActive, setMicActive] = useState(false); // MIC OFF BY DEFAULT
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const lastSubmitRef = useRef<{ text: string; ts: number }>({ text: '', ts: 0 });
   // TIER 1.3: @-mention autocomplete
   const [showMentions, setShowMentions] = useState(false);
@@ -46,10 +47,14 @@ export const CommandZone: React.FC = () => {
   };
 
   const handleToggleSpeaker = () => {
+    if (isSpeaking) {
+      fireInterrupt();
+      setIsSpeaking(false);
+      return;
+    }
     const nextState = !vocalize;
     setVocalize(nextState);
     if (!nextState) {
-      // Speaker toggled OFF -> Immediately kill active TTS mid-sentence
       fireInterrupt();
     }
   };
@@ -126,6 +131,23 @@ export const CommandZone: React.FC = () => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showMentions]);
+
+  React.useEffect(() => {
+    const handleArovaEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.type === 'voice.mic_state') {
+        setMicActive(Boolean(detail.enabled));
+      } else if (detail && detail.type === 'voice.speaker_state') {
+        setIsSpeaking(Boolean(detail.speaking));
+      } else if (detail && detail.type === 'voice.partial_transcript') {
+        if (detail.transcript) {
+          setVal(detail.transcript);
+        }
+      }
+    };
+    window.addEventListener('arova-event', handleArovaEvent);
+    return () => window.removeEventListener('arova-event', handleArovaEvent);
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVal = e.target.value;
@@ -293,14 +315,14 @@ export const CommandZone: React.FC = () => {
         />
         <div className="actions">
           <button 
-            className={`cmd-btn ${vocalize ? 'active' : ''}`} 
-            title={vocalize ? 'Speaker: ON (Arova will speak)' : 'Speaker: MUTED (Chat responses are quiet)'}
+            className={`cmd-btn ${isSpeaking ? 'active speaker-speaking' : vocalize ? 'active' : ''}`} 
+            title={isSpeaking ? 'Arova is speaking — click to stop speech instantly' : vocalize ? 'Speaker: ON (Arova will speak)' : 'Speaker: MUTED (Chat responses are quiet)'}
             onClick={handleToggleSpeaker}
           >
-            {vocalize ? (
+            {vocalize || isSpeaking ? (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"></path>
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

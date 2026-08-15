@@ -39,7 +39,7 @@ from arova.core.intention.continuity import PlanningContinuityEngine
 
 class RuntimeContainer:
     """
-    Root dependency container for the HyprVoice runtime.
+    Root dependency container for the Arova runtime.
     Initializes and holds references to the EventBus, ThreadPools, Loggers, and Core Services.
     Prevents scattered global instantiation.
     """
@@ -48,8 +48,8 @@ class RuntimeContainer:
         # === TIER 0.3: Beta minimal gate — only Capture→Workspace→Restore→Chat ===
         beta_cfg = self.config.get("beta", {})
         is_beta_minimal = beta_cfg.get("profile", "minimal") == "minimal"
-        # In minimal, voice/presence/ambience are OFF by default even if config says True
-        self.enable_voice = (not is_beta_minimal) and beta_cfg.get("enable_voice", True)
+        # Voice is always enabled (UI mic button requires it)
+        self.enable_voice = True
         self.enable_presence = (not is_beta_minimal) and beta_cfg.get("enable_presence", True)
         self.enable_ambience = (not is_beta_minimal) and beta_cfg.get("enable_ambience", True)
         self.enable_warmup = (not is_beta_minimal) and beta_cfg.get("enable_warmup", True)
@@ -145,33 +145,30 @@ class RuntimeContainer:
         self.turn_filter = TurnAuthorityFilter(session=self.session)
         self.event_bus.add_filter(self.turn_filter.filter_event)
         
-        # Initialize TurnCoordinator early so it processes WAKE_DETECTED before STT — lazy
-        from arova.core.voice.turn_coordinator import TurnCoordinator
-        self.turn_coordinator = TurnCoordinator(event_bus=self.event_bus, session=self.session)
-        
         # === TIER 0.3: Voice Pipeline Runtimes (Phase 2) — GATED by beta minimal ===
         if getattr(self, "enable_voice", False):
             # Lazy imports — only needed when voice enabled (requires numpy etc.)
             from arova.core.voice.cancellation import RuntimeCancellationService
             from arova.core.voice.audio_session import AudioSessionManager
-            from arova.core.voice.activity_runtime import VoiceActivityRuntime
-            from arova.core.voice.wake_service import WakeRuntimeService
-            from arova.core.voice.stt_service import STTRuntimeService
+            from arova.core.voice.voice_loop import VoiceConversationLoop
             from arova.core.voice.recovery_coordinator import RecoveryCoordinator, WatchdogService
             self.cancellation = RuntimeCancellationService(event_bus=self.event_bus)
             self.recovery = RecoveryCoordinator(event_bus=self.event_bus, cancellation=self.cancellation)
             self.watchdog = WatchdogService(event_bus=self.event_bus)
             
             self.audio_session = AudioSessionManager(event_bus=self.event_bus)
-            self.activity_runtime = VoiceActivityRuntime(event_bus=self.event_bus)
-            self.wake_service = WakeRuntimeService(event_bus=self.event_bus, config=self.config)
             
-            # Wire physical mic to VAD and Wake modules
-            self.audio_session.microphone.subscribe("activity_runtime", 50, self.activity_runtime.process_audio_chunk)
-            self.audio_session.microphone.subscribe("wake_service", 40, self.wake_service.process_audio_chunk)
-            self.wake_service.start()
+            # Unified voice conversation loop (replaces VoiceActivityRuntime + TurnCoordinator + STTRuntimeService)
+            self.voice_loop = VoiceConversationLoop(
+                event_bus=self.event_bus,
+                audio_session=self.audio_session,
+                session=self.session
+            )
             
-            self.stt_service = STTRuntimeService(event_bus=self.event_bus, audio_session=self.audio_session, session=self.session)
+            # Legacy attributes kept for graceful shutdown compatibility
+            self.activity_runtime = None
+            self.wake_service = None
+            self.stt_service = None
         else:
             # BETA_MINIMAL: Voice disabled — keep attributes for graceful shutdown
             self.cancellation = None
@@ -181,6 +178,7 @@ class RuntimeContainer:
             self.activity_runtime = None
             self.wake_service = None
             self.stt_service = None
+            self.voice_loop = None
             logging.info("BETA_MINIMAL: Voice pipeline disabled (enable_voice=False)")
         
         self.projection_cache = RuntimeProjectionCache(event_bus=self.event_bus)
@@ -553,9 +551,9 @@ class RuntimeContainer:
             try:
                 self.ambient_observer.stop()
             except: pass
-        if getattr(self, 'turn_coordinator', None):
+        if getattr(self, 'voice_loop', None):
             try:
-                self.turn_coordinator.stop()
+                self.voice_loop.stop()
             except: pass
         self.event_bus.shutdown(wait=True)
         self.thread_manager.shutdown(wait=True)

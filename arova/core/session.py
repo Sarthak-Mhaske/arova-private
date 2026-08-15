@@ -99,6 +99,17 @@ class ConversationSession:
         self._revision += 1
         return self._active_turn
 
+    def update_active_user_transcript(self, transcript: str):
+        """Updates the user_transcript for the active authoritative turn."""
+        if self._active_turn:
+            self._active_turn.user_transcript = transcript
+            self._last_user_text = transcript
+            for msg in reversed(self._legacy_messages):
+                if msg.get("id") == self._active_turn.turn_id and msg.get("role") == "user":
+                    msg["content"] = transcript
+                    break
+            self._revision += 1
+
     def get_previous_user_turn_timestamp(self) -> float | None:
         """Returns the timestamp of the previous user turn before the current active turn for absence gap calculation."""
         active_id = self._active_turn.turn_id if self._active_turn else None
@@ -146,7 +157,11 @@ class ConversationSession:
             self._save_history()
             
             # Eagerly extract memories Phase 7.5 — with 60-second cooldown to prevent spam
-            if hasattr(self, "_memory_runtime") and self._memory_runtime:
+            # Skip extraction on error/fallback responses (waste of tokens)
+            _error_markers = ["unable to reach llm", "unable to connect", "no inference provider",
+                              "encountered an unexpected error", "max retries exceeded"]
+            _is_error_response = any(em in response.lower() for em in _error_markers)
+            if hasattr(self, "_memory_runtime") and self._memory_runtime and not _is_error_response:
                 import asyncio
                 import logging
                 now = time.time()
@@ -248,25 +263,25 @@ class ConversationSession:
     def get_messages(self) -> list[dict[str, str]]:
         return [dict(m) for m in self._legacy_messages]
         
-    def build_api_messages(self, max_turns: int = 5) -> list[dict[str, str]]:
+    def build_api_messages(self, max_turns: int = 4) -> list[dict[str, str]]:
         """
         Builds the context window for the LLM. 
-        Implements a sliding window that favors recency but preserves thread continuity.
+        Implements a sliding window that favors recency and caps historical message bloat.
         """
         api_msgs = []
         if self._system_prompt:
-            api_msgs.append({"role": "system", "content": self._system_prompt})
+            api_msgs.append({"role": "system", "content": self._system_prompt[:1000]})
             
-        # Simplistic semantic sliding window:
-        # We always take the last `max_turns` messages for absolute recency.
-        # In a full implementation, we'd pull high-affinity turns from active threads.
-        
         recent_messages = self._legacy_messages[-max_turns:] if len(self._legacy_messages) > max_turns else self._legacy_messages
         
-        # (Future hook) Inject active thread snapshots here if they aren't in the recent messages
-        
-        for m in recent_messages:
-            api_msgs.append({"role": m["role"], "content": m["content"]})
+        last_idx = len(recent_messages) - 1
+        for idx, m in enumerate(recent_messages):
+            role = m.get("role", "user")
+            content = str(m.get("content", ""))
+            # Never truncate the active user prompt (last item), but truncate past turns to 800 chars max
+            if idx < last_idx and len(content) > 800:
+                content = content[:800] + "... [historical context truncated]"
+            api_msgs.append({"role": role, "content": content})
             
         return api_msgs
 

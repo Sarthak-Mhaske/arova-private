@@ -1,0 +1,25 @@
+{"timestamp": "2025-01-15T14:00:12", "type": "file_open", "data": {"path": "/home/sarthak/project/api/stripe_webhooks.py"}}
+{"timestamp": "2025-01-15T14:01:45", "type": "browser_visit", "data": {"url": "https://stripe.com/docs/webhooks/signatures", "title": "Stripe Webhook Signatures"}}
+{"timestamp": "2025-01-15T14:03:22", "type": "terminal_command", "data": {"command": "pytest tests/test_webhooks.py -v"}}
+{"timestamp": "2025-01-15T14:03:28", "type": "test_output", "data": {"result": "FAILED", "summary": "test_signature_validation FAILED — AssertionError: signature mismatch"}}
+{"timestamp": "2025-01-15T14:04:11", "type": "browser_search", "data": {"query": "stripe webhook signature validation intermittent failure", "engine": "google"}}
+{"timestamp": "2025-01-15T14:06:33", "type": "browser_visit", "data": {"url": "https://stripe.com/docs/webhooks/best-practices", "title": "Stripe Webhook Best Practices"}}
+{"timestamp": "2025-01-15T14:09:45", "type": "file_open", "data": {"path": "/home/sarthak/project/api/middleware.py"}}
+{"timestamp": "2025-01-15T14:11:02", "type": "browser_search", "data": {"query": "NTP clock skew webhook timestamp validation", "engine": "google"}}
+{"timestamp": "2025-01-15T14:13:17", "type": "terminal_command", "data": {"command": "date && ntpq -p"}}
+{"timestamp": "2025-01-15T14:13:19", "type": "terminal_output", "data": {"output": "Wed Jan 15 14:13:19 UTC 2025\nremote refid st t when poll reach delay offset jitter\n*0.ubuntu.pool 17.253.68.253 2 u 42 64 377 0.523 +0.412 0.089"}}
+{"timestamp": "2025-01-15T14:15:44", "type": "browser_search", "data": {"query": "stripe webhook tolerance window seconds", "engine": "google"}}
+{"timestamp": "2025-01-15T14:17:03", "type": "browser_visit", "data": {"url": "https://stripe.com/docs/webhooks/signatures#replay-attacks", "title": "Stripe replay attack prevention"}}
+{"timestamp": "2025-01-15T14:19:31", "type": "terminal_command", "data": {"command": "python3 -c \"import time; print(time.time())\""}}
+{"timestamp": "2025-01-15T14:20:44", "type": "terminal_output", "data": {"output": "NTP offset: +0.412ms \u2014 within acceptable range"}}
+{"timestamp": "2025-01-15T14:21:15", "type": "browser_visit", "data": {"url": "https://stripe.com/docs/webhooks/signatures#replay-attacks", "title": "Stripe replay prevention \u2014 tolerance window is 300 seconds"}}
+{"timestamp": "2025-01-15T14:22:08", "type": "file_open", "data": {"path": "/home/sarthak/project/api/stripe_webhooks.py"}}
+{"timestamp": "2025-01-15T14:23:44", "type": "browser_search", "data": {"query": "flask request body consumed before middleware", "engine": "google"}}
+{"timestamp": "2025-01-15T14:25:11", "type": "browser_visit", "data": {"url": "https://flask.palletsprojects.com/en/3.0.x/api/#flask.Request.get_data", "title": "Flask Request.get_data"}}
+{"timestamp": "2025-01-15T14:27:55", "type": "file_edit", "data": {"path": "/home/sarthak/project/api/middleware.py", "diff_summary": "Added request.get_data(cache=True) before middleware chain"}}
+{"timestamp": "2025-01-15T14:28:14", "type": "terminal_command", "data": {"command": "pytest tests/test_webhooks.py -v"}}
+{"timestamp": "2025-01-15T14:28:19", "type": "test_output", "data": {"result": "PASSED", "summary": "test_signature_validation PASSED in 0.34s"}}
+{"timestamp": "2025-01-15T14:29:02", "type": "terminal_command", "data": {"command": "pytest tests/ -v --tb=short"}}
+{"timestamp": "2025-01-15T14:29:41", "type": "test_output", "data": {"result": "PASSED", "summary": "47 passed in 4.21s"}}
+{"timestamp": "2025-01-15T14:30:18", "type": "git_diff", "data": {"files_changed": ["api/middleware.py"]}}
+{"timestamp": "2025-01-15T14:31:05", "type": "browser_visit", "data": {"url": "https://stripe.com/docs/webhooks/signatures#verify-official-libraries", "title": "Stripe webhook verification"}}

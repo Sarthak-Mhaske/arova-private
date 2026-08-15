@@ -1,5 +1,5 @@
 """
-plan_store.py — JSON-backed atomic persistence for HyprVoice plans.
+plan_store.py — JSON-backed atomic persistence for Arova plans.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-_PLANS_FILE = Path.home() / ".cache" / "hyprvoice" / "plans.json"
+_PLANS_FILE = Path.home() / ".cache" / "arova" / "plans.json"
 _lock = threading.Lock()
 
 def _load_raw() -> list[dict[str, Any]]:

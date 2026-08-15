@@ -1,0 +1,45 @@
+# Arova Daily Reconstruction
+# Date: 2025-01-15
+# Review this. Score it honestly. Then fill in inference_ledger.csv.
+
+============================================================
+
+Overall Confidence: 90% — HIGH CONFIDENCE
+Hallucination Risk: LOW
+
+ACTIVE QUESTION (95% confident):
+  Why is Stripe webhook signature validation failing intermittently?
+
+CURRENT BELIEF (90% confident):
+  The Flask request body was being consumed before the signature verification middleware could read it, causing validation to fail. Adding request.get_data(cache=True) fixes this by caching the body.
+
+EVIDENCE GATHERED:
+  [100%] tests/test_webhooks.py test output
+         → test_signature_validation failed with AssertionError: signature mismatch
+  [95%] Google search & Flask docs for "flask request body consumed before middleware"
+         → Identified potential issue with middleware consuming the request body
+  [95%] /home/sarthak/project/api/middleware.py (edit)
+         → Added request.get_data(cache=True) before middleware chain, which led to tests passing
+
+RULED OUT:
+  [95%] NTP clock skew causing timestamp validation failure
+         because: NTP offset was confirmed to be +0.412ms (within acceptable range) and Stripe's tolerance window is 300 seconds.
+
+STILL UNKNOWN:
+  [80%] Is the current Stripe webhook verification implementation fully aligned with Stripe's official libraries and best practices?
+
+STOPPED BECAUSE (85% confident):
+  Bug resolved (tests pass), user checked git diff and is verifying official documentation.
+
+============================================================
+
+SCORING INSTRUCTIONS:
+Open inference_ledger.csv and fill in these columns for today:
+  active_question_actual  — what was the real question?
+  accuracy_score          — 0 to 10
+  confident_hallucination — yes or no
+  failure_type            — correct / omission / hallucination / partial
+  notes                   — what did it miss? what did it invent?
+
+Remember: A confident wrong statement scores lower than an
+uncertain correct statement. Calibration matters more than coverage.

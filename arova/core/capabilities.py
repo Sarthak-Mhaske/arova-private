@@ -139,7 +139,7 @@ def build_capability_report() -> dict:
     }
 
 def format_capability_report(report: dict) -> str:
-    lines = ["HyprVoice V2 Capability Report\n"]
+    lines = ["Arova Capability Report\n"]
     
     lines.append("Feature readiness:")
     for feature, details in report["features"].items():

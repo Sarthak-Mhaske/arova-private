@@ -20,6 +20,17 @@ def _command_exists(name: str) -> bool:
 def _expand_path(path: str) -> str:
     return os.path.expanduser(path)
 
+def detect_language_from_text(text: str) -> str:
+    """
+    Detects whether the text contains Hindi/Marathi (Devanagari script) or English.
+    Devanagari Unicode range: \u0900-\u097F.
+    """
+    if not text:
+        return "english"
+    if any('\u0900' <= char <= '\u097F' for char in text):
+        return "hindi"
+    return "english"
+
 def normalize_tts_language(language: str | None) -> str:
     if not language:
         return "english"
@@ -51,14 +62,10 @@ def add_leading_silence(audio_path: str, silence_ms: int, config: dict | None = 
     if not ext:
         ext = ".wav"
         
-    fd, padded_path = tempfile.mkstemp(suffix=ext, prefix="hyprvoice_padded_")
+    fd, padded_path = tempfile.mkstemp(suffix=ext, prefix="arova_padded_")
     os.close(fd)
     
-    # anullsrc approach: generate silence and concat
-    # ffmpeg -y -i input -f lavfi -i anullsrc=d=0.3 -filter_complex "[1:a][0:a]concat=n=2:v=0:a=1[out]" -map "[out]" output
-    # or adelay=300:all=1
     delay_str = f"adelay={silence_ms}:all=1"
-    
     cmd = ["ffmpeg", "-y", "-i", audio_path, "-af", delay_str, padded_path]
     
     try:
@@ -86,13 +93,17 @@ def add_leading_silence(audio_path: str, silence_ms: int, config: dict | None = 
             "error": str(e)
         }
 
-def get_edge_voice(config: dict[str, Any], language: str) -> str | None:
+def get_edge_voice(config: dict[str, Any], language: str) -> str:
     tts_cfg = config.get("tts", {})
-    edge_cfg = tts_cfg.get("edge", {})
-    if not edge_cfg.get("enabled", True):
-        return None
-    voices = edge_cfg.get("voices", {})
-    return voices.get(language)
+    edge_cfg = tts_cfg.get("edge", {}) if isinstance(tts_cfg, dict) else {}
+    voices = edge_cfg.get("voices", {}) if isinstance(edge_cfg, dict) else {}
+    
+    default_voices = {
+        "english": "en-US-AvaMultilingualNeural",
+        "hindi": "hi-IN-SwaraNeural",
+        "marathi": "hi-IN-SwaraNeural"
+    }
+    return voices.get(language) or default_voices.get(language, "en-US-AvaMultilingualNeural")
 
 def get_piper_model(config: dict[str, Any], language: str) -> str | None:
     tts_cfg = config.get("tts", {})
@@ -105,38 +116,48 @@ def get_piper_model(config: dict[str, Any], language: str) -> str | None:
         return _expand_path(path)
     return None
 
-def synthesize_with_edge(text: str, config: dict[str, Any], language: str = "english", output_path: str | None = None) -> dict[str, Any]:
-    tts_cfg = config.get("tts", {})
-    edge_cfg = tts_cfg.get("edge", {})
-    binary_name = edge_cfg.get("binary", "edge-tts")
-    binary = _resolve_binary(binary_name)
+async def _edge_tts_async(text: str, voice: str, output_path: str):
+    import edge_tts
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_path)
 
-    if not binary:
-        return {
-            "ok": False,
-            "engine": "edge",
-            "audio_path": None,
-            "error": f"Binary '{binary_name}' not found in PATH or ~/.local/bin."
-        }
-        
-    voice = get_edge_voice(config, language)
-    if not voice:
-        return {
-            "ok": False,
-            "engine": "edge",
-            "audio_path": None,
-            "error": f"No Edge voice configured for language '{language}'."
-        }
+def synthesize_with_edge(text: str, config: dict[str, Any], language: str | None = None, output_path: str | None = None) -> dict[str, Any]:
+    # Auto-detect language if not explicitly provided or if default english was passed for Devanagari text
+    if not language or language == "english":
+        detected = detect_language_from_text(text)
+        if detected != "english":
+            language = detected
+    lang = normalize_tts_language(language)
+    voice = get_edge_voice(config, lang)
         
     if not output_path:
-        fd, output_path = tempfile.mkstemp(suffix=".mp3", prefix="hyprvoice_edge_")
+        fd, output_path = tempfile.mkstemp(suffix=".mp3", prefix="arova_edge_")
         os.close(fd)
         
-    cmd = [binary, "--voice", voice, "--text", text, "--write-media", output_path]
-    
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300.0)
-        if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        import asyncio
+        try:
+            import edge_tts
+        except ImportError:
+            # Fallback to CLI binary if Python module not found
+            binary_name = tts_cfg.get("edge", {}).get("binary", "edge-tts")
+            binary = _resolve_binary(binary_name)
+            if not binary:
+                return {"ok": False, "engine": "edge", "audio_path": None, "error": "edge-tts not installed"}
+            cmd = [binary, "--voice", voice, "--text", text, "--write-media", output_path]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=15.0)
+            if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return {"ok": True, "engine": "edge", "audio_path": output_path, "error": None}
+            return {"ok": False, "engine": "edge", "audio_path": None, "error": res.stderr.strip()}
+
+        # Native in-process Python async execution (no CLI subprocess overhead)
+        new_loop = asyncio.new_event_loop()
+        try:
+            new_loop.run_until_complete(_edge_tts_async(text, voice, output_path))
+        finally:
+            new_loop.close()
+
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             return {
                 "ok": True,
                 "engine": "edge",
@@ -144,17 +165,18 @@ def synthesize_with_edge(text: str, config: dict[str, Any], language: str = "eng
                 "error": None
             }
         else:
-            if os.path.exists(output_path):
-                os.remove(output_path)
             return {
                 "ok": False,
                 "engine": "edge",
                 "audio_path": None,
-                "error": res.stderr.strip() or "Unknown error synthesizing with Edge TTS."
+                "error": "Generated audio file is empty."
             }
     except Exception as e:
         if output_path and os.path.exists(output_path):
-            os.remove(output_path)
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
         return {
             "ok": False,
             "engine": "edge",
@@ -194,7 +216,7 @@ def synthesize_with_piper(text: str, config: dict[str, Any], language: str = "en
         }
 
     if not output_path:
-        fd, output_path = tempfile.mkstemp(suffix=".wav", prefix="hyprvoice_piper_")
+        fd, output_path = tempfile.mkstemp(suffix=".wav", prefix="arova_piper_")
         os.close(fd)
         
     cmd = [binary, "--model", model, "--output_file", output_path]

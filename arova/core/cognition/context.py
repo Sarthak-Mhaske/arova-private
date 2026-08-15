@@ -36,7 +36,7 @@ class CognitiveContext:
         if self.grounded_resources:
             lines.append("\n[GROUND TRUTH — VERBATIM DETERMINISTIC STATE — NEVER HALLUCINATE]")
             lines.append("These are EXACT files, terminals, repos, and browser resources observed via OS telemetry in the last session. Cite them verbatim.")
-            lines.append(self.grounded_resources)
+            lines.append(self.grounded_resources[:1200])
         else:
             lines.append("\n[GROUND TRUTH]")
             lines.append("No verbatim workspace resources observed yet (fresh boot). Do not invent files.")
@@ -45,22 +45,21 @@ class CognitiveContext:
         if self.mentioned_resources:
             lines.append("\n[MENTIONED RESOURCES — VERBATIM FILE EXCERPTS — USER EXPLICITLY @-TAGGED]")
             lines.append("User explicitly @-mentioned these files. Treat as ground truth, higher priority than general history.")
-            lines.append(self.mentioned_resources)
+            lines.append(self.mentioned_resources[:1500])
 
         # 0a2. SEARCH RESULTS — verbatim unified index hits (for 'find ...' queries)
         if self.search_results:
             lines.append("\n[SEARCH RESULTS — VERBATIM UNIFIED INDEX — DO NOT HALLUCINATE]")
             lines.append("These are exact hits from the local unified search index (files, decisions, docs). Cite them verbatim, don't invent.")
-            lines.append(self.search_results)
+            lines.append(self.search_results[:1200])
 
         # 0b. Timeline — recent lived experience
         if self.recent_timeline:
             lines.append("\n[RECENT TIMELINE — LAST EVENTS (trajectory)]")
-            for ev in self.recent_timeline[-15:]:
+            for ev in self.recent_timeline[-6:]:
                 cat = ev.get('category', 'unknown')
-                title = ev.get('title', '')[:120]
-                desc = ev.get('description', '')[:180]
-                ts = ev.get('timestamp', 0)
+                title = ev.get('title', '')[:80]
+                desc = ev.get('description', '')[:100]
                 lines.append(f"- [{cat}] {title}: {desc}")
         # 0c. Momentum capsule — continuity
         if self.momentum_capsule:
@@ -155,7 +154,7 @@ class CognitiveContext:
                 
         lines.append("\n--- END GROUNDED CONTEXT ---")
         lines.append("Instruction: When user asks 'where was I?' or 'fix the bug', ALWAYS prioritize GROUND TRUTH and TIMELINE over generic knowledge. Cite exact files/terminals. If confidence is low, hedge with 'I think...' and ask for confirmation.")
-        return "\n".join(lines)
+        return "\n".join(lines)[:3500]
 
 class ContextSynthesizer:
     """

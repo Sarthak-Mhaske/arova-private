@@ -1,0 +1,34 @@
+active_question:
+  confidence: 95
+  text: Why is Stripe webhook signature validation failing intermittently?
+current_belief:
+  confidence: 90
+  text: The Flask request body was being consumed before the signature verification
+    middleware could read it, causing validation to fail. Adding request.get_data(cache=True)
+    fixes this by caching the body.
+evidence_gathered:
+- confidence: 100
+  observation: 'test_signature_validation failed with AssertionError: signature mismatch'
+  source: tests/test_webhooks.py test output
+- confidence: 95
+  observation: Identified potential issue with middleware consuming the request body
+  source: Google search & Flask docs for "flask request body consumed before middleware"
+- confidence: 95
+  observation: Added request.get_data(cache=True) before middleware chain, which led
+    to tests passing
+  source: /home/sarthak/project/api/middleware.py (edit)
+hallucination_risk: low
+overall_confidence: 90
+ruled_out:
+- confidence: 95
+  hypothesis: NTP clock skew causing timestamp validation failure
+  reason: NTP offset was confirmed to be +0.412ms (within acceptable range) and Stripe's
+    tolerance window is 300 seconds.
+still_unknown:
+- confidence: 80
+  question: Is the current Stripe webhook verification implementation fully aligned
+    with Stripe's official libraries and best practices?
+stopping_reason:
+  confidence: 85
+  text: Bug resolved (tests pass), user checked git diff and is verifying official
+    documentation.

@@ -12,7 +12,7 @@ class LegacyGTKImporter:
     Optional utility to migrate old flat JSON history into the 
     new Schema v4 RuntimeStore. This is never called automatically.
     """
-    def __init__(self, history_path: str = "~/.cache/hyprvoice/history.json"):
+    def __init__(self, history_path: str = "~/.cache/arova/history.json"):
         self.history_path = Path(history_path).expanduser()
         
     def import_legacy_history(self, store: RuntimeStore) -> bool:

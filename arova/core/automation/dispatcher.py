@@ -535,83 +535,26 @@ class ScreenshotBackend(ActionBackend):
             return BackendObservation("", False, str(e))
 
 class PlayMusicBackend(ActionBackend):
-    async def _stop_current_playback(self):
-        import sys, asyncio
-        try:
-            if sys.platform == "win32":
-                cmd = "powershell -command \"$wsh = New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]178)\""
-            elif sys.platform == "darwin":
-                cmd = "osascript -e 'tell application \"Spotify\" to pause' -e 'tell application \"Music\" to pause'"
-            else:
-                cmd = "playerctl stop || pkill -f spotify || pkill -f vlc || true"
-            
-            proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            await proc.communicate()
-        except Exception as e:
-            logger.debug(f"Failed to stop current playback: {e}")
+    def _find_browser(self) -> Optional[str]:
+        import shutil, sys
+        browsers = [
+            "brave", "brave-browser", "brave-beta", "brave-nightly",
+            "google-chrome-stable", "google-chrome", "google-chrome-beta", "google-chrome-canary",
+            "chromium", "chromium-browser", "ungoogled-chromium",
+            "microsoft-edge-stable", "microsoft-edge", "msedge",
+            "vivaldi-stable", "vivaldi", "opera", "thorium-browser", "thorium",
+            "firefox", "firefox-esr", "zen-browser", "zen"
+        ]
+        for b in browsers:
+            path = shutil.which(b)
+            if path:
+                return path
+        return None
 
-    async def _navigate_or_replace_browser_tab(self, url: str) -> bool:
-        """
-        Reuses existing YouTube browser tab or closes the old music tab so duplicate tabs don't pile up.
-        """
-        import sys, os, asyncio, shlex
-        try:
-            if sys.platform == "darwin":
-                # macOS: AppleScript same-tab URL update for Chrome/Brave/Safari
-                script = f'''
-                try
-                    tell application "Google Chrome"
-                        repeat with w in windows
-                            repeat with t in tabs of w
-                                if URL of t contains "youtube.com" or URL of t contains "music.youtube" then
-                                    set URL of t to "{url}"
-                                    set active tab index of w to (index of t)
-                                    return "reused"
-                                end if
-                            end repeat
-                        end repeat
-                    end tell
-                end try
-                try
-                    tell application "Brave Browser"
-                        repeat with w in windows
-                            repeat with t in tabs of w
-                                if URL of t contains "youtube.com" or URL of t contains "music.youtube" then
-                                    set URL of t to "{url}"
-                                    set active tab index of w to (index of t)
-                                    return "reused"
-                                end if
-                            end repeat
-                        end repeat
-                    end tell
-                end try
-                return "none"
-                '''
-                proc = await asyncio.create_subprocess_shell(f"osascript -e {shlex.quote(script)}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                out, _ = await proc.communicate()
-                if "reused" in out.decode().lower():
-                    return True
-
-            elif sys.platform.startswith("linux"):
-                from arova.core.platform.services.backend import PlatformBackend
-                backend = PlatformBackend.create()
-                windows = backend.get_open_windows()
-                yt_windows = [w for w in windows if "youtube" in w.lower() or "music.youtube" in w.lower()]
-                if yt_windows:
-                    for win in yt_windows:
-                        safe_w = shlex.quote(win)
-                        close_cmd = f"wmctrl -c {safe_w} || hyprctl dispatch closewindow {safe_w} || true"
-                        p = await asyncio.create_subprocess_shell(close_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                        await p.communicate()
-                    await asyncio.sleep(0.25)
-
-            elif sys.platform == "win32":
-                cmd = "powershell -command \"Get-Process | Where-Object {$_.MainWindowTitle -like '*YouTube*'} | Stop-Process -Force\""
-                p = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                await p.communicate()
-        except Exception as e:
-            logger.debug(f"Tab navigation/replacement notice: {e}")
-        return False
+    def _is_chromium_based(self, browser_path: str) -> bool:
+        b_name = browser_path.lower()
+        chromium_keywords = ["brave", "chrome", "chromium", "edge", "msedge", "vivaldi", "opera", "thorium", "yandex", "iridium", "slimjet", "coccoc", "whale"]
+        return any(k in b_name for k in chromium_keywords)
 
     def _find_yt_music_app(self) -> Optional[str]:
         import shutil, sys, os
@@ -630,53 +573,188 @@ class PlayMusicBackend(ActionBackend):
                 return bin_path
         return None
 
-    async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
-        query = request.payload.get("song_query")
-        if not query:
-            return BackendObservation("", False, "No song query provided")
+    async def _stop_current_playback(self):
+        import sys, asyncio
+        try:
+            if sys.platform == "win32":
+                cmd = "powershell -command \"$wsh = New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]178)\""
+            elif sys.platform == "darwin":
+                cmd = "osascript -e 'tell application \"Spotify\" to pause' -e 'tell application \"Music\" to pause'"
+            else:
+                cmd = "playerctl stop || pkill -f spotify || pkill -f vlc || true"
+            
+            proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await proc.communicate()
+        except Exception as e:
+            logger.debug(f"Failed to stop current playback: {e}")
+
+    async def _close_yt_music_pwa_windows(self):
+        """Closes existing YouTube Music PWA windows across macOS, Windows, and Linux."""
+        import sys, os, asyncio, json, shlex
+        try:
+            if sys.platform == "darwin":
+                script = '''
+                try
+                    tell application "Google Chrome"
+                        repeat with w in windows
+                            repeat with t in tabs of w
+                                if URL of t contains "music.youtube" then close t
+                            end repeat
+                        end repeat
+                    end tell
+                end try
+                try
+                    tell application "Brave Browser"
+                        repeat with w in windows
+                            repeat with t in tabs of w
+                                if URL of t contains "music.youtube" then close t
+                            end repeat
+                        end repeat
+                    end tell
+                end try
+                '''
+                proc = await asyncio.create_subprocess_shell(f"osascript -e {shlex.quote(script)}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await proc.communicate()
+
+            elif sys.platform == "win32":
+                cmd = "powershell -command \"Get-Process | Where-Object {$_.MainWindowTitle -like '*YouTube Music*'} | Stop-Process -Force\""
+                proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await proc.communicate()
+
+            elif sys.platform.startswith("linux"):
+                import signal
+                proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                stdout, _ = await proc.communicate()
+                if proc.returncode == 0 and stdout:
+                    clients = json.loads(stdout.decode())
+                    for c in clients:
+                        cls_name = str(c.get("class", "")).lower()
+                        title = str(c.get("title", "")).lower()
+                        pid = c.get("pid")
+                        addr = c.get("address", "")
+                        if ("music.youtube" in cls_name or "music.youtube" in title or "youtube music" in title):
+                            if pid:
+                                try:
+                                    os.kill(int(pid), signal.SIGKILL)
+                                except Exception:
+                                    pass
+                            if addr:
+                                try:
+                                    w_proc = await asyncio.create_subprocess_exec("wmctrl", "-i", "-c", addr, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                                    await w_proc.communicate()
+                                except Exception:
+                                    pass
+
+                # Also run pkill fallback to clean any existing music.youtube PWA instances
+                try:
+                    k_proc = await asyncio.create_subprocess_shell("pkill -9 -f 'music.youtube.com'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    await k_proc.communicate()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"YT Music window cleanup notice: {e}")
+
+        query = request.payload.get("song_query", "").strip()
+        junk_queries = {
+            "आपके द्वारा दिए गए लिरिक्स", "lyrics provided by user", "the lyrics", "the song", 
+            "any song", "song query", "placeholder", "undefined", "null", "none", "lyrics", "music"
+        }
+        if not query or query.lower() in junk_queries or len(query) < 2:
+            return BackendObservation("Ignored invalid or placeholder music query.", False, "Invalid song query")
             
         if simulation_mode:
             logger.info(f"SIMULATION: Would search and play music: {query}")
             return BackendObservation(f"Simulated playing music: {query}", True)
             
-        import asyncio
-        import webbrowser
+        import asyncio, json, shlex, urllib.parse, sys, subprocess, webbrowser
         try:
-            # 1. Stop current music playback before starting new track
+            # 1. Stop active audio and close existing YouTube Music PWA windows
             await self._stop_current_playback()
+            await self._close_yt_music_pwa_windows()
 
-            # 2. Use yt-dlp to get the video ID for the track query
-            command = f"yt-dlp \"ytsearch1:{query}\" --get-id"
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            success = process.returncode == 0
-            
-            if success and stdout:
-                video_id = stdout.decode().strip()
-                if video_id:
-                    url = f"https://music.youtube.com/watch?v={video_id}"
-                    
-                    # 3. Check if native YouTube Music desktop app is installed
-                    app_cmd = self._find_yt_music_app()
-                    if app_cmd:
-                        logger.info(f"PlayMusicBackend: Found YT Music app '{app_cmd}', launching native playback...")
-                        launch_proc = await asyncio.create_subprocess_shell(f"{app_cmd} '{url}'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                        await launch_proc.communicate()
-                        return BackendObservation(f"Playing music in YouTube Music Desktop App: {url}", True)
-                    else:
-                        # 4. Same-tab reuse or close old music tab before opening new URL
-                        reused = await self._navigate_or_replace_browser_tab(url)
-                        if not reused:
-                            webbrowser.open(url)
-                        
-                        obs_msg = f"Playing music: {url}\n\nNote: YouTube Music Desktop App is not installed. Would you like to install it for native desktop playback?"
-                        return BackendObservation(obs_msg, True)
-            
-            return BackendObservation("", False, f"Failed to find music: {stderr.decode() if stderr else 'No results'}")
+            # 2. Save active window & workspace on Hyprland (Linux) for seamless focus restoration
+            orig_window = ""
+            orig_ws = ""
+            if sys.platform.startswith("linux"):
+                try:
+                    w_proc = await asyncio.create_subprocess_exec("hyprctl", "activewindow", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    w_out, _ = await w_proc.communicate()
+                    if w_out:
+                        orig_window = json.loads(w_out.decode()).get("address", "")
+
+                    ws_proc = await asyncio.create_subprocess_exec("hyprctl", "activeworkspace", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    ws_out, _ = await ws_proc.communicate()
+                    if ws_out:
+                        orig_ws = str(json.loads(ws_out.decode()).get("id", ""))
+                except Exception:
+                    pass
+
+            # 3. Use yt-dlp to get top result video ID
+            video_id = ""
+            try:
+                yt_cmd = f"yt-dlp --no-warnings --get-id \"ytsearch1:{query}\""
+                yt_proc = await asyncio.create_subprocess_shell(yt_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                yt_out, _ = await asyncio.wait_for(yt_proc.communicate(), timeout=10.0)
+                if yt_proc.returncode == 0 and yt_out:
+                    video_id = yt_out.decode().strip().split("\n")[0]
+            except Exception as e:
+                logger.debug(f"yt-dlp query notice: {e}")
+
+            if video_id:
+                url = f"https://music.youtube.com/watch?v={video_id}&autoplay=1"
+            else:
+                enc_q = urllib.parse.quote(query)
+                url = f"https://music.youtube.com/search?q={enc_q}"
+
+            # 4. Check for standalone native YouTube Music desktop app
+            app_cmd = self._find_yt_music_app()
+            if app_cmd:
+                logger.info(f"PlayMusicBackend: Found native app '{app_cmd}', launching...")
+                launch_proc = await asyncio.create_subprocess_shell(f"{app_cmd} '{url}'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await launch_proc.communicate()
+                return BackendObservation(f"Playing '{query}' in YouTube Music App.", True)
+
+            # 5. Find browser & launch PWA (--app=) mode
+            browser = self._find_browser()
+            if browser and self._is_chromium_based(browser):
+                launch_cmd = f"{shlex.quote(browser)} --app={shlex.quote(url)}"
+                logger.info(f"PlayMusicBackend: Launching PWA mode: {launch_cmd}")
+                subprocess.Popen(launch_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif browser:
+                launch_cmd = f"{shlex.quote(browser)} {shlex.quote(url)}"
+                subprocess.Popen(launch_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                webbrowser.open(url)
+
+            # 6. On Hyprland (Linux): Route to workspace 3 and refocus original user window seamlessly
+            if sys.platform.startswith("linux") and (orig_window or orig_ws):
+                await asyncio.sleep(0.6)
+                new_addr = ""
+                for _ in range(12):
+                    try:
+                        c_proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        c_out, _ = await c_proc.communicate()
+                        if c_out:
+                            clients = json.loads(c_out.decode())
+                            yt_wins = [c.get("address", "") for c in clients if "music.youtube" in str(c.get("class", "")).lower() or "music.youtube" in str(c.get("title", "")).lower()]
+                            if yt_wins:
+                                new_addr = yt_wins[0]
+                                break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.3)
+
+                if new_addr:
+                    await asyncio.create_subprocess_shell(f"hyprctl dispatch movetoworkspacesilent 3,address:{new_addr}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    await asyncio.sleep(0.1)
+
+                if orig_ws:
+                    await asyncio.create_subprocess_shell(f"hyprctl dispatch workspace {orig_ws}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    await asyncio.sleep(0.05)
+                if orig_window:
+                    await asyncio.create_subprocess_shell(f"hyprctl dispatch focuswindow address:{orig_window}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+
+            return BackendObservation(f"Playing '{query}' on YouTube Music PWA.", True)
         except Exception as e:
             return BackendObservation("", False, str(e))
 
@@ -724,35 +802,60 @@ class CloseWindowBackend(ActionBackend):
         if not window_name:
             return BackendObservation("", False, "No window_name provided")
         
-        import sys, asyncio, shlex
-        safe_name = shlex.quote(window_name)
-        if sys.platform == "darwin":
-            command = f"osascript -e 'tell application \"{window_name}\" to quit'"
-        elif sys.platform == "win32":
-            command = f"taskkill /IM {safe_name}.exe /F"
-        else:
-            command = f"wmctrl -c {safe_name}"
-            
         if simulation_mode:
             return BackendObservation(f"Simulated closing window: {window_name}", True)
-            
+
+        import sys, asyncio, json, shlex, signal, os
+        target_lower = window_name.lower().strip()
+        safe_name = shlex.quote(window_name)
+
         try:
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            success = process.returncode == 0
-            
-            # For Linux, try hyprctl if wmctrl fails
-            if not success and sys.platform.startswith("linux"):
-                hypr_cmd = f"hyprctl dispatch closewindow {safe_name}"
-                process = await asyncio.create_subprocess_shell(hypr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                stdout, stderr = await process.communicate()
-                success = process.returncode == 0
-                
-            return BackendObservation(f"Closed window {window_name}", success, error=stderr.decode() if stderr and not success else None)
+            # 1. On Hyprland (Linux), query active windows via hyprctl clients -j
+            if sys.platform.startswith("linux"):
+                try:
+                    c_proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    c_out, _ = await c_proc.communicate()
+                    if c_proc.returncode == 0 and c_out:
+                        clients = json.loads(c_out.decode())
+                        matched_items = []
+                        for c in clients:
+                            cls = str(c.get("class", "")).lower()
+                            title = str(c.get("title", "")).lower()
+                            addr = c.get("address", "")
+                            pid = c.get("pid")
+                            
+                            is_music_query = any(k in target_lower for k in ["music", "youtube music", "yt music", "youtube", "pwa", "song", "player"])
+                            if is_music_query and ("music.youtube" in cls or "music.youtube" in title or "youtube music" in title or "youtube" in cls):
+                                matched_items.append((addr, pid))
+                            elif target_lower in cls or target_lower in title:
+                                matched_items.append((addr, pid))
+                                
+                        if matched_items:
+                            logger.info(f"CloseWindowBackend: Closing {len(matched_items)} Hyprland window(s) for '{window_name}'")
+                            for addr, pid in matched_items:
+                                if pid:
+                                    try:
+                                        os.kill(int(pid), signal.SIGKILL)
+                                    except Exception:
+                                        pass
+                                if addr:
+                                    close_p = await asyncio.create_subprocess_exec("wmctrl", "-i", "-c", addr, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                                    await close_p.communicate()
+                            return BackendObservation(f"Closed window '{window_name}'", True)
+                except Exception as e:
+                    logger.debug(f"Hyprland client search notice: {e}")
+
+            # 2. Cross-platform fallback for macOS, Windows, and X11
+            if sys.platform == "darwin":
+                command = f"osascript -e 'tell application \"{window_name}\" to quit'"
+            elif sys.platform == "win32":
+                command = f"taskkill /IM \"{safe_name}.exe\" /F || powershell -command \"Get-Process | Where-Object {{$_.MainWindowTitle -like '*{safe_name}*'}} | Stop-Process -Force\""
+            else:
+                command = f"wmctrl -c {safe_name} || pkill -i -f {safe_name} || true"
+
+            process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await process.communicate()
+            return BackendObservation(f"Closed window '{window_name}'", True)
         except Exception as e:
             return BackendObservation("", False, str(e))
 
@@ -761,26 +864,63 @@ class CloseAppBackend(ActionBackend):
         app_name = request.payload.get("app_name") or request.payload.get("app") or request.payload.get("window_name")
         if not app_name:
             return BackendObservation("", False, "No app_name provided")
-        
-        import sys, asyncio, shlex
-        safe_name = shlex.quote(app_name)
-        if sys.platform == "darwin":
-            command = f"osascript -e 'tell application \"{app_name}\" to quit'"
-        elif sys.platform == "win32":
-            command = f"taskkill /IM \"{app_name}.exe\" /F || taskkill /FI \"WINDOWTITLE eq {safe_name}*\" /F"
-        else:
-            command = f"wmctrl -c '{safe_name}' || pkill -i -f '{safe_name}' || killall '{safe_name}' || true"
             
         if simulation_mode:
             return BackendObservation(f"Simulated closing application: {app_name}", True)
-            
+
+        import sys, asyncio, json, shlex, signal, os
+        target_lower = app_name.lower().strip()
+        safe_name = shlex.quote(app_name)
+
         try:
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
+            # 1. On Hyprland (Linux), query active windows via hyprctl clients -j
+            if sys.platform.startswith("linux"):
+                try:
+                    c_proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    c_out, _ = await c_proc.communicate()
+                    if c_proc.returncode == 0 and c_out:
+                        clients = json.loads(c_out.decode())
+                        matched_items = []
+                        for c in clients:
+                            cls = str(c.get("class", "")).lower()
+                            title = str(c.get("title", "")).lower()
+                            addr = c.get("address", "")
+                            pid = c.get("pid")
+                            
+                            is_music_query = any(k in target_lower for k in ["music", "youtube music", "yt music", "youtube", "pwa", "song", "player"])
+                            if is_music_query and ("music.youtube" in cls or "music.youtube" in title or "youtube music" in title or "youtube" in cls):
+                                matched_items.append((addr, pid))
+                            elif target_lower in cls or target_lower in title:
+                                matched_items.append((addr, pid))
+                                
+                        if matched_items:
+                            logger.info(f"CloseAppBackend: Closing {len(matched_items)} Hyprland window(s) for '{app_name}'")
+                            for addr, pid in matched_items:
+                                if pid:
+                                    try:
+                                        os.kill(int(pid), signal.SIGKILL)
+                                    except Exception:
+                                        pass
+                                if addr:
+                                    close_p = await asyncio.create_subprocess_exec("wmctrl", "-i", "-c", addr, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                                    await close_p.communicate()
+                            return BackendObservation(f"Closed application '{app_name}'", True)
+                except Exception as e:
+                    logger.debug(f"Hyprland app search notice: {e}")
+
+            # 2. Cross-platform fallback for macOS, Windows, and X11
+            if sys.platform == "darwin":
+                command = f"osascript -e 'tell application \"{app_name}\" to quit'"
+            elif sys.platform == "win32":
+                command = f"taskkill /IM \"{app_name}.exe\" /F || taskkill /FI \"WINDOWTITLE eq {safe_name}*\" /F"
+            else:
+                command = f"wmctrl -c {safe_name} || pkill -i -f {safe_name} || killall {safe_name} || true"
+
+            process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await process.communicate()
+            return BackendObservation(f"Closed application '{app_name}'", True)
+        except Exception as e:
+            return BackendObservation("", False, str(e))
             success = process.returncode == 0 or sys.platform.startswith("linux")
             return BackendObservation(f"Closed application: {app_name}", True)
         except Exception as e:

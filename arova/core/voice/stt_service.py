@@ -79,8 +79,9 @@ class STTRuntimeService:
                 self._audio_buffer.extend(chunk)
 
     def _transcribe(self, audio_bytes: bytes, turn_id: str):
-        if len(audio_bytes) < 32000:  # Less than 1 second at 16kHz int16
-            logging.warning("Audio buffer too short for STT, ignoring.")
+        if len(audio_bytes) < 4000:  # Less than 0.125 seconds at 16kHz int16
+            logging.warning(f"Audio buffer too short for STT ({len(audio_bytes)} bytes), ignoring.")
+            self._event_bus.emit("runtime", "INTERRUPT_REQUESTED", {"source": "stt_too_short"})
             return
 
         try:

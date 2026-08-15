@@ -55,9 +55,16 @@ class RuntimeEventMapper:
         elif internal_type == "TRANSCRIPT_FINAL":
             event = cls._base_event("voice.transcript", "voice_runtime")
             event["text"] = payload.get("transcript", "")
+            event["transcript"] = payload.get("transcript", "")
         elif internal_type == "TEXT_STREAM_STARTED":
             event = cls._base_event("stream.start", "cognition_runtime")
             event["stream_id"] = f"asst_{payload.get('turn_id', 'default')}"
+        elif internal_type == "TTS_STARTED":
+            event = cls._base_event("voice.speaker_state", "voice_runtime")
+            event["speaking"] = True
+        elif internal_type in ("TTS_COMPLETED", "TTS_INTERRUPTED"):
+            event = cls._base_event("voice.speaker_state", "voice_runtime")
+            event["speaking"] = False
 
         elif internal_type == "TEXT_CHUNK_GENERATED":
             event = cls._base_event("stream.delta", "cognition_runtime")

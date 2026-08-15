@@ -25,6 +25,11 @@ class MemoryExtractor:
         """
         extracted = []
         
+        # Skip LLM memory extraction for short transient inputs (< 12 chars e.g. typos, greetings)
+        user_text = (turn.user_transcript or "").strip()
+        if len(user_text) < 12:
+            return extracted
+
         if not self.orchestrator:
             logging.warning("MemoryExtractor: No orchestrator set, cannot extract memories.")
             return extracted
@@ -50,18 +55,20 @@ If there are no persistent facts to extract, return an empty array [].
 Respond ONLY with valid JSON array.
 """
 
+        asst_text = (turn.assistant_response or "").strip()
         messages = [
-            {"role": "user", "content": f"User Transcript: {turn.user_transcript}\nAssistant Response: {turn.assistant_response}"}
+            {"role": "user", "content": f"User Transcript: {user_text[:500]}\nAssistant Response: {asst_text[:300]}"}
         ]
         
         try:
-            # We use standard depth since this runs asynchronously in the background and shouldn't block
+            # Use FAST depth for background extraction to use instant low-quota models (llama-3.1-8b-instant / compound-mini)
             from arova.core.models.schema import ReasoningDepth, ReasoningBudget
             result = await self.orchestrator.invoke_structured(
                 messages=messages,
                 system_prompt=system_prompt,
-                depth=ReasoningDepth.STANDARD,
-                budget=ReasoningBudget(max_tokens=512)
+                depth=ReasoningDepth.FAST,
+                budget=ReasoningBudget(max_tokens=256),
+                model="llama-3.1-8b-instant"
             )
             
             # The orchestrator returns parsed JSON if the provider gave valid JSON, else {"content": "..."}

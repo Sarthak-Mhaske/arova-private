@@ -20,7 +20,9 @@ interface OrbState {
   triggerPulse: () => void;
 }
 
-export const useOrbState = create<OrbState>((set) => ({
+let autoSettleTimer: ReturnType<typeof setTimeout> | null = null;
+
+export const useOrbState = create<OrbState>((set, get) => ({
   mode: 'present',
   details: '',
   rawState: '',
@@ -31,7 +33,22 @@ export const useOrbState = create<OrbState>((set) => ({
     warmth: 0.5,
     saturation: 0.5
   },
-  setMode: (mode, details = '', rawState = '') => set({ mode, details, rawState }),
+  setMode: (mode, details = '', rawState = '') => {
+    if (autoSettleTimer) {
+      clearTimeout(autoSettleTimer);
+      autoSettleTimer = null;
+    }
+    set({ mode, details, rawState });
+
+    // Dynamic auto-settle safety watchdog: if orb enters thinking/executing/reflecting, auto-settle after 7s
+    if (['thinking', 'executing', 'reflecting'].includes(mode)) {
+      autoSettleTimer = setTimeout(() => {
+        if (['thinking', 'executing', 'reflecting'].includes(get().mode)) {
+          set({ mode: 'present', details: '', rawState: 'idle' });
+        }
+      }, 7000);
+    }
+  },
   setModulation: (mod) => set((state) => ({ modulation: { ...state.modulation, ...mod } })),
   triggerPulse: () => {
     set({ isPulsing: true });

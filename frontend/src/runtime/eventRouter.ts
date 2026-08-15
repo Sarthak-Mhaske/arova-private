@@ -85,8 +85,19 @@ export function routeEvent(event: any) {
       }
       break;
 
+    case 'voice.partial_transcript':
+      if (event.transcript && event.transcript.trim()) {
+        useCognitionState.getState().updateLiveUserInput(event.transcript, event.turn_id);
+      }
+      break;
+
     case 'voice.transcript':
-      useCognitionState.getState().addUserInput(event.text);
+      const finalTranscript = event.transcript || event.text || '';
+      if (finalTranscript && finalTranscript.trim()) {
+        useCognitionState.getState().finalizeLiveUserInput(finalTranscript, event.turn_id);
+      } else {
+        useCognitionState.getState().cancelLiveUserInput();
+      }
       break;
     case 'memory.ghost':
       useCognitionState.getState().addItems([{

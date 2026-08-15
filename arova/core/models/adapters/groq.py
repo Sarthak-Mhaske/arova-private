@@ -67,26 +67,14 @@ class GroqAdapter(ModelAdapter):
         import threading
         threading.Thread(target=_sync_stream, daemon=True).start()
         
-        buffer = ""
         while True:
             chunk = await queue.get()
             if isinstance(chunk, Exception):
                 raise chunk
             if chunk is None:
-                if buffer.strip():
-                    yield buffer.strip()
                 break
-                
-            buffer += chunk
-            if any(p in buffer for p in [". ", "? ", "! ", "\n"]):
-                for p in [". ", "? ", "! ", "\n"]:
-                    if p in buffer:
-                        idx = buffer.find(p) + len(p)
-                        sentence = buffer[:idx].strip()
-                        buffer = buffer[idx:]
-                        if sentence:
-                            yield sentence
-                        break
+            if chunk:
+                yield chunk
 
     def _sync_call(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int, stream: bool, structured: bool = False) -> Any:
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -113,7 +101,8 @@ class GroqAdapter(ModelAdapter):
         if structured:
             payload["response_format"] = {"type": "json_object"}
         
-        response = requests.post(url, headers=headers, json=payload, timeout=10.0, stream=stream)
+        timeout_config = (10.0, 60.0) if stream else 30.0
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout_config, stream=stream)
         if response.status_code != 200:
             logging.error(f"Groq API error {response.status_code}: {response.text[:500]}")
         response.raise_for_status()

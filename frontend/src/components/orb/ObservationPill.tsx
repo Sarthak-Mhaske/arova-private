@@ -23,12 +23,12 @@ export const ObservationPill: React.FC = () => {
     dotState = 'thinking';
     primaryText = details ? details : "Reasoning & routing intent...";
   }
-  // Priority 3: Streaming / Responding state
+  // Priority 4: Streaming / Responding state
   else if (mode === 'streaming') {
     dotState = 'active';
     primaryText = "Synthesizing response...";
   }
-  // Priority 4: Active listening
+  // Priority 5: Active listening (waiting for speech)
   else if (mode === 'listening') {
     dotState = 'pulse';
     primaryText = "Listening to input...";

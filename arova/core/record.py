@@ -27,7 +27,7 @@ def get_recording_config(config: dict[str, Any]) -> dict[str, Any]:
     rec_cfg = config.get("recording", {})
     
     backend = str(rec_cfg.get("backend", "auto"))
-    output_dir = str(rec_cfg.get("output_dir", "~/.cache/hyprvoice"))
+    output_dir = str(rec_cfg.get("output_dir", "~/.cache/arova"))
     filename_prefix = str(rec_cfg.get("filename_prefix", "voice_command"))
     
     try:

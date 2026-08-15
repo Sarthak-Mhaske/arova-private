@@ -1,0 +1,28 @@
+14:00 — Opened file: /home/sarthak/project/api/stripe_webhooks.py
+14:01 — Browser: Stripe Webhook Signatures
+14:03 — Terminal: $ pytest tests/test_webhooks.py -v
+14:03 — Tests: FAILED — test_signature_validation FAILED — AssertionError: signature mismatch
+14:04 — Searched: "stripe webhook signature validation intermittent failure" (google)
+14:06 — Browser: Stripe Webhook Best Practices
+14:09 — Opened file: /home/sarthak/project/api/middleware.py
+14:11 — Searched: "NTP clock skew webhook timestamp validation" (google)
+14:13 — Terminal: $ date && ntpq -p
+14:13 — Output: Wed Jan 15 14:13:19 UTC 2025
+remote refid st t when poll reach delay offset jitter
+*0.ubuntu.pool 17.253.68.253 2 u 42 64 377 0.523 +0.412 0.089
+14:15 — Searched: "stripe webhook tolerance window seconds" (google)
+14:17 — Browser: Stripe replay attack prevention
+14:19 — Terminal: $ python3 -c "import time; print(time.time())"
+14:20 — Output: NTP offset: +0.412ms — within acceptable range
+14:21 — Browser: Stripe replay prevention — tolerance window is 300 seconds
+14:22 — Opened file: /home/sarthak/project/api/stripe_webhooks.py
+14:23 — Searched: "flask request body consumed before middleware" (google)
+14:25 — Browser: Flask Request.get_data
+14:27 — Edited: /home/sarthak/project/api/middleware.py
+         Change: Added request.get_data(cache=True) before middleware chain
+14:28 — Terminal: $ pytest tests/test_webhooks.py -v
+14:28 — Tests: PASSED — test_signature_validation PASSED in 0.34s
+14:29 — Terminal: $ pytest tests/ -v --tb=short
+14:29 — Tests: PASSED — 47 passed in 4.21s
+14:30 — Git diff: api/middleware.py
+14:31 — Browser: Stripe webhook verification

@@ -12,8 +12,8 @@ class TurnCoordinator:
         self._event_bus = event_bus
         self._session = session
         
-        self._required_silence_s = 3.0
-        self._initial_timeout_s = 10.0
+        self._required_silence_s = 2.8
+        self._initial_timeout_s = 15.0
         self._last_speech_time = 0.0
         self._turn_start_time = 0.0
         self._is_speaking = False
@@ -31,7 +31,7 @@ class TurnCoordinator:
         threading.Thread(target=self._monitor_turn, daemon=True, name="TurnCoordinatorMonitor").start()
 
     def _on_wake_detected(self, payload):
-        """A wake word starts a fresh turn and revokes any existing turn's authority."""
+        """A wake word or manual mic click starts a fresh turn."""
         self._turn_active = True
         self._is_speaking = False
         self._speech_detected_this_turn = False
@@ -39,9 +39,8 @@ class TurnCoordinator:
         self._turn_start_time = RuntimeClock.now()
         
         # Start a new pending turn so a valid turn_id exists for the pipeline.
-        # The transcript will be filled in later by STT.
         self._session.start_new_turn("")
-        logging.info(f"TurnCoordinator: New turn started. turn_id={self._session.get_authoritative_turn_id()}")
+        logging.info(f"TurnCoordinator: New turn started (listening...). turn_id={self._session.get_authoritative_turn_id()}")
         
     def _on_activity_changed(self, payload):
         """VAD updates our local speech model."""
@@ -50,10 +49,11 @@ class TurnCoordinator:
             
         self._is_speaking = payload.is_speaking
         if self._is_speaking:
+            now = payload.timestamp if hasattr(payload, 'timestamp') and payload.timestamp else RuntimeClock.now()
+            self._last_speech_time = now
             if not self._speech_detected_this_turn:
-                logging.info("TurnCoordinator: Speech detected! Cancelling initial timeout.")
+                logging.info("TurnCoordinator: Speech started! Silence monitoring activated.")
                 self._speech_detected_this_turn = True
-            self._last_speech_time = payload.timestamp
             
     def _on_interrupt(self, payload):
         """An interruption forcibly ends the turn's listening phase."""
@@ -68,24 +68,26 @@ class TurnCoordinator:
             if not self._turn_active:
                 continue
                 
-            # If we've been silent longer than the required silence duration
             current_time = RuntimeClock.now()
-            if not self._is_speaking:
-                if self._last_speech_time > 0:
+            
+            if self._speech_detected_this_turn:
+                # Speech was detected — monitor post-speech silence duration
+                if not self._is_speaking and self._last_speech_time > 0:
                     if current_time - self._last_speech_time > self._required_silence_s:
                         self._turn_active = False
-                        logging.info("TurnCoordinator: Silence threshold reached, finalizing turn.")
+                        logging.info(f"TurnCoordinator: Post-speech silence threshold ({self._required_silence_s}s) reached, finalizing turn.")
                         self._event_bus.emit("voice", "FINALIZE_TURN", {"timestamp": current_time})
-                else:
-                    if current_time - self._turn_start_time > self._initial_timeout_s:
+                elif self._is_speaking:
+                    # Extended speech guard: max 30s speaking time
+                    if current_time - self._turn_start_time > 30.0:
                         self._turn_active = False
-                        logging.info("TurnCoordinator: Initial timeout reached (no speech detected). Finalizing turn.")
+                        logging.info("TurnCoordinator: Maximum turn speech duration (30s) reached, finalizing turn.")
                         self._event_bus.emit("voice", "FINALIZE_TURN", {"timestamp": current_time})
             else:
-                # BULLETPROOF FALLBACK: Never hang forever
-                if current_time - self._turn_start_time > 10.0:
+                # Speech has NOT been detected yet — wait up to initial timeout
+                if current_time - self._turn_start_time > self._initial_timeout_s:
                     self._turn_active = False
-                    logging.info("TurnCoordinator: Maximum turn length (10s) reached. Force finalizing turn to prevent hang.")
+                    logging.info(f"TurnCoordinator: Initial listening timeout ({self._initial_timeout_s}s) reached with no speech detected. Finalizing turn.")
                     self._event_bus.emit("voice", "FINALIZE_TURN", {"timestamp": current_time})
                     
     def stop(self):

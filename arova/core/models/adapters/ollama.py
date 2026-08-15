@@ -11,6 +11,10 @@ class OllamaAdapter(ModelAdapter):
     Local edge inference using Ollama HTTP API.
     """
     def __init__(self, host: str = "http://localhost:11434"):
+        if not host or not str(host).strip():
+            host = "http://localhost:11434"
+        elif not str(host).startswith(("http://", "https://")):
+            host = f"http://{host}"
         self.host = host
         
     @property

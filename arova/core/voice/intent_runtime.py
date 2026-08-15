@@ -267,8 +267,10 @@ class IntentRuntime:
             if hasattr(self._session, "_memory_runtime") and self._session._memory_runtime:
                 await self._session._memory_runtime.recall_ghosts_for_transcript(transcript)
             
-            # 1. Start turn if needed
-            if not turn_id or not self._session.is_authoritative(turn_id):
+            # 1. Update existing turn transcript or start new turn if needed
+            if turn_id and self._session.is_authoritative(turn_id):
+                self._session.update_active_user_transcript(transcript)
+            else:
                 turn = self._session.start_new_turn(transcript)
                 turn_id = turn.turn_id
 
@@ -312,8 +314,8 @@ class IntentRuntime:
                         ]
                     })
 
-            # 3. Single route call with full conversation history (Bug 6 fix: removed redundant first call)
-            messages = self._session.build_api_messages(max_turns=10)
+            # 3. Single route call with light context history
+            messages = self._session.build_api_messages(max_turns=4)
             if is_keyword_restore and active_ws:
                 messages.append({
                     "role": "system",
@@ -516,117 +518,111 @@ class IntentRuntime:
             logging.info(f"IntentRuntime invoked for turn_id={turn_id}")
             self._event_bus.emit("cognition", "COGNITION_STATE_CHANGED", {"state": "GENERATING_RESPONSE", "details": ""})
             
-            identity_block = (
-                "========================\n"
-                "1. WHO YOU ARE\n"
-                "========================\n"
-                "You are Arova — an ambient operating system layer that runs natively on the user's desktop.\n"
-                "You are NOT a chatbot. You are a persistent, context-aware intelligence woven into their daily workflow.\n"
-                "You are NOT the user. You never claim ownership of the user's projects, code, or work.\n"
-                "\n"
-                "YOUR CORE CAPABILITIES (explain these thoroughly when asked):\n"
-                "• AMBIENT INTELLIGENCE: You observe the user's desktop environment — open apps, active windows, \n"
-                "  media playback, system state — and build a continuous understanding of their workflow trajectory.\n"
-                "• SEMANTIC MEMORY: You learn facts, preferences, and patterns about the user over time. This memory \n"
-                "  is persistent across sessions — you remember their projects, tools, habits, and interests.\n"
-                "• WORKSPACE RESTORATION: When the user returns after being away, you can restore their full working \n"
-                "  context — the apps they had open, the files they were editing, the tabs they were browsing.\n"
-                "• SYSTEM CONTROL: You can open/close apps, control media playback, adjust volume, search the web, \n"
-                "  take screenshots, launch files/folders, focus specific windows, and run shell commands.\n"
-                "• SCREEN ANALYSIS: You can take a screenshot and analyze what's currently on screen to answer \n"
-                "  questions about visible content (but you need to take a screenshot first — you don't have a \n"
-                "  persistent live video feed of their screen).\n"
-                "• COGNITIVE THREADING: You track multiple conversation threads and can resume context from earlier \n"
-                "  in the session without the user repeating themselves.\n"
-                "• PROACTIVE AWARENESS: You detect work patterns and can surface relevant context, suggest next \n"
-                "  actions, and help the user resume flow after interruptions.\n"
-                "• PRIVACY-FIRST: Everything runs locally on their machine. Their data never leaves their device \n"
-                "  except for LLM inference calls which use only the immediate conversation context.\n"
-                "\n"
-                "WHEN EXPLAINING YOURSELF TO NEW USERS:\n"
-                "Be thorough and specific. Don't just list features — explain how each one helps in daily life. \n"
-                "Give concrete examples: 'When you come back to your desk in the morning, I can restore exactly \n"
-                "where you left off — the VS Code files you had open, the browser tabs, even the Spotify playlist.' \n"
-                "Make the user understand WHY Arova is valuable, not just WHAT it can do.\n"
-                "\n"
-                "CHAT PATH BEHAVIOR:\n"
-                "You are currently in the conversational chat path. If the user asks you to perform an action \n"
-                "(open an app, play music, etc.), you CAN do it — but you need them to phrase it as a clear command. \n"
-                "Guide them: 'Absolutely, just say something like: open brave' or 'Sure, try: play music'.\n"
-                "Never say 'I cannot' or 'I don't have the ability' — you DO have these abilities."
-            )
+            # ── COMPACT IDENTITY (token-optimized) ──
+            # Only expand capabilities when user explicitly asks
+            _intro_keywords = ["what can you do", "what are you", "who are you", "your capabilities",
+                               "what do you do", "tell me about yourself", "help me understand",
+                               "introduce yourself", "what is arova"]
+            _wants_intro = any(kw in transcript.lower() for kw in _intro_keywords)
 
-            # ── ADAPTIVE VERBOSITY ──
-            # Determine response length based on: voice vs chat, and explicit detail signals
+            if _wants_intro:
+                identity_block = (
+                    "You are Arova — an ambient OS layer on the user's desktop. Not a chatbot. "
+                    "A persistent, context-aware intelligence in their daily workflow.\n"
+                    "You are NOT the user. Never claim ownership of their projects or work.\n\n"
+                    "CAPABILITIES (explain thoroughly with concrete examples):\n"
+                    "• Ambient Intelligence: observe open apps, windows, media, system state\n"
+                    "• Semantic Memory: learn facts, preferences, patterns across sessions\n"
+                    "• Workspace Restoration: restore apps, files, tabs from previous session\n"
+                    "• System Control: open/close apps, media, volume, web search, screenshots, shell commands\n"
+                    "• Screen Analysis: take & analyze screenshots (not live video)\n"
+                    "• Cognitive Threading: track conversation threads, resume context\n"
+                    "• Proactive Awareness: detect patterns, suggest next actions\n"
+                    "• Privacy-First: everything local except LLM inference calls\n\n"
+                    "Give concrete examples. Make the user understand WHY Arova is valuable.\n"
+                    "If user asks to perform an action, guide them: 'Just say: open brave' or 'Try: play music'. "
+                    "Never say 'I cannot' — you DO have these abilities."
+                )
+            else:
+                identity_block = (
+                    "You are Arova — an ambient OS layer on the user's desktop. "
+                    "You observe their workflow, remember across sessions, and can control apps/media/system. "
+                    "You are NOT the user. Never claim their work as yours.\n"
+                    "If they ask you to do something (open app, play music), guide them to phrase it as a command. "
+                    "Never say 'I cannot' — you have system control abilities."
+                )
+
+            # ── DYNAMIC INTENT & RELEVANCE ANALYZER ──
             lower_transcript = transcript.lower()
             explicit_detail = any(w in lower_transcript for w in [
                 "in depth", "in detail", "detailed", "thorough", "comprehensive", 
                 "explain in detail", "elaborate", "tell me everything", "full explanation",
                 "deep dive", "tell me all"
             ])
+
+            # Dynamically determine if workspace/memory context is actually relevant to the user query
+            is_workspace_relevant = any(w in lower_transcript for w in [
+                "file", "code", "workspace", "project", "repo", "git", "commit", "working on",
+                "edit", "function", "class", "bug", "terminal", "log", "error", "build", "script",
+                "folder", "path", "directory", "arova", "readme"
+            ])
             
+            is_memory_relevant = is_workspace_relevant or any(w in lower_transcript for w in [
+                "remember", "recall", "memory", "prefer", "like", "favorite", "last time", "before", "history",
+                "who am i", "my name", "what do i"
+            ])
+
             if explicit_detail:
                 verbosity_directive = (
-                    "RESPONSE LENGTH: The user explicitly asked for a detailed answer. "
-                    "Provide a thorough, comprehensive response with full explanations, examples, and context. "
-                    "Use clear section headers and bullet points for readability."
+                    "RESPONSE STYLE: The user requested an in-depth response. "
+                    "Provide a thorough, comprehensive explanation with clear structure and necessary detail."
                 )
             elif not vocalize:
-                # Chat input — user is typing, probably wants a reasonably detailed answer
+                # Chat input
                 verbosity_directive = (
-                    "RESPONSE LENGTH: The user typed this in chat. Provide a moderately detailed answer — "
-                    "enough to be genuinely useful (e.g. top 3-5 recommendations with a sentence each) "
-                    "but don't write an essay. Aim for 4-8 sentences or a short list."
+                    "RESPONSE STYLE: Text chat mode. Provide a clear, moderately detailed answer "
+                    "useful for reading on screen."
                 )
             else:
-                # Voice input — user is speaking, wants a concise spoken answer
+                # Spoken voice mode
                 verbosity_directive = (
-                    "RESPONSE LENGTH: The user SPOKE this via voice. Keep your response SHORT and conversational — "
-                    "2-3 sentences max for simple questions, 4-5 sentences for knowledge questions. "
-                    "No long lists, no essay-style paragraphs. Be direct and useful. "
-                    "If the topic needs more detail, give the top 2-3 items and offer to elaborate."
+                    "SPOKEN VOICE MODE: The user is communicating via microphone. "
+                    "Adapt your response dynamically to sound like a natural human voice partner:\n"
+                    "• For actions & system commands (e.g. closing windows, playing music): State a brief, natural confirmation of the action.\n"
+                    "• For quick questions (e.g. time, weather, facts): Answer directly and conversationally.\n"
+                    "• For complex inquiries: Give the core answer clearly, avoiding markdown tables or bulleted lists that sound awkward when read aloud.\n"
+                    "• Never include unsolicited disclaimers or background summaries of unrelated context.\n"
+                    "• NEVER speak raw http/https URLs aloud. Refer to apps, websites, or tools naturally by name (e.g. 'on YouTube Music', 'on GitHub')."
                 )
 
+            url_policy = "• NEVER output raw URLs in spoken voice mode." if vocalize else "• Include full https:// URLs when recommending web resources."
             response_policy_block = (
-                "========================\n"
-                "2. RESPONSE POLICY\n"
-                "========================\n"
-                "• Respond in natural, conversational plain text. Never wrap responses in curly braces or brackets.\n"
-                "• Be warm but concise. You're a daily companion, not a corporate assistant.\n"
-                "• HONESTY & TRANSPARENCY: If you genuinely cannot do something, say so clearly and explain why. \n"
-                "  For example: 'I can't see your screen in real-time, but I can take a screenshot to check — want me to?'\n"
-                "  Never pretend you did something you didn't. Never fabricate results.\n"
-                "• ATTRIBUTION: Distinguish between OBSERVED USER WORK and REQUESTED ASSISTANT WORK.\n"
-                "  When asked 'What was I doing?', say 'You were working on...' not 'I was working on...'.\n"
-                "• GROUNDING: Distinguish between FACTS (directly observed telemetry) and INFERENCES.\n"
-                "  If you don't have enough context, say 'I don't have enough context for that' rather than guessing.\n"
-                "• CORRECTIONS: If the user says 'no', they're usually correcting a misunderstanding. \n"
-                "  Don't execute the correction as a new command.\n"
+                "RESPONSE POLICY:\n"
+                "• Natural, authentic conversational style. Daily intelligent partner, not corporate assistant.\n"
+                "• Never fabricate results or pretend you performed actions you didn't.\n"
+                "• Distinguish observed user work vs your own: 'You were working on...' not 'I was working on...'\n"
                 f"• {verbosity_directive}\n"
-                "• When explaining yourself to new users ('what can you do?'), give a thorough answer with concrete examples.\n"
-                "• Keep markdown minimal in spoken responses. Use it only for code blocks if sharing code.\n"
-                "• When you recommend external resources (courses, docs, videos, textbooks), ALWAYS include a full "
-                "https:// URL on its own line so the user can say 'open these resources' and Arova can open them. "
-                "Never recommend a resource by name only."
+                f"{url_policy}"
             )
 
             memory_context = ""
-            if hasattr(self._session, "_memory_runtime") and self._session._memory_runtime:
+            if is_memory_relevant and hasattr(self._session, "_memory_runtime") and self._session._memory_runtime:
                 memory_context = await self._session._memory_runtime.recall_context()
                 
             workspace_summary = ""
-            workspace_manager = getattr(self, '_workspace_manager', None) or getattr(self._session, 'workspace_manager', None) or getattr(self._context_synthesizer, 'workspace_manager', None)
-            if workspace_manager:
-                active_ws = workspace_manager.get_active_workspace()
-                if active_ws and hasattr(active_ws, 'get_workspace_summary_prompt'):
-                    workspace_summary = active_ws.get_workspace_summary_prompt()
+            if is_workspace_relevant:
+                workspace_manager = getattr(self, '_workspace_manager', None) or getattr(self._session, 'workspace_manager', None) or getattr(self._context_synthesizer, 'workspace_manager', None)
+                if workspace_manager:
+                    active_ws = workspace_manager.get_active_workspace()
+                    if active_ws and hasattr(active_ws, 'get_workspace_summary_prompt'):
+                        workspace_summary = active_ws.get_workspace_summary_prompt()
 
             from arova.core.time import get_live_temporal_context_prompt
             import time as _time_mod
             last_accessed = None
             if hasattr(self._session, 'get_previous_user_turn_timestamp'):
                 last_accessed = self._session.get_previous_user_turn_timestamp()
-            if not last_accessed and workspace_manager:
+            if not last_accessed and is_workspace_relevant and workspace_manager:
                 active_ws = workspace_manager.get_active_workspace()
                 if active_ws:
                     last_accessed = active_ws.reality.last_accessed_at
@@ -635,25 +631,40 @@ class IntentRuntime:
             if hasattr(self._session, '_persistent_last_active_ts'):
                 self._session._persistent_last_active_ts = _time_mod.time()
                 
-            try:
-                cognitive_context = await self._context_synthesizer.synthesize(transcript, mentions=mentions or [])
-                grounded_block = cognitive_context.to_system_prompt_block() if cognitive_context else ""
-            except Exception as e:
-                logging.warning(f"Grounded synthesis failed, falling back to legacy: {e}")
-                grounded_block = ""
-                cognitive_context = None
+            grounded_block = ""
+            if is_workspace_relevant:
+                try:
+                    cognitive_context = await self._context_synthesizer.synthesize(transcript, mentions=mentions or [])
+                    grounded_block = cognitive_context.to_system_prompt_block() if cognitive_context else ""
+                except Exception as e:
+                    logging.warning(f"Grounded synthesis failed: {e}")
 
             prompt_parts = [identity_block, response_policy_block, temporal_block]
+            
             if grounded_block:
                 prompt_parts.append(grounded_block)
             elif workspace_summary:
                 prompt_parts.append(workspace_summary)
-            elif getattr(self._session, '_system_prompt', None):
-                prompt_parts.append(f"========================\nOBSERVED CONTEXT\n========================\n{self._session._system_prompt}")
+            elif is_workspace_relevant and getattr(self._session, '_system_prompt', None):
+                sys_ctx = self._session._system_prompt
+                prompt_parts.append(f"========================\nOBSERVED CONTEXT\n========================\n{sys_ctx}")
                 
             if memory_context:
-                prompt_parts.append(f"========================\n4. HISTORICAL MEMORY (Episodic Profile)\n========================\n{memory_context}")
+                prompt_parts.append(f"RECALLED MEMORY:\n{memory_context}")
                 
+            # Limit conversation history for voice turns dynamically based on mode
+            max_turns = 4 if vocalize and not explicit_detail else 6
+            if len(messages) > max_turns:
+                messages = messages[-max_turns:]
+
+            # Filter out error/failure messages from history — they waste tokens and confuse context
+            _error_phrases = ["unable to reach llm", "unable to connect", "no inference provider",
+                              "encountered an unexpected error", "max retries exceeded", "connection refused"]
+            messages = [
+                m for m in messages
+                if not (m.get("role") == "assistant" and any(ep in m.get("content", "").lower() for ep in _error_phrases))
+            ]
+
             sys_prompt = "\n\n".join(prompt_parts)        
             # Stream chunks directly to TTS Runtime (Phase 7.5 streaming TTS)
             logging.info(f"IntentRuntime: Emitting stream start for {turn_id}")
@@ -661,8 +672,10 @@ class IntentRuntime:
                 "turn_id": turn_id
             })
             
+            collected_chunks = []
             async def _on_chunk_batch(text_chunk: str, seq: int):
                 logging.info(f"IntentRuntime: LLM batch seq {seq}: '{text_chunk}'")
+                collected_chunks.append(text_chunk)
                 self._event_bus.emit("voice", "TEXT_CHUNK_GENERATED", {
                     "text": text_chunk,
                     "turn_id": turn_id,
@@ -673,16 +686,44 @@ class IntentRuntime:
             from arova.core.cognition.buffer import AsyncDeltaBuffer
             buffer = AsyncDeltaBuffer(_on_chunk_batch, flush_interval_s=0.05)
             
+            # ── DYNAMIC COGNITIVE ROUTING ANALYZER ──
+            # Determine reasoning depth based on prompt complexity, length, and task type
+            prompt_len = len(transcript)
+            lower_transcript = transcript.lower()
+            complex_keywords = [
+                "roadmap", "plan", "strategy", "priority", "schedule", "course", "hackathon",
+                "explain", "analyze", "architecture", "design", "debug", "code", "algorithm",
+                "dsa", "database", "system", "research", "exam", "assessment", "difference",
+                "tradeoff", "deep dive", "step by step"
+            ]
+            is_complex_task = any(kw in lower_transcript for kw in complex_keywords) or prompt_len > 350
+
+            if is_complex_task:
+                target_depth = ReasoningDepth.DEEP
+                token_budget = 4096
+                logging.info(f"IntentRuntime: Route -> DEEP REASONING (len={prompt_len}, complex={is_complex_task})")
+            elif prompt_len < 150 and not vocalize:
+                target_depth = ReasoningDepth.FAST
+                token_budget = 2048
+                logging.info(f"IntentRuntime: Route -> FAST CHAT (len={prompt_len})")
+            else:
+                target_depth = ReasoningDepth.STANDARD
+                token_budget = 4096
+                logging.info(f"IntentRuntime: Route -> STANDARD CHAT (len={prompt_len})")
+
             stream_success = False
             try:
-                async for token in self._router.models.invoke_stream(messages, sys_prompt, depth=ReasoningDepth.STANDARD):
+                async for token in self._router.models.invoke_stream(
+                    messages, sys_prompt, depth=target_depth, budget=ReasoningBudget(max_tokens=token_budget)
+                ):
                     await buffer.append(token)
                     stream_success = True
             except Exception as e:
-                logging.warning(f"IntentRuntime LLM stream failed, will use grounded mock fallback: {e}")
+                logging.warning(f"IntentRuntime LLM stream failed: {e}")
                 stream_success = False
                 
-            full_text = getattr(buffer, '_full_text', "")
+            await buffer.close()
+            full_text = "".join(collected_chunks).strip()
 
             # === TIER 1 MOAT FALLBACK: If no tokens or provider error, synthesize grounded mock ===
             is_error_response = any(phrase in full_text.lower() for phrase in [
@@ -694,9 +735,7 @@ class IntentRuntime:
                 logging.warning("IntentRuntime: clearing error provider text before grounded fallback")
                 full_text = ""
                 stream_success = False
-                if hasattr(buffer, '_full_text'):
-                    buffer._full_text = ""
-            if not stream_success or not full_text.strip() or is_error_response:
+            if not stream_success or not full_text or is_error_response:
                 grounded = getattr(cognitive_context, 'grounded_resources', None) if 'cognitive_context' in locals() else None
                 active_ws = None
                 try:
@@ -705,12 +744,16 @@ class IntentRuntime:
                         active_ws = wm.get_active_workspace()
                 except:
                     pass
-                if active_ws and (transcript.strip().lower() in ["where was i?", "where was i", "what was i doing", "resume", "what's next", "whats next", "continue"] or "where" in transcript.lower() or "what was" in transcript.lower()):
+                resume_intents = {"where was i?", "where was i", "what was i doing", "resume", "what's next", "whats next", "continue", "where did i leave off"}
+                is_resume_query = transcript.strip().lower() in resume_intents or any(q in transcript.lower() for q in ["where was i", "what was i doing", "what was i working on", "where did i leave off"])
+                if active_ws and is_resume_query:
                     title = getattr(active_ws, 'title', 'your workspace')
                     goal = getattr(active_ws.understanding.momentum, 'goal', 'continuing work') if hasattr(active_ws, 'understanding') else 'continuing work'
                     blocker = getattr(active_ws.understanding.momentum, 'current_blocker', None) if hasattr(active_ws, 'understanding') else None
                     nxt = getattr(active_ws.understanding.momentum, 'next_action', None) if hasattr(active_ws, 'understanding') else None
                     conf = getattr(active_ws.understanding.confidence, 'score', 0) if hasattr(active_ws, 'understanding') else 0
+                    if conf is None:
+                        conf = 0
                     hedge = "I think " if 0 < conf < 70 else ""
                     res_list = list(active_ws.reality.resources.keys())[:3] if hasattr(active_ws, 'reality') and active_ws.reality.resources else []
                     res_cite = ", ".join([r.split('/')[-1] for r in res_list]) if res_list else "your recent files"
@@ -731,25 +774,19 @@ class IntentRuntime:
                     for chunk in [mock_answer[i:i+60] for i in range(0, len(mock_answer), 60)]:
                         await buffer.append(chunk)
                     full_text = mock_answer
-                elif grounded and "@" in transcript and cognitive_context and getattr(cognitive_context, 'mentioned_resources', None):
+                import re
+                has_explicit_at_mention = bool(re.search(r'(?:\s|^)@[\w.-]+', transcript))
+                if grounded and has_explicit_at_mention and cognitive_context and getattr(cognitive_context, 'mentioned_resources', None):
                     mock_answer = f"Got it — you @-mentioned a file. Here's the verbatim context I'm grounding on:\n\n{cognitive_context.mentioned_resources[:800]}\n\nBased on that, the issue is around the code above. Want me to trace the flow?"
-                    for chunk in [mock_answer[i:i+60] for i in range(0, len(mock_answer), 60)]:
-                        await buffer.append(chunk)
-                    full_text = mock_answer
-                elif cognitive_context and getattr(cognitive_context, 'search_results', None):
-                    hits = cognitive_context.search_results[:600]
-                    mock_answer = f"Found via unified search (verbatim, no hallucination):\n\n{hits}\n\nAbove are exact hits from your local index — files, decisions, docs. Want me to open one?"
                     for chunk in [mock_answer[i:i+60] for i in range(0, len(mock_answer), 60)]:
                         await buffer.append(chunk)
                     full_text = mock_answer
                 else:
                     if not full_text.strip():
-                        fallback = "I'm in minimal demo mode (no LLM key). But I can still answer from your VERBATIM ground truth — try `where was I?` or `@runtime.py what's stuck?`"
+                        fallback = "Unable to reach LLM provider. Please check network connection or provider settings."
                         await buffer.append(fallback)
                         full_text = fallback
 
-            await buffer.close()
-            
             exec_meta = {}
             if hasattr(self._router, 'models') and hasattr(self._router.models, 'router'):
                 exec_meta = getattr(self._router.models.router, 'last_execution_metadata', {}) or {}

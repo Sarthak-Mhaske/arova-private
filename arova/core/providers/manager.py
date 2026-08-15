@@ -112,20 +112,23 @@ class ProviderManager:
     def get(self, name: str) -> Optional[CognitiveProvider]:
         return self._providers.get(name)
 
-    def get_for_capability(self, capability: Capability, preferred_order: List[str]) -> CognitiveProvider:
+    def get_for_capability(self, capability: Capability, preferred_order: List[str], exclude: Optional[List[str]] = None) -> CognitiveProvider:
         """
         Return the best healthy provider from the preferred_order list
         that supports the given capability.
         Falls back to MockProvider if nothing is available.
         """
+        exclude_set = set(exclude or [])
         for provider_name in preferred_order:
+            if provider_name in exclude_set:
+                continue
             provider = self._providers.get(provider_name)
             if provider and capability in provider.supported_capabilities and provider.health.is_available:
                 return provider
 
         # All preferred providers failed — try ANY healthy provider
         for provider in self._providers.values():
-            if provider.name != "mock" and capability in provider.supported_capabilities and provider.health.is_available:
+            if provider.name not in exclude_set and provider.name != "mock" and capability in provider.supported_capabilities and provider.health.is_available:
                 return provider
 
         # Everything is dead

@@ -10,7 +10,7 @@ class ExecutionLogger:
     Structured JSONL logging for the orchestration runtime.
     Append-only, streamable, observability-ready.
     """
-    def __init__(self, log_dir: str = "~/.cache/hyprvoice"):
+    def __init__(self, log_dir: str = "~/.cache/arova"):
         self.log_path = Path(os.path.expanduser(log_dir)) / "execution.log"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()

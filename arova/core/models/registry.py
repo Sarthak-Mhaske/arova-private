@@ -270,27 +270,22 @@ class ModelRegistry:
             ModelCandidate(
                 id="llama-3.3-70b-versatile", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=420, cost_per_1k_tokens=0.59, selection_reason=["Baseline Groq fast chat model"]
-            ),
-            ModelCandidate(
-                id="openai/gpt-oss-120b", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=500, cost_per_1k_tokens=0.60, selection_reason=["Baseline Groq reasoning model"]
-            ),
-            ModelCandidate(
-                id="qwen/qwen3.6-27b", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=500, cost_per_1k_tokens=3.00, selection_reason=["Baseline Groq vision & reasoning model"]
-            ),
-            ModelCandidate(
-                id="openai/gpt-oss-20b", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=210, cost_per_1k_tokens=0.30, selection_reason=["Baseline Groq fast chat model"]
+                latency_ms=300, cost_per_1k_tokens=0.59, selection_reason=["High capacity 70k TPM Groq versatile model"]
             ),
             ModelCandidate(
                 id="llama-3.1-8b-instant", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=150, cost_per_1k_tokens=0.08, selection_reason=["Baseline Groq instant low-latency model"]
+                latency_ms=120, cost_per_1k_tokens=0.08, selection_reason=["High capacity 30k TPM Groq instant model"]
+            ),
+            ModelCandidate(
+                id="groq/compound", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=250, cost_per_1k_tokens=0.20, selection_reason=["High capacity 70k TPM Groq compound model"]
+            ),
+            ModelCandidate(
+                id="groq/compound-mini", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=180, cost_per_1k_tokens=0.10, selection_reason=["High capacity 70k TPM Groq mini model"]
             )
         ]
         self._candidates["openai"] = [

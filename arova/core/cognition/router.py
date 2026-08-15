@@ -36,8 +36,17 @@ class CognitiveRouter:
         import re
         norm = text.lower().strip().strip(".!?")
         
-        # If the text contains multiple intents, fallback to LLM Action Planner
-        if any(w in norm for w in [" and ", " then ", ","]):
+        # ── YOUTUBE SEARCH ACTION ──
+        yt_match = re.match(r'^(?:can\s+you\s+)?(?:please\s+)?open\s+youtube[,\s]+(.+)', norm)
+        if yt_match:
+            yt_query = yt_match.group(1).strip()
+            if yt_query:
+                import urllib.parse
+                yt_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(yt_query)}"
+                return self._build_fast_graph("Open YouTube Search", "open_app", {"app_name": yt_url})
+
+        # If the text contains multiple distinct sequential intents, fallback to LLM Action Planner
+        if any(w in norm for w in [" and then ", " then "]):
             return None
         
         # ── NEGATION / DISMISSAL GUARD ──
@@ -179,6 +188,15 @@ class CognitiveRouter:
                     {},
                 )
 
+        # ── YOUTUBE SEARCH ACTION ──
+        yt_match = re.match(r'^(?:can\s+you\s+)?(?:please\s+)?open\s+youtube[,\s]+(.+)', norm)
+        if yt_match:
+            yt_query = yt_match.group(1).strip()
+            if yt_query:
+                import urllib.parse
+                yt_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(yt_query)}"
+                return self._build_fast_graph("Open YouTube Search", "open_app", {"app_name": yt_url})
+
         # ── APP LAUNCH ──
         # Only known desktop apps. Reject multi-word deictic garbage.
         KNOWN_APPS = {
@@ -243,12 +261,37 @@ class CognitiveRouter:
         text = latest[0]
         norm = text.lower().strip().strip(".!?")
         
+        # ── 0. GRATITUDE & CONVERSATIONAL ACKNOWLEDGEMENT (PURE CHAT) ──
+        # Gratitude messages like "thanks", "ok thanks", "thank you so much", "theek hai thanks"
+        # MUST NEVER trigger physical OS actions, open/close apps, or modify workspace state.
+        gratitude_exact = {
+            "thanks", "thank you", "ok thanks", "okay thanks", "ok thank you", "okay thank you",
+            "thanks a lot", "thank you so much", "thanks arova", "thank you arova",
+            "great thanks", "got it thanks", "alright thanks", "perfect thanks",
+            "cool thanks", "nice thanks", "awesome thanks", "sounds good", "looks good",
+            "dhanyavad", "dhanyawad", "shukriya", "theek hai thanks", "accha thanks",
+            "no thanks", "no thank you", "that's all", "thats all", "nothing else", "i'm good", "im good",
+            "done thanks", "super thanks", "ok", "okay", "alright", "got it", "cool", "nice", "awesome",
+            "theek hai", "accha", "sahi hai", "badhiya"
+        }
+        if norm in gratitude_exact or (
+            any(norm.startswith(g) or norm.endswith(g) for g in ["thanks", "thank you", "dhanyavad", "shukriya"])
+            and not any(act in norm for act in ["open ", "play ", "search ", "run ", "close ", "kill ", "set volume", "code ", "launch "])
+        ):
+            self._emit_state("CONVERSATIONAL_RESPONSE", "User expressed gratitude/acknowledgment.")
+            return IntentClassification(
+                category="chat",
+                confidence=1.0,
+                depth=ReasoningDepth.FAST,
+                reasoning="User expressed gratitude or conversational acknowledgment."
+            )
+
         # Check message history for screen analysis follow-up context (e.g. user says "yes" or "take a screenshot")
         prev_asst_msgs = [m["content"].lower() for m in reversed(messages[:-1]) if m["role"] == "assistant"]
         if prev_asst_msgs:
             last_asst = prev_asst_msgs[0]
             if any(w in last_asst for w in ["screenshot", "screen", "video", "check"]):
-                if norm in ["yes", "yeah", "yep", "sure", "do it", "go ahead", "ok", "okay", "take screenshot", "take a screenshot", "take ss", "check it", "please do"]:
+                if norm in ["yes", "yeah", "yep", "sure", "do it", "go ahead", "take screenshot", "take a screenshot", "take ss", "check it", "please do"]:
                     query = "Analyze the video and content on the screen to answer the user's question."
                     return IntentClassification(
                         category="fast_action",
@@ -296,20 +339,21 @@ class CognitiveRouter:
             "  2. Follow-ups like 'do it', 'yes', 'go ahead' after an action context = action.\n"
             "  3. Multi-step commands ('open X and Y') = action.\n"
             "  4. Screen/video analysis requests ('is this video good', 'check my screen') = action.\n"
-            "- chat: The user is asking a QUESTION, requesting ADVICE, or having a CONVERSATION.\n"
-            "  Examples of 'chat': 'recommend some YouTubers', 'what are good resources to learn Python',\n"
-            "  'can you make a learning roadmap for me', 'what if I watch X first then Y', 'tell me about X',\n"
-            "  'explain how Y works', 'what are the best channels', 'give me a study plan',\n"
+            "- chat: The user is asking a QUESTION, requesting ADVICE, expressing GRATITUDE (e.g. 'thanks', 'ok thanks', 'thank you', 'dhanyavad'), or having a CONVERSATION.\n"
+            "  Examples of 'chat': 'thanks', 'ok thanks', 'thank you so much', 'got it', 'cool', 'sounds good',\n"
+            "  'recommend some YouTubers', 'what are good resources to learn Python', 'explain how Y works',\n"
             "  'hello', 'what can you do', any knowledge/advice/recommendation question.\n"
-            "  CRITICAL: If the user asks 'tell me good resources' or 'recommend channels', that is 'chat' NOT 'action'.\n"
-            "  The user is asking for INFORMATION, not asking you to open apps.\n"
+            "  CRITICAL RULE 1: If the user says 'thanks', 'ok thanks', 'thank you', 'got it', 'nice', or expresses gratitude/acknowledgment,\n"
+            "  that is 100% 'chat' NOT 'action'. NEVER trigger an action or close/open apps when the user is simply thanking you.\n"
+            "  CRITICAL RULE 2: If the user asks for advice or recommendations ('tell me good resources'), that is 'chat' NOT 'action'.\n"
             "- deep_planning: Requires multi-step execution, heavy memory recall, or complex orchestration.\n"
             "Return JSON matching: {\"category\": \"...\", \"confidence\": 0.0-1.0, \"reasoning\": \"...\"}"
         )
         
         budget = ReasoningBudget(max_tokens=200)
+        route_messages = messages[-2:] if len(messages) > 2 else messages
         res = await self.models.invoke_structured(
-            messages=messages, 
+            messages=route_messages, 
             system_prompt=sys_prompt, 
             depth=ReasoningDepth.FAST, 
             budget=budget

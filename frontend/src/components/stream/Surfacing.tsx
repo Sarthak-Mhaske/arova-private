@@ -12,7 +12,9 @@ import remarkGfm from 'remark-gfm';
 const formatMarkdownText = (text: string): string => {
   if (!text) return '';
 
-  let normalized = text;
+  let normalized = text
+    .replace(/[\u202f\xa0]/g, ' ')
+    .replace(/[\u2011]/g, '-');
 
   // 1. Auto-close unclosed code block fences (odd number of ```) so streaming code is NEVER mangled by prose regexes
   const backticks = (normalized.match(/```/g) || []).length;
@@ -25,32 +27,23 @@ const formatMarkdownText = (text: string): string => {
 
   return parts.map((part) => {
     if (part.startsWith('```')) {
-      // It's a code block! Extract language and body
-      let cleaned = part.replace(/^```([a-zA-Z0-9_-]+)?([^\n\s])/g, '```$1\n$2');
-      const inner = cleaned.slice(3, -3); // Strip ``` boundaries
-      const firstLineBreak = inner.indexOf('\n');
-      
-      let lang = 'python';
-      let rawCode = inner;
+      // Cleanly extract language tag and code body without mangling identifier names (e.g. bash -> bas\nh bug)
+      const matchFence = part.match(/^```([a-zA-Z0-9_+-]*)\s*\n?([\s\S]*?)```$/);
+      if (matchFence) {
+        let lang = matchFence[1].trim() || 'code';
+        let rawCode = matchFence[2] || '';
 
-      if (firstLineBreak !== -1) {
-        const potentialLang = inner.slice(0, firstLineBreak).trim();
-        if (potentialLang && !potentialLang.includes(' ') && potentialLang.length < 20) {
-          lang = potentialLang;
-          rawCode = inner.slice(firstLineBreak + 1);
+        // If code statement keywords were concatenated on a single line, format into multiline
+        if (!rawCode.includes('\n')) {
+          rawCode = rawCode
+            .replace(/(import\s+[a-zA-Z0-9_]+)(import|from|class|def)/g, '$1\n$2')
+            .replace(/(class\s+[a-zA-Z0-9_]+:)(def|import)/g, '$1\n  $2')
+            .replace(/(def\s+[a-zA-Z0-9_]+\([^)]*\):)([a-zA-Z0-9_.]+=|self\.)/g, '$1\n    $2')
+            .replace(/(self\.[a-zA-Z0-9_.]+\([^)]*\))(def|self\.)/g, '$1\n    $2');
         }
-      }
 
-      // If code statement keywords were concatenated on a single line, format into multiline
-      if (!rawCode.includes('\n')) {
-        rawCode = rawCode
-          .replace(/(import\s+[a-zA-Z0-9_]+)(import|from|class|def)/g, '$1\n$2')
-          .replace(/(class\s+[a-zA-Z0-9_]+:)(def|import)/g, '$1\n  $2')
-          .replace(/(def\s+[a-zA-Z0-9_]+\([^)]*\):)([a-zA-Z0-9_.]+=|self\.)/g, '$1\n    $2')
-          .replace(/(self\.[a-zA-Z0-9_.]+\([^)]*\))(def|self\.)/g, '$1\n    $2');
+        return `\n\n\`\`\`${lang}\n${rawCode.trim()}\n\`\`\`\n\n`;
       }
-
-      return `\n\n\`\`\`${lang}\n${rawCode.trim()}\n\`\`\`\n\n`;
     }
 
     // For non-code prose text:
@@ -84,8 +77,8 @@ const formatMarkdownText = (text: string): string => {
 
     formatted = cleanedParagraphs.join('\n\n');
 
-    // Fix missing newlines before list items ("factors:1.**Data Modeling**" -> "factors:\n\n1. **Data Modeling**")
-    formatted = formatted.replace(/([^\n])(\d+)\.\s*(\*{0,2}|_{0,2}|`{0,3})([A-Za-z0-9])/g, '$1\n\n$2. $3$4');
+    // Fix missing newlines before list items safely without breaking version strings like "1.8b" or "llama-1-8b"
+    formatted = formatted.replace(/([:.;])\s*(\d+)\.\s+(\*{2}[^*]+\*{2}|[A-Z][a-z]+)/g, '$1\n\n$2. $3');
 
     // Fix period followed directly by Capital letter ("down.To" -> "down. To") without breaking URLs
     formatted = formatted.replace(/([a-z0-9]{3,})\.([A-Z][a-z])/g, '$1. $2');
@@ -120,7 +113,9 @@ const CopyCodeButton: React.FC<{ code: string }> = ({ code }) => {
         padding: '3px 9px',
         transition: 'all 0.2s ease',
         textTransform: 'none',
-        letterSpacing: 'normal'
+        letterSpacing: 'normal',
+        whiteSpace: 'nowrap',
+        flexShrink: 0
       }}
       title="Copy code to clipboard"
     >
@@ -250,7 +245,7 @@ export const Surfacing: React.FC<{ item: SurfacingItem }> = ({ item }) => {
                   return (
                     <div style={{ margin: '18px 0', background: 'rgba(14, 12, 18, 0.95)', border: '1px solid var(--hairline-2)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
                       <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--hairline-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#d4a878', fontFamily: 'monospace', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.1em' }}>
-                        <span>{lang}</span>
+                        <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{lang}</span>
                         <CopyCodeButton code={codeText} />
                       </div>
                       <pre style={{ padding: '18px 22px', margin: 0, overflowX: 'hidden', fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace", fontSize: '13.5px', lineHeight: '1.65', color: '#e8d0a4', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'transparent' }}>

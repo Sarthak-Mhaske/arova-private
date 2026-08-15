@@ -93,7 +93,10 @@ class MicrophoneSession:
             
         if stream_to_close:
             try:
-                stream_to_close.stop()
+                try:
+                    stream_to_close.abort()
+                except Exception:
+                    stream_to_close.stop()
                 stream_to_close.close()
             except Exception as e:
                 logging.error(f"Error stopping audio capture stream: {e}")

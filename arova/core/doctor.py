@@ -32,7 +32,7 @@ def format_doctor_report(report: dict[str, Any]) -> str:
     cmds = report.get("commands", {})
     
     lines = [
-        "HyprVoice Doctor",
+        "Arova Doctor",
         "",
         f"Python Version: {report.get('python_version', 'unknown')}",
         "",
