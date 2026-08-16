@@ -2,7 +2,8 @@ import asyncio
 import logging
 import json
 import os
-from typing import Callable, Awaitable, Any, Dict
+import sys
+from typing import Callable, Awaitable, Any, Dict, Optional
 from arova.core.ipc.transport import TransportAdapter
 
 class UnixSocketTransport(TransportAdapter):
@@ -15,13 +16,24 @@ class UnixSocketTransport(TransportAdapter):
     async def start_server(self, on_message: Callable[[str, Any], Awaitable[None]]):
         self._on_message = on_message
         
+        # On Windows or systems without start_unix_server, IPC is handled via WebSocket bridge
+        if sys.platform == "win32" or not hasattr(asyncio, "start_unix_server"):
+            logging.info("UDS transport disabled on Windows (using WebSocket IPC bridge)")
+            return
+
         if os.path.exists(self.socket_path):
-            os.remove(self.socket_path)
+            try:
+                os.remove(self.socket_path)
+            except Exception:
+                pass
             
         os.makedirs(os.path.dirname(self.socket_path), exist_ok=True)
         
-        self._server = await asyncio.start_unix_server(self._handle_client, path=self.socket_path)
-        logging.info(f"UDS Server listening on {self.socket_path}")
+        try:
+            self._server = await asyncio.start_unix_server(self._handle_client, path=self.socket_path)
+            logging.info(f"UDS Server listening on {self.socket_path}")
+        except Exception as e:
+            logging.warning(f"Could not start UDS server on {self.socket_path}: {e}")
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         client_id = str(id(writer))

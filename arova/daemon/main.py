@@ -14,13 +14,53 @@ from arova.core.bridge.runtime_events import RuntimeEventMapper
 from arova.core.cognition.ledger import InvestigationLedger
 from arova.core.cognition.investigator import ProactiveInvestigator
 
-logging.basicConfig(level=logging.INFO)
+import os
+import traceback
+
+def _setup_daemon_logging():
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    handlers = [logging.StreamHandler(sys.stdout)]
+
+    # Determine cross-platform log directory
+    log_dirs = []
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            log_dirs.append(os.path.join(local_app_data, "Arova"))
+        user_profile = os.environ.get("USERPROFILE")
+        if user_profile:
+            log_dirs.append(os.path.join(user_profile, ".config", "arova"))
+    else:
+        home = os.path.expanduser("~")
+        log_dirs.append(os.path.join(home, ".config", "arova"))
+        if sys.platform == "darwin":
+            log_dirs.append(os.path.join(home, "Library", "Logs", "Arova"))
+
+    for log_dir in log_dirs:
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "daemon.log")
+            handlers.append(logging.FileHandler(log_file, encoding="utf-8", mode="a"))
+            break
+        except Exception:
+            continue
+
+    logging.basicConfig(level=logging.INFO, format=log_format, handlers=handlers)
+
+    # Crash excepthook for unhandled exceptions
+    def _uncaught_exception_handler(exc_type, exc_value, exc_tb):
+        err_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        logging.critical(f"FATAL UNCAUGHT DAEMON EXCEPTION:\n{err_msg}")
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _uncaught_exception_handler
+
+_setup_daemon_logging()
 
 
 class ArovaDaemon:
     def __init__(self):
         self.runtime = None
-        import os
         sock_path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "arova.sock")
         self.transport = UnixSocketTransport(sock_path)
         ws_port = int(os.environ.get("WS_PORT", 8765))

@@ -237,6 +237,32 @@ impl SupervisorState {
                     cmd.arg("--safe-mode");
                 }
 
+                // Prepare log output destination
+                let log_path = if cfg!(windows) {
+                    std::env::var_os("LOCALAPPDATA")
+                        .map(std::path::PathBuf::from)
+                        .map(|p| p.join("Arova"))
+                        .unwrap_or_else(|| exe_dir.clone())
+                        .join("daemon_supervisor.log")
+                } else {
+                    std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .map(|p| p.join(".config/arova"))
+                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+                        .join("daemon_supervisor.log")
+                };
+
+                if let Some(parent) = log_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+
+                if let Ok(file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+                    if let Ok(err_file) = file.try_clone() {
+                        cmd.stdout(std::process::Stdio::from(file));
+                        cmd.stderr(std::process::Stdio::from(err_file));
+                    }
+                }
+
                 // Detach daemon process group so it keeps running in the background when frontend UI closes
                 #[cfg(unix)]
                 {
