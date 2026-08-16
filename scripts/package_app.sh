@@ -27,7 +27,7 @@ npm run build
 # 3. Step 3: Compile Tauri Desktop App & AppImage
 echo ""
 echo "▶ [3/4] Compiling Tauri desktop binary and AppImage bundle..."
-npm run tauri build
+npm run tauri build || npm run tauri build -- --no-bundle
 
 # 4. Step 4: Assemble Release Artifacts
 echo ""

@@ -104,17 +104,20 @@ fi
 # Create Zip Archive
 cd "$RELEASE_DIR"
 zip -r -q "$REPO_ROOT/Arova-macOS.zip" "Arova.app"
-echo "✓ Zip archive created: $REPO_ROOT/Arova-macOS.zip"
+echo "✓ Standalone Zip archive created: $REPO_ROOT/Arova-macOS.zip"
 
-# Check / Generate DMG
-DMG_FILE=$(find "$REPO_ROOT/frontend/src-tauri/target/release/bundle/dmg" -name "*.dmg" 2>/dev/null | head -n 1)
-if [ -f "$DMG_FILE" ]; then
-    cp -f "$DMG_FILE" "$REPO_ROOT/Arova-macOS.dmg"
-    echo "✓ DMG created by Tauri: $REPO_ROOT/Arova-macOS.dmg"
-elif command -v hdiutil &>/dev/null; then
-    echo "Creating Arova-macOS.dmg with hdiutil..."
-    hdiutil create -volname "Arova" -srcfolder "$RELEASE_DIR" -ov -format UDZO "$REPO_ROOT/Arova-macOS.dmg"
-    echo "✓ DMG created via hdiutil: $REPO_ROOT/Arova-macOS.dmg"
+# Generate Drag-to-Applications Disk Image (DMG) containing full Arova.app + Applications symlink
+echo "Creating complete Drag-to-Applications Disk Image (DMG)..."
+DMG_STAGING="$REPO_ROOT/dmg_staging"
+rm -rf "$DMG_STAGING" "$REPO_ROOT/Arova-macOS.dmg"
+mkdir -p "$DMG_STAGING"
+cp -rf "$RELEASE_DIR/Arova.app" "$DMG_STAGING/"
+ln -s /Applications "$DMG_STAGING/Applications"
+
+if command -v hdiutil &>/dev/null; then
+    hdiutil create -volname "Arova" -srcfolder "$DMG_STAGING" -ov -format UDZO "$REPO_ROOT/Arova-macOS.dmg"
+    rm -rf "$DMG_STAGING"
+    echo "✓ Full macOS DMG created: $REPO_ROOT/Arova-macOS.dmg"
 fi
 
 echo ""
