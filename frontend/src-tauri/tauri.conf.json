@@ -36,9 +36,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "resources/**/*"
-    ],
+    "resources": [],
     "linux": {
       "appimage": {
         "bundleMediaFramework": false
