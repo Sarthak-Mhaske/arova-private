@@ -7,7 +7,13 @@ echo "[build_arovad] Compiling standalone Arova Daemon (arovad) via PyInstaller.
 cd "$(dirname "$0")/.."
 
 # Run PyInstaller using arovad.spec for clean onedir packaging
-./venv/bin/pyinstaller --noconfirm --clean arovad.spec
+if [ -f "./venv/bin/pyinstaller" ]; then
+    ./venv/bin/pyinstaller --noconfirm --clean arovad.spec
+elif command -v pyinstaller &> /dev/null; then
+    pyinstaller --noconfirm --clean arovad.spec
+else
+    python3 -m PyInstaller --noconfirm --clean arovad.spec
+fi
 
 echo "[build_arovad] Build complete! Checking dist/arovad..."
 ls -ld dist/arovad dist/arovad/arovad

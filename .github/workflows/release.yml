@@ -31,11 +31,15 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
       - name: Install Python Dependencies & PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller -r requirements.txt || true
-          pip install pyinstaller
+          pip install -r requirements.txt
 
       - name: Package Linux Standalone Release
         run: |
@@ -67,10 +71,15 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
       - name: Install Python Dependencies & PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Package Windows Release
         shell: pwsh
@@ -102,10 +111,15 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
       - name: Install Python Dependencies & PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Package macOS Release
         run: |

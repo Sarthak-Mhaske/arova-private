@@ -26,6 +26,9 @@ fi
 echo ""
 echo "▶ [2/4] Compiling frontend assets..."
 cd "$REPO_ROOT/frontend"
+if [ ! -d "node_modules" ]; then
+    npm install
+fi
 npm run build
 
 # 3. Build Tauri macOS Application Bundle (.app & .dmg)

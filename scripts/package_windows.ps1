@@ -23,6 +23,9 @@ if (Test-Path "$RepoRoot\venv\Scripts\pyinstaller.exe") {
 # 2. Compile Frontend UI Assets
 Write-Host "`n▶ [2/4] Compiling frontend assets..." -ForegroundColor Yellow
 Set-Location "$RepoRoot\frontend"
+if (-not (Test-Path "node_modules")) {
+    npm install
+}
 npm run build
 
 # 3. Build Tauri Windows Application
