@@ -28,8 +28,17 @@ if (-not (Test-Path "node_modules")) {
 }
 npm run build
 
-# 3. Build Tauri Windows Application
-Write-Host "`n▶ [3/4] Compiling Tauri desktop binary..." -ForegroundColor Yellow
+# Copy backend resources into Tauri resources folder before bundle build
+Write-Host "`n▶ [2.5/4] Staging daemon resources for Tauri bundler..." -ForegroundColor Yellow
+$TauriResourceDir = "$RepoRoot\frontend\src-tauri\resources\arovad"
+if (Test-Path $TauriResourceDir) { Remove-Item -Recurse -Force $TauriResourceDir }
+New-Item -ItemType Directory -Force -Path $TauriResourceDir | Out-Null
+if (Test-Path "$RepoRoot\dist\arovad") {
+    Copy-Item -Recurse "$RepoRoot\dist\arovad\*" "$TauriResourceDir"
+}
+
+# 3. Build Tauri Windows Application (Produces native NSIS setup exe + binaries)
+Write-Host "`n▶ [3/4] Compiling Tauri desktop binary and NSIS installer..." -ForegroundColor Yellow
 npm run tauri build
 
 # 4. Assemble Release Directory
@@ -37,6 +46,14 @@ Write-Host "`n▶ [4/4] Assembling release package..." -ForegroundColor Yellow
 $ReleaseDir = "$RepoRoot\release-windows"
 if (Test-Path $ReleaseDir) { Remove-Item -Recurse -Force $ReleaseDir }
 New-Item -ItemType Directory -Path $ReleaseDir | Out-Null
+
+# Copy NSIS installer if generated
+$NsisExe = Get-ChildItem "$RepoRoot\frontend\src-tauri\target\release\bundle\nsis" -Filter "*.exe" -Recurse | Select-Object -First 1
+if ($NsisExe) {
+    Copy-Item $NsisExe.FullName "$RepoRoot\Arova-Setup-x64.exe" -Force
+    Copy-Item $NsisExe.FullName "$ReleaseDir\Arova-Setup-x64.exe" -Force
+    Write-Host "✓ Native NSIS Windows Installer ready: $RepoRoot\Arova-Setup-x64.exe" -ForegroundColor Green
+}
 
 $TauriExe = Get-ChildItem "$RepoRoot\frontend\src-tauri\target\release" -Filter "arova.exe" -Recurse | Select-Object -First 1
 if (-not $TauriExe) {

@@ -875,7 +875,6 @@ class ArovaDaemon:
         """Clean up any dangling socket files or orphaned daemon processes holding port 8765."""
         import os
         import signal
-        import subprocess
         import time
 
         xdg_sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "arova.sock")
@@ -887,26 +886,25 @@ class ArovaDaemon:
                 except Exception as e:
                     logging.warning(f"Could not remove stale socket file {sock_file}: {e}")
 
+        # Pure cross-platform process cleanup via psutil (Linux, macOS, Windows)
         try:
-            out = subprocess.check_output(f"fuser {port}/tcp 2>/dev/null || true", shell=True).decode().strip()
-            pids = [int(p) for p in out.split() if p.isdigit()]
+            import psutil
             current_pid = os.getpid()
-            other_pids = [p for p in pids if p != current_pid]
-            if other_pids:
-                logging.warning(f"Port {port} is held by PID(s) {other_pids}. Cleaning up stale processes...")
-                for pid in other_pids:
-                    try:
-                        os.kill(pid, signal.SIGTERM)
-                    except (ProcessLookupError, OSError):
-                        pass
-                time.sleep(0.3)
-                for pid in other_pids:
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                    except (ProcessLookupError, OSError):
-                        pass
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['pid'] == current_pid:
+                        continue
+                    name = (proc.info.get('name') or '').lower()
+                    cmdline = " ".join(proc.info.get('cmdline') or []).lower()
+                    if "arovad" in name or "arovad" in cmdline or "arova.daemon.main" in cmdline:
+                        for conn in proc.connections(kind='inet'):
+                            if conn.laddr.port == port:
+                                logging.warning(f"Killing stale daemon PID {proc.pid} holding port {port}...")
+                                proc.kill()
+                except Exception:
+                    pass
         except Exception as e:
-            logging.warning(f"Port cleanup check returned: {e}")
+            logging.debug(f"Port cleanup check: {e}")
 
     async def start(self):
         is_safe_mode = "--safe-mode" in sys.argv
