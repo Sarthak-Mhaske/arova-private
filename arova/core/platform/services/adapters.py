@@ -104,6 +104,58 @@ class JetBrainsAdapter(DeepAdapter):
         return True
 
 
+class SublimeAdapter(DeepAdapter):
+    """Deep integration for Sublime Text (`subl file:line:col`)."""
+    app_exec = "subl"
+
+    def enhance_launch_args(self, base_args: List[str], intent: "RestoreIntent") -> List[str]:
+        args = list(base_args)
+        if not intent.resource_path:
+            return args
+        line = intent.metadata.get("line")
+        col = intent.metadata.get("col")
+        target = intent.resource_path
+        if line is not None:
+            target += f":{line}"
+            if col is not None:
+                target += f":{col}"
+        if intent.resource_path in args:
+            idx = args.index(intent.resource_path)
+            args[idx] = target
+        else:
+            args.append(target)
+        return args
+
+    def can_restore_state(self) -> bool:
+        return True
+
+
+class ZedAdapter(DeepAdapter):
+    """Deep integration for Zed editor (`zed file:line:col`)."""
+    app_exec = "zed"
+
+    def enhance_launch_args(self, base_args: List[str], intent: "RestoreIntent") -> List[str]:
+        args = list(base_args)
+        if not intent.resource_path:
+            return args
+        line = intent.metadata.get("line")
+        col = intent.metadata.get("col")
+        target = intent.resource_path
+        if line is not None:
+            target += f":{line}"
+            if col is not None:
+                target += f":{col}"
+        if intent.resource_path in args:
+            idx = args.index(intent.resource_path)
+            args[idx] = target
+        else:
+            args.append(target)
+        return args
+
+    def can_restore_state(self) -> bool:
+        return True
+
+
 # Registry of all available adapters, keyed by executable name
 ADAPTER_REGISTRY: Dict[str, DeepAdapter] = {}
 
@@ -115,13 +167,31 @@ def register_adapter(adapter: DeepAdapter) -> None:
     if adapter.app_exec == "code":
         ADAPTER_REGISTRY["code-oss"] = adapter
         ADAPTER_REGISTRY["code-insiders"] = adapter
+        ADAPTER_REGISTRY["codium"] = adapter
+        ADAPTER_REGISTRY["vscodium"] = adapter
+        ADAPTER_REGISTRY["cursor"] = adapter
+        ADAPTER_REGISTRY["antigravity"] = adapter
+        ADAPTER_REGISTRY["antigravity-ide"] = adapter
+        ADAPTER_REGISTRY["agy"] = adapter
+    elif adapter.app_exec == "idea":
+        ADAPTER_REGISTRY["pycharm"] = adapter
+        ADAPTER_REGISTRY["pycharm-community"] = adapter
+        ADAPTER_REGISTRY["webstorm"] = adapter
+        ADAPTER_REGISTRY["clion"] = adapter
+        ADAPTER_REGISTRY["goland"] = adapter
+        ADAPTER_REGISTRY["rider"] = adapter
+    elif adapter.app_exec == "subl":
+        ADAPTER_REGISTRY["sublime_text"] = adapter
+        ADAPTER_REGISTRY["sublime-text"] = adapter
 
 
 def get_adapter(exec_name: str) -> Optional[DeepAdapter]:
     """Look up a deep adapter by executable name. Returns None if none exists."""
-    return ADAPTER_REGISTRY.get(exec_name)
+    return ADAPTER_REGISTRY.get(exec_name.lower())
 
 
 # Auto-register built-in adapters
 register_adapter(VSCodeAdapter())
 register_adapter(JetBrainsAdapter())
+register_adapter(SublimeAdapter())
+register_adapter(ZedAdapter())

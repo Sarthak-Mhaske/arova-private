@@ -8,12 +8,16 @@
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  text-rendering: geometricPrecision;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
   height: 100%;
   overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 body {

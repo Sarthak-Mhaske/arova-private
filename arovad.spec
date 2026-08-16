@@ -3,7 +3,12 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = []
 binaries = []
-hiddenimports = ['arova', 'arova.core', 'arova.daemon', 'arova.core.cognition.workspace_manager', 'arova.core.projection.projector']
+hiddenimports = [
+    'arova', 'arova.core', 'arova.core.voice', 'arova.core.cognition', 
+    'arova.core.ambience', 'arova.core.automation', 'arova.core.platform', 
+    'arova.daemon', 'arova.core.cognition.workspace_manager', 
+    'arova.core.projection.projector', 'numpy', 'scipy', 'sklearn', 'websockets'
+]
 tmp_ret = collect_all('openwakeword')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('arova')
@@ -28,16 +33,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='arovad',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -45,3 +47,15 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=True,
+    upx=True,
+    upx_exclude=[],
+    name='arovad',
+)
+

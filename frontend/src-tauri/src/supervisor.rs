@@ -4,6 +4,9 @@ use std::time::Duration;
 use std::process::Command;
 use serde::{Serialize, Deserialize};
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisorStatus {
     pub is_running: bool,
@@ -45,6 +48,32 @@ impl SupervisorState {
                     }
                 }
 
+                // 1. Check if background daemon is ALREADY running on port 8765
+                let is_port_active = std::net::TcpStream::connect_timeout(
+                    &std::net::SocketAddr::from(([127, 0, 0, 1], 8765)),
+                    Duration::from_millis(350)
+                ).is_ok();
+
+                if is_port_active {
+                    {
+                        let mut st = status.lock().unwrap();
+                        st.is_running = true;
+                        st.safe_mode = false;
+                        st.last_error = None;
+                    }
+                    // Background daemon is actively tracking! Monitor health in loop
+                    while !*stop_signal.lock().unwrap() {
+                        thread::sleep(Duration::from_secs(2));
+                        if std::net::TcpStream::connect_timeout(
+                            &std::net::SocketAddr::from(([127, 0, 0, 1], 8765)),
+                            Duration::from_millis(500)
+                        ).is_err() {
+                            break; // Daemon stopped or killed, fall through to respawn
+                        }
+                    }
+                    continue;
+                }
+
                 if crash_counter > 5 {
                     let mut st = status.lock().unwrap();
                     st.is_running = false;
@@ -54,7 +83,6 @@ impl SupervisorState {
                 }
 
                 // Resolve bundled binary or python runtime across Deb, RPM, AppImage, and local dev.
-                // AppImage mounts at $APPDIR; Tauri 2 resource dir varies by target.
                 let exe_dir = std::env::current_exe()
                     .ok()
                     .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -74,60 +102,95 @@ impl SupervisorState {
 
                 let mut candidate_paths = vec![
                     exe_dir.join("arovad"),
+                    exe_dir.join("arovad.exe"),
                     exe_dir.join("resources").join("arovad"),
+                    exe_dir.join("resources").join("arovad.exe"),
+                    exe_dir.join("resources").join("arovad").join("arovad"),
+                    exe_dir.join("resources").join("arovad").join("arovad.exe"),
+                    exe_dir.join("../Resources").join("arovad"),
+                    exe_dir.join("../Resources").join("arovad").join("arovad"),
                     exe_dir.join("../resources").join("arovad"),
+                    exe_dir.join("../resources").join("arovad.exe"),
+                    exe_dir.join("../resources").join("arovad").join("arovad"),
+                    exe_dir.join("../resources").join("arovad").join("arovad.exe"),
                     exe_dir.join("../lib/Arova/resources/arovad"),
+                    exe_dir.join("../lib/Arova/resources/arovad/arovad"),
                     exe_dir.join("../lib/Arova/_up_/_up_/dist/arovad"),
                     exe_dir.join("../../dist/arovad"),
+                    exe_dir.join("../../dist/arovad/arovad"),
+                    exe_dir.join("../../dist/arovad/arovad.exe"),
                     exe_dir.join("../../../dist/arovad"),
+                    exe_dir.join("../../../dist/arovad/arovad"),
                     std::path::PathBuf::from("/usr/lib/Arova/resources/arovad"),
-                    std::path::PathBuf::from("/usr/lib/Arova/_up_/_up_/dist/arovad"),
+                    std::path::PathBuf::from("/usr/lib/Arova/resources/arovad/arovad"),
                     std::path::PathBuf::from("/usr/lib/arova/resources/arovad"),
                     std::path::PathBuf::from("/opt/arova/arovad"),
+                    std::path::PathBuf::from("/opt/arova/resources/arovad/arovad"),
                 ];
 
+                if let Some(home_val) = std::env::var_os("HOME") {
+                    let h = std::path::PathBuf::from(home_val);
+                    candidate_paths.insert(0, h.join(".local/share/arova/resources/arovad/arovad"));
+                    candidate_paths.insert(1, h.join(".local/share/arova/resources/arovad"));
+                    candidate_paths.insert(2, h.join(".local/share/arova/arovad"));
+                    candidate_paths.insert(3, h.join("Library/Application Support/Arova/resources/arovad/arovad"));
+                }
+
+                if let Some(appdata_val) = std::env::var_os("LOCALAPPDATA") {
+                    let ad = std::path::PathBuf::from(appdata_val);
+                    candidate_paths.insert(0, ad.join("Arova/resources/arovad/arovad.exe"));
+                    candidate_paths.insert(1, ad.join("Arova/resources/arovad.exe"));
+                    candidate_paths.insert(2, ad.join("Arova/arovad.exe"));
+                }
+
                 if let Some(ref rd) = resource_dir {
-                    candidate_paths.insert(0, rd.join("arovad"));
-                    candidate_paths.insert(1, rd.join("dist").join("arovad"));
+                    candidate_paths.insert(0, rd.join("arovad").join("arovad"));
+                    candidate_paths.insert(1, rd.join("arovad").join("arovad.exe"));
+                    candidate_paths.insert(2, rd.join("arovad"));
+                    candidate_paths.insert(3, rd.join("dist").join("arovad"));
                 }
                 if let Some(ref ad) = appdir {
                     candidate_paths.insert(0, ad.join("usr/bin/arovad"));
-                    candidate_paths.insert(1, ad.join("usr/lib/Arova/resources/arovad"));
-                    candidate_paths.insert(2, ad.join("resources/arovad"));
-                    candidate_paths.insert(3, ad.join("arovad"));
+                    candidate_paths.insert(1, ad.join("usr/lib/Arova/resources/arovad/arovad"));
+                    candidate_paths.insert(2, ad.join("usr/lib/Arova/resources/arovad"));
+                    candidate_paths.insert(3, ad.join("resources/arovad/arovad"));
+                    candidate_paths.insert(4, ad.join("resources/arovad"));
+                    candidate_paths.insert(5, ad.join("arovad"));
                 }
 
-                let found_binary = candidate_paths.into_iter().find(|p| p.exists());
+                let found_binary = candidate_paths.into_iter().find_map(|p| {
+                    if p.is_file() {
+                        Some(p)
+                    } else if p.is_dir() && p.join("arovad").is_file() {
+                        Some(p.join("arovad"))
+                    } else if p.is_dir() && p.join("arovad.exe").is_file() {
+                        Some(p.join("arovad.exe"))
+                    } else {
+                        None
+                    }
+                });
+
                 let resource_py_dir = resource_dir
                     .clone()
                     .unwrap_or_else(|| exe_dir.join("resources"));
 
-                // Clean up any stale PyInstaller temp folders before launching daemon to prevent tmpfs quota exhaustion
-                for dir_path in &["/tmp", "/var/tmp"] {
-                    if let Ok(entries) = std::fs::read_dir(dir_path) {
-                        for entry in entries.flatten() {
-                            if let Some(name) = entry.file_name().to_str() {
-                                if name.starts_with("_MEI") {
-                                    let _ = std::fs::remove_dir_all(entry.path());
-                                }
-                            }
-                        }
-                    }
-                }
-
                 let mut cmd = if let Some(bin_path) = found_binary {
-                    let mut c = Command::new(bin_path);
-                    // PyInstaller standalone binaries crash with "No module named 'encodings'" if PYTHONHOME or incompatible PYTHONPATH is inherited from AppRun/AppImage
+                    let mut c = Command::new(&bin_path);
+                    if let Some(parent) = bin_path.parent() {
+                        c.current_dir(parent);
+                    }
                     c.env_remove("PYTHONHOME");
                     c.env_remove("PYTHONPATH");
-                    c.env("TMPDIR", "/var/tmp");
                     c
                 } else {
                     let mut venv_candidates = vec![
                         std::path::PathBuf::from("/home/sarthak/arova/venv/bin/python"),
                         std::path::PathBuf::from("../venv/bin/python"),
+                        std::path::PathBuf::from("../venv/Scripts/python.exe"),
                         std::path::PathBuf::from("../../venv/bin/python"),
+                        std::path::PathBuf::from("../../venv/Scripts/python.exe"),
                         std::path::PathBuf::from("./venv/bin/python"),
+                        std::path::PathBuf::from("./venv/Scripts/python.exe"),
                         exe_dir.join("../lib/Arova/_up_/_up_/venv/bin/python"),
                     ];
                     if let Some(ref ad) = appdir {
@@ -138,11 +201,15 @@ impl SupervisorState {
                         .into_iter()
                         .find(|p| p.exists())
                         .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "python3".to_string());
+                        .unwrap_or_else(|| {
+                            if cfg!(windows) { "python.exe".to_string() } else { "python3".to_string() }
+                        });
 
                     let mut c = Command::new(py_bin);
                     c.env_remove("PYTHONHOME");
-                    c.env("TMPDIR", "/var/tmp");
+                    if !cfg!(windows) {
+                        c.env("TMPDIR", "/var/tmp");
+                    }
 
                     let mut py_dir_candidates = vec![
                         std::path::PathBuf::from("/home/sarthak/arova"),
@@ -170,6 +237,18 @@ impl SupervisorState {
                     cmd.arg("--safe-mode");
                 }
 
+                // Detach daemon process group so it keeps running in the background when frontend UI closes
+                #[cfg(unix)]
+                {
+                    cmd.process_group(0);
+                }
+
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    // CREATE_NO_WINDOW (0x08000000) + CREATE_NEW_PROCESS_GROUP (0x00000200)
+                    cmd.creation_flags(0x08000000 | 0x00000200);
+                }
 
                 match cmd.spawn() {
                     Ok(mut child) => {

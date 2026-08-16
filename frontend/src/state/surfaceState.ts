@@ -9,6 +9,7 @@ export type SurfaceType =
   | 'command_palette'
   | 'session_timeline'
   | 'developer_mode'
+  | 'journal'
   | null;
 
 interface SurfaceState {

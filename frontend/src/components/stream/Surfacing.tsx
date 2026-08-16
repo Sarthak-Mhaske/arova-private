@@ -296,7 +296,11 @@ export const Surfacing: React.FC<{ item: SurfacingItem }> = ({ item }) => {
             }}
             onClick={() => setShowMeta(!showMeta)}
           >
-            <span>{meta.fallback ? '⚠' : '⚡'}</span>
+            {meta.fallback ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            )}
             <span style={{ fontWeight: 500 }}>
               {meta.fallback 
                 ? `Fallback: ${meta.requested_model || 'Preferred AI'} → ${meta.model_name}` 

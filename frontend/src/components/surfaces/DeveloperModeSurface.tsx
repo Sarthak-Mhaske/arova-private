@@ -65,7 +65,7 @@ export const DeveloperModeSurface: React.FC = () => {
 
       {/* MANDATORY DOGFOODING RULE BANNER */}
       <div style={{ background: 'rgba(255, 215, 0, 0.12)', border: '1px solid #ffd700', borderRadius: '12px', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px', color: '#fff', fontSize: '13px', lineHeight: '1.4' }}>
-        <span style={{ fontSize: '20px' }}>⚠️</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffd700" strokeWidth="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <div>
           <strong style={{ color: '#ffd700' }}>MANDATORY TEAM DOGFOODING RULE:</strong> You are not allowed to manually search first. You must ask Arova first. If it fails or forces you to fall back to manual VS Code / Chrome search, report it immediately as a bug.
         </div>
@@ -73,8 +73,9 @@ export const DeveloperModeSurface: React.FC = () => {
 
       {/* ONE DASHBOARD - THE EXACT 6 CORE NUMBERS */}
       <div style={{ background: 'linear-gradient(135deg, rgba(168, 129, 255, 0.1) 0%, rgba(20, 20, 30, 0.9) 100%)', border: '1px solid rgba(168, 129, 255, 0.35)', borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-        <div style={{ fontSize: '14px', fontWeight: 700, color: '#a881ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          🎯 Core Dogfooding KPI Dashboard (`Today`)
+        <div style={{ fontSize: '14px', fontWeight: 700, color: '#a881ff', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          <span>Core Dogfooding KPI Dashboard (`Today`)</span>
         </div>
         
         {kpi.resume_attempts === 0 && (kpi.continue_card_shown_count || 0) === 0 ? (

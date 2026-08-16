@@ -30,9 +30,43 @@ class ProcessContextTracker:
         elif sys.platform == "win32":
             cls._scan_windows_proc(terminal_cwds, editor_projects)
 
+        home = os.path.abspath(os.path.expanduser("~"))
+        def _is_clean(p: str) -> bool:
+            if not p or not isinstance(p, str) or not os.path.isdir(p):
+                return False
+            ap = os.path.abspath(p)
+            if (
+                ap in [home, "/", "/root"]
+                or ap.startswith(("/tmp", "/var/tmp", "/usr", "/opt", "/etc"))
+                or any(noisy in ap for noisy in [
+                    "/.cache",
+                    "/.vscode/extensions",
+                    "/.vscode-server",
+                    "/.cursor/extensions",
+                    "/.antigravity",
+                    "/.config",
+                    "/.local/share",
+                    "/node_modules",
+                    "/site-packages",
+                    "/__pycache__",
+                    "/venv",
+                    "/.venv",
+                    "/.git",
+                    "/arova/frontend",
+                    "/arova/release",
+                    "/arova/dist",
+                    "/arova/src-tauri",
+                ])
+            ):
+                return False
+            return True
+
+        clean_terms = [p for p in terminal_cwds if _is_clean(p)]
+        clean_editors = [p for p in editor_projects if _is_clean(p)]
+
         return {
-            "terminal_cwds": list(terminal_cwds),
-            "editor_projects": list(editor_projects)
+            "terminal_cwds": clean_terms,
+            "editor_projects": clean_editors
         }
 
     @classmethod

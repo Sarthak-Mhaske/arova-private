@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { socket } from '../../runtime/socket';
 import { useAwarenessState } from '../../state';
 
@@ -6,36 +6,255 @@ interface ContinueCardProps {
   workspace: any | null;
 }
 
-const renderProgressBar = (score: number) => {
-  const filledCount = Math.round((score / 100) * 10);
-  const emptyCount = Math.max(0, 10 - filledCount);
-  return '█'.repeat(filledCount) + '░'.repeat(emptyCount);
-};
+interface EditorItem {
+  id: string;
+  name: string;
+  path: string;
+  directory: string;
+  app: string;
+  action_label: string;
+}
+
+interface TerminalItem {
+  id: string;
+  cwd: string;
+  display_path: string;
+  app: string;
+  recent_command?: string;
+  action_label: string;
+}
+
+interface BrowserItem {
+  id: string;
+  url: string;
+  title: string;
+  domain: string;
+  app: string;
+  action_label: string;
+}
+
+interface AppItem {
+  id: string;
+  name: string;
+  window_title: string;
+  app: string;
+  action_label: string;
+}
 
 export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const { continueCardDismissed, dismissContinueCard } = useAwarenessState();
-  const [showTrajectory, setShowTrajectory] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
-  const [restoreEditors, setRestoreEditors] = useState(true);
-  const [restoreTerminal, setRestoreTerminal] = useState(true);
-  const [restoreBrowsers] = useState(false);
-  const [restoreDocumentation] = useState(false);
-  const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
+  const [selectedEditors, setSelectedEditors] = useState<string[]>([]);
+  const [selectedTerminals, setSelectedTerminals] = useState<string[]>([]);
+  const [selectedBrowsers, setSelectedBrowsers] = useState<string[]>([]);
+  const [selectedApps, setSelectedApps] = useState<string[]>([]);
   const [copiedCmd, setCopiedCmd] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
+  // Extract structured, classified items from workspace
+  const { editors, terminals, browsers, apps } = useMemo(() => {
+    if (!workspace) return { editors: [], terminals: [], browsers: [], apps: [] };
+
+    // 1. If backend already sent structured categorized_items, use them directly
+    const backendCategories = workspace?.categorized_items;
+    if (backendCategories && (backendCategories.editors || backendCategories.terminals || backendCategories.browsers || backendCategories.apps)) {
+      return {
+        editors: (backendCategories.editors || []) as EditorItem[],
+        terminals: (backendCategories.terminals || []) as TerminalItem[],
+        browsers: (backendCategories.browsers || []) as BrowserItem[],
+        apps: (backendCategories.apps || []) as AppItem[]
+      };
+    }
+
+    // 2. Otherwise parse robustly from reality resources
+    const resourcesObj = workspace?.reality?.resources || {};
+    const resourcesArr: string[] = workspace?.associated_resources || Object.keys(resourcesObj);
+
+    const parsedEditors: EditorItem[] = [];
+    const parsedTerminals: TerminalItem[] = [];
+    const parsedBrowsers: BrowserItem[] = [];
+    const parsedApps: AppItem[] = [];
+
+    resourcesArr.forEach((resKey: string) => {
+      const meta = resourcesObj[resKey] || {};
+      const rType = meta?.type || '';
+      const rCat = meta?.category || '';
+      const identity = String(meta?.identity || resKey);
+      const idLower = identity.toLowerCase();
+
+      // Filter out Arova itself, frontend dev window, and internal dev processes
+      if (
+        idLower.includes('frontend - arova') ||
+        idLower.includes('arova - arova') ||
+        idLower.includes('arova desktop') ||
+        idLower === 'arova' ||
+        idLower === 'arovad' ||
+        idLower === 'frontend' ||
+        idLower.includes('npm run tauri') ||
+        idLower.includes('tauri dev') ||
+        idLower.includes('cargo tauri') ||
+        idLower.includes('build_arovad') ||
+        idLower.startsWith('arova v')
+      ) {
+        return;
+      }
+      if (['N/A', 'v2', 'Desktop', 'xprintidle', 'root'].includes(identity)) {
+        return;
+      }
+
+      if (rCat === 'browser' || rType === 'browser' || rType === 'url' || identity.startsWith('http://') || identity.startsWith('https://')) {
+        const cleanUrl = identity.replace(/^url:\/\//, '').trim();
+        const uLower = cleanUrl.toLowerCase();
+        const isJunk = [
+          "newtab", "about:blank", "chrome://", "brave://", "edge://", "firefox://",
+          "localhost:8765", "127.0.0.1:8765", "localhost:5173", "127.0.0.1:5173",
+          "instagram.com", "facebook.com", "tiktok.com", "twitter.com", "x.com",
+          "google.com/sorry", "google.com/search", "/accounts/setosid", "/servicelogin"
+        ].some(skip => uLower.includes(skip));
+
+        if (!isJunk && !parsedBrowsers.some(b => b.url === cleanUrl)) {
+          let host = cleanUrl;
+          try {
+            host = new URL(cleanUrl).hostname;
+          } catch {
+            host = cleanUrl;
+          }
+          let bTitle = meta?.summary || meta?.title || host;
+          for (const suffix of [" - Google Chrome", " - Brave", " - Mozilla Firefox", " - Microsoft Edge", " - Chromium"]) {
+            if (bTitle.endsWith(suffix)) {
+              bTitle = bTitle.slice(0, -suffix.length).trim();
+            }
+          }
+          if (!["new tab", "brave", "google chrome", "firefox", "home"].includes(bTitle.toLowerCase())) {
+            const bApp = meta?.app || 'Browser';
+            parsedBrowsers.push({
+              id: cleanUrl,
+              url: cleanUrl,
+              title: bTitle,
+              domain: host,
+              app: bApp,
+              action_label: `Open tab: ${bTitle}`
+            });
+          }
+        }
+      } else if (rCat === 'terminal' || rType === 'terminal' || identity.startsWith('terminal://')) {
+        const cleanCwd = identity.replace(/^terminal:\/\//, '');
+        // Exclude internal dev build directories
+        if (cleanCwd.endsWith('/arova/frontend') || cleanCwd.endsWith('/arova/release') || cleanCwd.endsWith('/arova/dist')) {
+          return;
+        }
+        if (cleanCwd && !parsedTerminals.some(t => t.cwd === cleanCwd)) {
+          parsedTerminals.push({
+            id: cleanCwd,
+            cwd: cleanCwd,
+            display_path: cleanCwd.replace(/^\/home\/[^\/]+/, '~'),
+            app: meta?.app || 'Terminal',
+            recent_command: workspace?.recent_command || meta?.recent_command,
+            action_label: `Restore terminal session (${cleanCwd.replace(/^\/home\/[^\/]+/, '~')})`
+          });
+        }
+      } else if (rCat === 'editor' || rType === 'vscode' || rType === 'editor' || rType === 'file' || (identity.startsWith('/') && !identity.startsWith('http'))) {
+        const cleanPath = identity.replace(/^file:\/\//, '').trim();
+        const parts = cleanPath.split('/');
+        let rawName = meta?.file_name || parts[parts.length - 1] || cleanPath;
+        const wsTitle = workspace?.title || '';
+
+        // Clean up any raw window titles
+        if (rawName.includes(' - ') || rawName.toLowerCase().includes('antigravity')) {
+          const subparts = rawName.split(' - ').map((s: string) => s.trim()).filter(Boolean);
+          const cleaned = subparts.filter((sp: string) => {
+            const pLow = sp.toLowerCase();
+            if (['antigravity-ide', 'antigravity ide', 'antigravity', 'visual studio code', 'code', 'code - oss', 'cursor'].includes(pLow)) return false;
+            if (wsTitle && pLow === wsTitle.toLowerCase()) return false;
+            return true;
+          });
+          if (cleaned.length > 0) {
+            rawName = cleaned[cleaned.length - 1];
+          } else {
+            rawName = wsTitle || parts[parts.length - 1] || cleanPath;
+          }
+        }
+
+        // Avoid duplicate workspace project window title
+        if (wsTitle && rawName.toLowerCase() === wsTitle.toLowerCase() && parsedEditors.some(e => e.name.toLowerCase() === wsTitle.toLowerCase())) {
+          return;
+        }
+
+        const dir = parts.slice(-3).join('/');
+        const editorApp = meta?.app || 'Antigravity IDE';
+        if (rawName && !parsedEditors.some(e => e.path === cleanPath || e.name === rawName)) {
+          parsedEditors.push({
+            id: cleanPath,
+            name: rawName,
+            path: cleanPath,
+            directory: dir ? `.../${dir}` : '',
+            app: editorApp,
+            action_label: meta?.summary || `Open ${rawName} in ${editorApp}`
+          });
+        }
+      } else if (rCat === 'app' || rType === 'window') {
+        const appName = meta?.app || identity;
+        const aLower = String(appName).toLowerCase();
+        if (!aLower.includes('arova') && !aLower.includes('frontend') && !aLower.includes('tauri')) {
+          if (appName && !parsedApps.some(a => a.name === appName)) {
+            parsedApps.push({
+              id: identity,
+              name: appName,
+              window_title: meta?.title || identity,
+              app: appName,
+              action_label: `Launch ${appName}`
+            });
+          }
+        }
+      }
+    });
+
+    // Deduplicate bare project folder when specific files are present
+    const hasFiles = parsedEditors.some(e => e.name && e.name.includes('.'));
+    const finalEditors = hasFiles ? parsedEditors.filter(e => e.name.includes('.')) : parsedEditors;
+
+    // Terminal CWD fallback if no terminal in resources
+    if (parsedTerminals.length === 0 && workspace?.terminal_cwd) {
+      const tCwd = workspace.terminal_cwd;
+      if (!tCwd.endsWith('/arova/frontend')) {
+        parsedTerminals.push({
+          id: tCwd,
+          cwd: tCwd,
+          display_path: tCwd.replace(/^\/home\/[^\/]+/, '~'),
+          app: 'Terminal',
+          recent_command: workspace?.recent_command,
+          action_label: `Restore terminal session (${tCwd.replace(/^\/home\/[^\/]+/, '~')})`
+        });
+      }
+    }
+
+    return {
+      editors: finalEditors,
+      terminals: parsedTerminals,
+      browsers: parsedBrowsers,
+      apps: parsedApps
+    };
+  }, [workspace]);
+
+  // Sync selected state initially
   useEffect(() => {
     if (workspace && (workspace.id || workspace.workspace_id)) {
       socket.sendEvent({
         type: 'dogfooding.record_acceptance',
         event: 'shown'
       });
-      const resourcesObj = workspace?.reality?.resources || {};
-      const resourcesArr: string[] = (workspace as any).associated_resources || Object.keys(resourcesObj);
-      const urlResources: string[] = resourcesArr.filter(k => k.startsWith('http') || k.startsWith('https') || resourcesObj[k]?.type === 'url' || resourcesObj[k]?.type === 'browser');
-      setSelectedUrls(urlResources);
+      setSelectedEditors(editors.map(e => e.id));
+      setSelectedTerminals(terminals.map(t => t.id));
+      setSelectedBrowsers(browsers.map(b => b.id));
+      setSelectedApps(apps.map(a => a.id));
     }
-  }, [workspace?.id, workspace?.workspace_id]);
+  }, [workspace?.id, workspace?.workspace_id, editors, terminals, browsers, apps]);
+
+  useEffect(() => {
+    if (!continueCardDismissed) {
+      setRestoring(false);
+    }
+  }, [continueCardDismissed]);
 
   if (!workspace || !(workspace.id || workspace.workspace_id)) return null;
   if (continueCardDismissed) return null;
@@ -45,71 +264,40 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const title = workspace?.title || 'Current Workspace';
   const continueData = workspace as any;
 
-  const associated_resources: string[] = continueData?.associated_resources || 
-    (workspace?.reality?.resources ? Object.keys(workspace.reality.resources) : []);
-  const preparedList = associated_resources.map((r: string) => r.split('/').pop() || r);
-
-  const confLayer = workspace?.understanding?.confidence_layer || {};
-
-  const storyNarrative: string[] = (workspace?.story_narrative && workspace.story_narrative.length > 0)
-    ? workspace.story_narrative
-    : ((workspace?.understanding?.story_narrative && workspace.understanding.story_narrative.length > 0)
-    ? workspace.understanding.story_narrative
-    : [
-        `Yesterday you focused on ${title}.`,
-        'Active engineering momentum preserved.'
-      ]);
-
   const blocker = continueData?.current_blocker || workspace?.understanding?.momentum?.current_blocker || '';
-  const nextAction = continueData?.next_action || workspace?.understanding?.momentum?.next_action || '';
-  const trajectoryStory = continueData?.trajectory_story || workspace?.understanding?.trajectory_story || 'Continuing active project trajectory.';
+  const goal = continueData?.current_goal || workspace?.understanding?.momentum?.goal || '';
 
-  const resourcesObj = workspace?.reality?.resources || {};
-  const urlResources: string[] = associated_resources.filter((k: string) => k.startsWith('http') || k.startsWith('https') || k.includes('youtube') || resourcesObj[k]?.type === 'url' || resourcesObj[k]?.type === 'browser');
-
-  const filteredUrlResources = urlResources.filter((u: string) => {
-    const uLower = u.toLowerCase();
-    return !["instagram.com", "facebook.com", "tiktok.com", "twitter.com", "x.com", "google.com/sorry", "/accounts/setosid", "/servicelogin"].some(skip => uLower.includes(skip));
-  });
-
-  const repoConf: number = typeof confLayer.repository?.score === 'number' ? confLayer.repository.score : 100;
-  const blockerConf: number = typeof confLayer.blocker?.score === 'number' ? confLayer.blocker.score : 92;
-  const resourcesConf: number = typeof confLayer.resources?.score === 'number' ? confLayer.resources.score : 65;
-  const goalConf: number = typeof confLayer.goal?.score === 'number' ? confLayer.goal.score : 94;
-
-  const confBreakdown: Record<string, number> = {
-    "Repository": repoConf,
-    "Open files": resourcesConf,
-    "Goal": goalConf,
-    "Blocker": blockerConf,
-    "Browser docs": 61,
-    "Terminal": 95
+  const toggleEditor = (id: string) => {
+    setSelectedEditors(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const defaultGrouped = [
-    { category: 'PROJECT', text: `Updated ${title} architecture and dependencies` },
-    { category: 'CODE', text: `${preparedList.length || 4} files modified or prepared for continuation` },
-    { category: 'DECISION', text: 'Persistent recovery state stored in snapshot engine' },
-    { category: 'NEXT', text: nextAction || 'Continue active engineering flow and verify unit tests' }
-  ];
-
-  const storedGrouped = workspace?.understanding?.grouped_changes;
-  const groupedChanges: { category: string; text: string }[] = (storedGrouped && storedGrouped.length > 0)
-    ? storedGrouped.filter((item: any) => item.text && item.text.trim())
-    : defaultGrouped;
-
-  const scorecardDimensions = [
-    { name: 'Repository', ok: true },
-    { name: 'Files', ok: true },
-    { name: 'Goal', ok: true },
-    { name: 'Blocker', ok: true },
-    { name: 'Terminal', ok: true },
-    { name: 'Browser', ok: false },
-  ];
-
-  const toggleUrl = (u: string) => {
-    setSelectedUrls(prev => prev.includes(u) ? prev.filter(item => item !== u) : [...prev, u]);
+  const toggleTerminal = (id: string) => {
+    setSelectedTerminals(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
+
+  const toggleBrowser = (id: string) => {
+    setSelectedBrowsers(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleApp = (id: string) => {
+    setSelectedApps(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const selectAll = () => {
+    setSelectedEditors(editors.map(e => e.id));
+    setSelectedTerminals(terminals.map(t => t.id));
+    setSelectedBrowsers(browsers.map(b => b.id));
+    setSelectedApps(apps.map(a => a.id));
+  };
+
+  const deselectAll = () => {
+    setSelectedEditors([]);
+    setSelectedTerminals([]);
+    setSelectedBrowsers([]);
+    setSelectedApps([]);
+  };
+
+  const totalSelected = selectedEditors.length + selectedTerminals.length + selectedBrowsers.length + selectedApps.length;
 
   const handleCommandAction = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -127,133 +315,99 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
       type: 'workspace.continue',
       workspace_id: workspace.workspace_id || workspace.id || 'ws_default',
       options: {
-        restore_all: !showOptions,
-        restore_vscode: restoreEditors,
-        restore_editors: restoreEditors,
-        restore_terminal: restoreTerminal,
-        restore_chrome: restoreBrowsers || selectedUrls.length > 0,
-        restore_browsers: restoreBrowsers,
-        restore_documentation: restoreDocumentation,
-        selected_urls: selectedUrls
+        restore_all: false,
+        restore_vscode: selectedEditors.length > 0,
+        restore_editors: selectedEditors.length > 0,
+        selected_files: selectedEditors,
+        restore_terminal: selectedTerminals.length > 0,
+        selected_terminals: selectedTerminals,
+        restore_chrome: selectedBrowsers.length > 0,
+        restore_browsers: selectedBrowsers.length > 0,
+        selected_urls: selectedBrowsers,
+        selected_apps: selectedApps
       }
     });
     dismissContinueCard();
   };
 
-  const terminalCwd: string | null = workspace?.terminal_cwd || null;
-  const recentCommand: string | null = workspace?.recent_command || null;
-
+  // Build natural summary text
+  const summaryParts: string[] = [];
+  if (editors.length > 0) summaryParts.push(`${editors.length} editor file${editors.length === 1 ? '' : 's'}`);
+  if (terminals.length > 0) summaryParts.push(`${terminals.length} terminal session${terminals.length === 1 ? '' : 's'}`);
+  if (browsers.length > 0) summaryParts.push(`${browsers.length} browser tab${browsers.length === 1 ? '' : 's'}`);
+  if (apps.length > 0) summaryParts.push(`${apps.length} desktop application${apps.length === 1 ? '' : 's'}`);
   return (
     <div 
-      className="surfacing momentum continue-card" 
+      className="surfacing momentum"
       style={{ 
-        marginBottom: '36px', 
-        animation: 'surface-in 900ms cubic-bezier(0.32, 0.72, 0.24, 1) both' 
+        marginBottom: '28px',
+        animation: 'surface-in 700ms cubic-bezier(0.32, 0.72, 0.24, 1) both'
       }}
     >
-      {/* 1. Header with glowing orb dot + text */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.22em', color: 'var(--ink-mute)', fontWeight: 500, marginBottom: '14px' }}>
-        <span style={{ 
-          width: '8px', 
-          height: '8px', 
-          borderRadius: '50%', 
-          background: 'radial-gradient(circle at 38% 32%, #ffffff, rgba(245, 222, 180, 0.75) 50%, rgba(212, 168, 120, 0.45))', 
-          boxShadow: 'inset 0 0 3px rgba(255, 255, 255, 0.95), 0 0 8px rgba(232, 200, 140, 0.65)',
-          flexShrink: 0 
-        }} />
-        <span>AROVA · CONTEXT RECOVERY</span>
+      {/* 1. Natural Arova Origin Indicator */}
+      <div className="from">
+        AROVA
       </div>
 
-      {/* 2. Main Title in Serif Font */}
-      <h2 style={{ 
-        fontFamily: "'Instrument Serif', 'Canela', Georgia, serif", 
-        fontSize: '32px', 
-        lineHeight: '1.25', 
-        fontWeight: 400, 
-        color: 'var(--ink)', 
-        letterSpacing: '-0.018em', 
-        margin: '0 0 12px 0' 
-      }}>
-        {greeting}. Ready to resume {title}?
-      </h2>
+      {/* 2. Chat-Native Large Serif Title */}
+      <div className="lede">
+        {greeting}. Ready to resume <span style={{ color: 'var(--accent-gold)' }}>{title}</span>?
+      </div>
 
-      {/* 3. Description text */}
-      <p style={{ fontSize: '15px', lineHeight: '1.6', color: 'var(--ink-2)', margin: '0 0 22px 0' }}>
-        Yesterday you focused on <strong>{title}</strong>.{' '}
+      {/* 3. Natural Context Description */}
+      <p style={{ margin: '0 0 16px 0', fontSize: '14.5px', lineHeight: '1.6', color: 'var(--ink-2)' }}>
+        {goal && goal !== 'Active project' ? (
+          <span>Goal: <strong>{goal}</strong>.{' '}</span>
+        ) : null}
+        <span>
+          {summaryParts.length > 0 
+            ? `Workspace state preserved: ${summaryParts.join(', ')}.`
+            : 'Workspace state preserved.'}
+        </span>
         {blocker && blocker !== 'None' && blocker !== 'No critical blockers right now.' ? (
-          <span>Stopped due to blocker: <span style={{ color: 'var(--accent-amber)' }}>{blocker}</span>. </span>
-        ) : (
-          <span>You stopped cleanly without blockers. </span>
-        )}
-        Active engineering momentum preserved.
+          <span> Previous blocker: <span style={{ color: 'var(--accent-amber)' }}>{blocker}</span>.</span>
+        ) : null}
       </p>
 
-      {/* 4. Action Buttons Row */}
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '24px' }}>
+      {/* 4. Action Chips */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: showOptions ? '18px' : '0' }}>
         <button 
           onClick={handleResume}
-          disabled={restoring}
+          disabled={restoring || totalSelected === 0}
+          className="action-chip primary"
           style={{ 
-            background: 'linear-gradient(180deg, #cbb994 0%, #bba780 100%)', 
-            color: '#332b1f', 
-            border: '1px solid rgba(255, 255, 255, 0.12)', 
-            borderRadius: '999px', 
-            padding: '10px 22px', 
-            fontSize: '13.5px', 
-            fontWeight: 600, 
+            padding: '8px 16px', 
+            fontSize: '13px', 
+            fontWeight: 600,
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-            transition: 'all 0.2s'
+            gap: '6px'
           }}
         >
-          {restoring ? 'Restoring...' : 'Resume & Restore All →'}
+          {restoring ? 'Restoring...' : `Resume Workspace (${totalSelected}) →`}
         </button>
 
         <button 
           onClick={() => setShowOptions(!showOptions)}
+          className="action-chip"
           style={{ 
-            background: 'rgba(255, 255, 255, 0.05)', 
-            color: 'var(--ink-2)', 
-            border: '1px solid var(--hairline-2)', 
-            borderRadius: '999px', 
-            padding: '10px 20px', 
-            fontSize: '13px', 
+            padding: '8px 14px', 
+            fontSize: '12.5px', 
             fontWeight: 500,
             cursor: 'pointer' 
           }}
         >
-          {showOptions ? 'Hide Options' : 'Choose What To Restore'}
-        </button>
-
-        <button 
-          onClick={() => setShowTrajectory(!showTrajectory)}
-          style={{ 
-            background: 'rgba(255, 255, 255, 0.05)', 
-            color: 'var(--ink-2)', 
-            border: '1px solid var(--hairline-2)', 
-            borderRadius: '999px', 
-            padding: '10px 20px', 
-            fontSize: '13px', 
-            fontWeight: 500,
-            cursor: 'pointer' 
-          }}
-        >
-          {showTrajectory ? 'Hide Scorecard & Story' : 'Show Scorecard & Story'}
+          {showOptions ? 'Hide Items' : `Choose Items (${totalSelected})`}
         </button>
 
         <button 
           onClick={() => dismissContinueCard()}
+          className="action-chip"
           style={{ 
-            background: 'rgba(255, 255, 255, 0.05)', 
-            color: 'var(--ink-mute)', 
-            border: '1px solid var(--hairline-2)', 
-            borderRadius: '999px', 
-            padding: '10px 20px', 
-            fontSize: '13px', 
-            fontWeight: 500,
+            padding: '8px 12px', 
+            fontSize: '12px', 
+            color: 'var(--ink-mute)',
             cursor: 'pointer' 
           }}
         >
@@ -261,166 +415,257 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         </button>
       </div>
 
-      {/* 5. Customization Options Box */}
+      {/* 5. Real Selectable Items (Shown when Choose Items is toggled) */}
+
+      {/* 6. Granular Selector (Shown when 'Choose What To Restore' is clicked) */}
       {showOptions && (
         <div style={{ 
-          marginBottom: '24px', 
-          padding: '18px 22px', 
-          background: 'rgba(20, 18, 16, 0.65)', 
-          borderRadius: '16px', 
-          border: '1px solid var(--hairline-2)', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '14px' 
+          marginTop: '16px',
+          background: 'var(--glass-1)',
+          border: '1px solid var(--hairline-2)',
+          borderRadius: '16px',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px'
         }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
-            Select exact items to restore
+          {/* Quick Select / Deselect Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '6px', borderBottom: '1px solid var(--hairline-2)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-mute)' }}>
+              Select exact items to open
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={selectAll} style={{ background: 'none', border: 'none', color: 'var(--accent-gold, #d4a878)', fontSize: '11.5px', cursor: 'pointer', padding: 0 }}>Select All</button>
+              <span style={{ color: 'var(--ink-mute)', fontSize: '11.5px' }}>•</span>
+              <button onClick={deselectAll} style={{ background: 'none', border: 'none', color: 'var(--ink-mute)', fontSize: '11.5px', cursor: 'pointer', padding: 0 }}>Deselect All</button>
+            </div>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--ink-2)', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={restoreEditors}
-              onChange={e => setRestoreEditors(e.target.checked)}
-              style={{ accentColor: 'var(--accent-gold)' }}
-            />
-            <span>VS Code / Editor files (Exact line positions)</span>
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--ink-2)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={restoreTerminal}
-                onChange={e => setRestoreTerminal(e.target.checked)}
-                style={{ accentColor: 'var(--accent-gold)' }}
-              />
-              <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Terminal working directory {terminalCwd ? `(${terminalCwd})` : ''}</span>
-            </label>
-            {recentCommand && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', background: 'rgba(255,255,255,0.04)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--hairline-2)', marginLeft: '24px' }}>
-                <span style={{ fontFamily: 'monospace', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '320px' }}>Recent command: {recentCommand}</span>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button className="action-chip" onClick={() => handleCommandAction(recentCommand)} style={{ padding: '2px 8px', fontSize: '11px' }}>{copiedCmd ? 'Copied!' : 'Copy'}</button>
-                  <button className="action-chip primary" onClick={() => socket.sendEvent({ type: 'terminal.execute', command: recentCommand, cwd: terminalCwd || undefined })} style={{ padding: '2px 8px', fontSize: '11px' }}>Run</button>
-                </div>
+
+          {/* Category 1: Workspace & Code Editors */}
+          {editors.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Workspace & Editors</span>
+                <span>{selectedEditors.length}/{editors.length}</span>
               </div>
-            )}
-          </div>
-          {filteredUrlResources.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-2)' }}>Documentation & browser tabs:</div>
-              {filteredUrlResources.map((u, idx) => (
-                <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: 'var(--ink-3)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={selectedUrls.includes(u)} onChange={() => toggleUrl(u)} style={{ accentColor: 'var(--accent-gold)' }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u}</span>
-                </label>
-              ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {editors.map((item) => {
+                  const isChecked = selectedEditors.includes(item.id);
+                  return (
+                    <label 
+                      key={item.id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px', 
+                        fontSize: '13px', 
+                        color: isChecked ? 'var(--ink)' : 'var(--ink-mute)', 
+                        cursor: 'pointer',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        background: isChecked ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
+                        transition: 'background 0.15s'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleEditor(item.id)}
+                        style={{ accentColor: 'var(--accent-gold)', width: '14px', height: '14px', cursor: 'pointer' }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', fontSize: '12.5px', color: 'var(--ink)' }}>
+                            {item.name}
+                          </span>
+                          <span style={{ fontSize: '10.5px', background: 'var(--hairline-2, rgba(120,110,95,0.12))', padding: '1px 6px', borderRadius: '4px', color: 'var(--ink)' }}>
+                            {item.app}
+                          </span>
+                          {item.directory && (
+                            <span style={{ fontSize: '11px', color: 'var(--ink-mute)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {item.directory}
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '11.5px', color: 'var(--ink-mute)' }}>
+                          {item.action_label?.startsWith('Open window:') 
+                            ? `Open ${item.name} in ${item.app}` 
+                            : item.action_label}
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* 6. Embedded Scorecard & Trajectory Container */}
-      {showTrajectory && (
-        <div style={{ 
-          padding: '22px 24px', 
-          background: 'rgba(20, 18, 16, 0.55)', 
-          borderRadius: '16px', 
-          border: '1px solid var(--hairline-2)', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '20px' 
-        }}>
-          {/* TRAJECTORY STORY */}
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '8px' }}>
-              TRAJECTORY STORY
-            </div>
-            <p style={{ fontSize: '14px', color: 'var(--ink-2)', margin: '0 0 10px 0', lineHeight: '1.5' }}>
-              {trajectoryStory}
-            </p>
+          {/* Category 2: Terminal Sessions */}
+          {terminals.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {storyNarrative.map((line, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', color: 'var(--ink-2)' }}>
-                  <span style={{ color: 'var(--accent-gold)' }}>•</span>
-                  <span>{line}</span>
-                </div>
-              ))}
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Terminal Environment</span>
+                <span>{selectedTerminals.length}/{terminals.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {terminals.map((item) => {
+                  const isChecked = selectedTerminals.includes(item.id);
+                  return (
+                    <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label 
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '10px', 
+                          fontSize: '13px', 
+                          color: isChecked ? 'var(--ink)' : 'var(--ink-mute)', 
+                          cursor: 'pointer',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          background: isChecked ? 'var(--hairline)' : 'transparent',
+                          transition: 'background 0.15s'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleTerminal(item.id)}
+                          style={{ accentColor: 'var(--accent-gold)', width: '14px', height: '14px', cursor: 'pointer' }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', fontSize: '12.5px', color: 'var(--ink)' }}>
+                              {item.display_path}
+                            </span>
+                            <span style={{ fontSize: '10.5px', background: 'var(--hairline-2, rgba(120,110,95,0.12))', padding: '1px 6px', borderRadius: '4px', color: 'var(--ink)' }}>
+                              {item.app}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '11.5px', color: 'var(--ink-mute)' }}>
+                            {item.action_label}
+                          </span>
+                        </div>
+                      </label>
+                      {item.recent_command && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', background: 'var(--hairline)', padding: '4px 8px', borderRadius: '6px', marginLeft: '24px' }}>
+                          <span style={{ fontFamily: 'monospace', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '320px' }}>
+                            Recent: {item.recent_command}
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button className="action-chip" onClick={() => handleCommandAction(item.recent_command!)} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                              {copiedCmd ? 'Copied!' : 'Copy'}
+                            </button>
+                            <button className="action-chip primary" onClick={() => socket.sendEvent({ type: 'terminal.execute', command: item.recent_command, cwd: item.cwd })} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                              Run
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* WHILE YOU WERE AWAY */}
-          <div style={{ borderTop: '1px solid var(--hairline-2)', paddingTop: '16px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '10px' }}>
-              WHILE YOU WERE AWAY
+          {/* Category 3: Browser Tabs & Documentation */}
+          {browsers.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Browser Tabs & Documentation</span>
+                <span>{selectedBrowsers.length}/{browsers.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {browsers.map((item) => {
+                  const isChecked = selectedBrowsers.includes(item.id);
+                  return (
+                    <label 
+                      key={item.id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px', 
+                        fontSize: '12.5px', 
+                        color: isChecked ? 'var(--ink-2)' : 'var(--ink-mute)', 
+                        cursor: 'pointer',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        background: isChecked ? 'var(--hairline)' : 'transparent',
+                        transition: 'background 0.15s'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleBrowser(item.id)}
+                        style={{ accentColor: 'var(--accent-gold)', width: '14px', height: '14px', cursor: 'pointer' }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, color: isChecked ? 'var(--ink)' : 'var(--ink-mute)' }}>
+                            {item.title}
+                          </span>
+                          <span style={{ fontSize: '10.5px', background: 'var(--hairline-2, rgba(120,110,95,0.12))', padding: '1px 6px', borderRadius: '4px', color: 'var(--ink)' }}>
+                            {item.domain}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '11.5px', color: 'var(--ink-mute)' }}>
+                          {item.action_label}
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
-              {groupedChanges.map((item, idx) => (
-                <div key={idx} style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--hairline-2)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--accent-violet, #9d85e7)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    {item.category}
-                  </div>
-                  <div style={{ fontSize: '12.5px', color: 'var(--ink-2)', lineHeight: '1.4' }}>
-                    {item.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* Recovery Accuracy Scorecard */}
-          <div style={{ borderTop: '1px solid var(--hairline-2)', paddingTop: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
-                Recovery Accuracy Scorecard
-              </span>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-sage, #a8d8b0)' }}>
-                5 / 6 verified
-              </span>
+          {/* Category 4: Desktop Applications */}
+          {apps.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Desktop Applications</span>
+                <span>{selectedApps.length}/{apps.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {apps.map((item) => {
+                  const isChecked = selectedApps.includes(item.id);
+                  return (
+                    <label 
+                      key={item.id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px', 
+                        fontSize: '12.5px', 
+                        color: isChecked ? 'var(--ink-2)' : 'var(--ink-mute)', 
+                        cursor: 'pointer',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        background: isChecked ? 'var(--hairline)' : 'transparent',
+                        transition: 'background 0.15s'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleApp(item.id)}
+                        style={{ accentColor: 'var(--accent-gold)', width: '14px', height: '14px', cursor: 'pointer' }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+                        <span style={{ fontWeight: 600, color: isChecked ? 'var(--ink)' : 'var(--ink-mute)' }}>
+                          {item.name}
+                        </span>
+                        <span style={{ fontSize: '11.5px', color: 'var(--ink-mute)' }}>
+                          {item.action_label}
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-
-            {/* Checklist Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', fontSize: '13px', marginBottom: '16px' }}>
-              {scorecardDimensions.map((dim, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: dim.ok ? 'var(--ink-2)' : 'var(--ink-mute)' }}>
-                  <span style={{ color: dim.ok ? 'var(--accent-sage, #a8d8b0)' : 'var(--ink-mute)', fontWeight: 600 }}>
-                    {dim.ok ? '✓' : '×'}
-                  </span>
-                  <span>{dim.name}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Progress Bar Breakdown Box */}
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '8px', 
-              fontSize: '12px', 
-              fontFamily: 'var(--font-mono, monospace)', 
-              background: 'rgba(0, 0, 0, 0.3)', 
-              padding: '14px 16px', 
-              borderRadius: '10px', 
-              border: '1px solid var(--hairline-2)' 
-            }}>
-              {Object.entries(confBreakdown).map(([label, score]: any, idx) => {
-                const numScore = typeof score === 'number' ? score : parseInt(score) || 0;
-                const isHigh = numScore >= 80;
-                const barColor = isHigh ? 'var(--accent-sage, #a8d8b0)' : 'var(--accent-gold, #d4a878)';
-
-                return (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--ink-2)', minWidth: '110px' }}>{label}</span>
-                    <span style={{ color: barColor, letterSpacing: '0.12em' }}>
-                      {renderProgressBar(numScore)}
-                    </span>
-                    <span style={{ color: barColor, fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
-                      {numScore}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

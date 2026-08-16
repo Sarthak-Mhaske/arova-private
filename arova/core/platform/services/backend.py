@@ -89,33 +89,46 @@ class PlatformBackend(abc.ABC):
         backed by this platform's launcher and window manager.
         """
 
-    @staticmethod
-    def create() -> "PlatformBackend":
+    _instance: Optional["PlatformBackend"] = None
+
+    @classmethod
+    def create(cls, force_new: bool = False) -> "PlatformBackend":
         """
-        Factory: detect the operating system and instantiate the correct backend.
+        Factory: detect the operating system and instantiate/cache the correct backend singleton.
         If a backend is not available or fails to initialize, raise a clear NotImplementedError.
         """
         sys_name = platform.system().lower()
-        logger.info(f"PlatformBackend.create(): Detected OS '{sys_name}'")
+        if cls._instance is not None and not force_new:
+            # If OS changed via mocking or test patch, don't return stale mismatch
+            current_type = type(cls._instance).__name__.lower()
+            if (sys_name == "darwin" and "macos" in current_type) or \
+               (sys_name == "windows" and "windows" in current_type) or \
+               (sys_name == "linux" and "linux" in current_type):
+                return cls._instance
+
+        logger.debug(f"PlatformBackend.create(): Detected OS '{sys_name}'")
 
         if sys_name == "linux":
             try:
                 from .backends.linux import LinuxBackend
-                return LinuxBackend()
+                cls._instance = LinuxBackend()
+                return cls._instance
             except Exception as e:
                 logger.error(f"Failed to initialize LinuxBackend: {e}", exc_info=True)
                 raise NotImplementedError("Linux backend is not available or failed to initialize in this build.") from e
         elif sys_name == "darwin":
             try:
                 from .backends.macos import MacOSBackend
-                return MacOSBackend()
+                cls._instance = MacOSBackend()
+                return cls._instance
             except Exception as e:
                 logger.error(f"Failed to initialize MacOSBackend: {e}", exc_info=True)
                 raise NotImplementedError("macOS backend is not available or failed to initialize in this build.") from e
         elif sys_name == "windows":
             try:
                 from .backends.windows import WindowsBackend
-                return WindowsBackend()
+                cls._instance = WindowsBackend()
+                return cls._instance
             except Exception as e:
                 logger.error(f"Failed to initialize WindowsBackend: {e}", exc_info=True)
                 raise NotImplementedError("Windows backend is not available or failed to initialize in this build.") from e

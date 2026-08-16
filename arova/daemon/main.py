@@ -1,3 +1,6 @@
+import multiprocessing
+multiprocessing.freeze_support()
+
 import asyncio
 import sys
 import logging
@@ -159,6 +162,11 @@ class ArovaDaemon:
                     "type": "session.sync",
                     "messages": []
                 })
+                self.ws_manager.broadcast({
+                    "type": "automation.action_progress",
+                    "action": "",
+                    "node_state": "completed"
+                })
         elif payload.get("type") == "runtime.ping":
             self.ws_manager.broadcast({"v": 1, "type": "runtime.pong", "timestamp": int(time.time() * 1000)})
         elif payload.get("type") == "session.sync_request":
@@ -246,10 +254,27 @@ class ArovaDaemon:
                     title = active_ws.title
                     # 1. Restore Environment & emit telemetry
                     self.runtime.workspace_manager.restore_environment(active_ws, restore_options)
+
+                    # 2. Add visual confirmation directly into persistent session history
+                    confirm_text = f"Restored {title}. Ready to continue working."
+                    if hasattr(self.runtime, 'session') and self.runtime.session:
+                        self.runtime.session.add_assistant_message(confirm_text)
+                        history = [dict(msg) for msg in self.runtime.session._legacy_messages]
+                        self.ws_manager.broadcast({
+                            "type": "session.sync",
+                            "messages": history
+                        })
+                    
+                    # 3. Clear active action indicator
+                    self.ws_manager.broadcast({
+                        "type": "automation.action_progress",
+                        "action": "",
+                        "node_state": "completed"
+                    })
                     
                     async def _generate_dynamic_welcome():
                         try:
-                            # 2. Prime Cognitive State (Layer 2 Active Workspace Context)
+                            # 4. Prime Cognitive State (Layer 2 Active Workspace Context)
                             summary_prompt = active_ws.get_workspace_summary_prompt() if hasattr(active_ws, 'get_workspace_summary_prompt') else ""
                             if hasattr(self.runtime, 'session') and self.runtime.session:
                                 self.runtime.session.set_system_prompt(summary_prompt)
@@ -276,7 +301,7 @@ class ArovaDaemon:
                                 
                                 self.runtime.session.add_assistant_message(welcome_msg.strip())
                                 
-                                # 4. Sync updated chat feed immediately to frontend
+                                # 5. Sync updated chat feed immediately to frontend
                                 history = [dict(msg) for msg in self.runtime.session._legacy_messages]
                                 self.ws_manager.broadcast({
                                     "type": "session.sync",
@@ -288,7 +313,7 @@ class ArovaDaemon:
                     
                     asyncio.create_task(_generate_dynamic_welcome())
                     
-                    # 5. Visual confirmation toast
+                    # 6. Visual confirmation toast
                     self.ws_manager.broadcast({
                         "type": "cognition.surfacing_push",
                         "item": {
@@ -518,6 +543,12 @@ class ArovaDaemon:
                 mode = payload.get("mode", "review_queue")
                 self.runtime.memory_runtime.policy_engine.set_tier2_mode(mode)
                 self.ws_manager.broadcast({"type": "memory.policy_updated"})
+        elif payload.get("type") in ["journal.entry_added", "journal.add_entry"]:
+            asyncio.create_task(self._handle_journal_entry_added(payload))
+        elif payload.get("type") in ["journal.query", "journal.get_entries"]:
+            asyncio.create_task(self._handle_journal_query(payload))
+        elif payload.get("type") == "journal.delete_entry":
+            asyncio.create_task(self._handle_journal_delete(payload))
         elif payload.get("type") == "client.resume_thread":
             thread_id = payload.get("thread_id")
             if self.runtime and self.runtime.session and thread_id:
@@ -665,6 +696,151 @@ class ArovaDaemon:
         
         self.ws_manager.broadcast({"type": "memory.mutation_success", "memory_id": memory_id, "action": action})
 
+    async def _handle_journal_entry_added(self, payload: dict):
+        entry = payload.get("entry") or {}
+        cat = payload.get("category") or entry.get("category", "build")
+        text = payload.get("text") or entry.get("content", "")
+        e_id = entry.get("id") or f"j_{int(time.time()*1000)}"
+        ts = entry.get("timestamp") or time.time() * 1000
+        date_str = entry.get("dateStr") or time.strftime("%I:%M %p")
+        
+        # 1. Persist to ~/.arova/journal/
+        journal_dir = Path(os.path.expanduser("~/.arova/journal"))
+        journal_dir.mkdir(parents=True, exist_ok=True)
+        
+        index_file = journal_dir / "journal_index.json"
+        existing_entries = []
+        if index_file.exists():
+            try:
+                with open(index_file, "r", encoding="utf-8") as f:
+                    existing_entries = json.load(f)
+            except Exception:
+                existing_entries = []
+                
+        new_record = {
+            "id": e_id,
+            "timestamp": ts,
+            "dateStr": date_str,
+            "category": cat,
+            "content": text
+        }
+        existing_entries = [new_record] + [e for e in existing_entries if e.get("id") != e_id]
+        with open(index_file, "w", encoding="utf-8") as f:
+            json.dump(existing_entries, f, indent=2)
+            
+        # Write clean daily Markdown file for Notion/Obsidian
+        day_filename = time.strftime("%Y-%m-%d") + ".md"
+        day_file = journal_dir / day_filename
+        cat_labels = {
+            "build": "⚡ What I Built",
+            "decision": "📐 Architecture Decision",
+            "blocker": "⚠️ Blocker & Next Step",
+            "reflection": "✨ Daily Reflection"
+        }
+        header_tag = cat_labels.get(cat, cat.title())
+        md_block = f"\n### [{header_tag}] — {date_str}\n*Logged via Arova Dev Journal*\n\n{text}\n\n---\n"
+        with open(day_file, "a", encoding="utf-8") as f:
+            f.write(md_block)
+            
+        # 2. Ingest into Semantic Long-Term Memory
+        if self.runtime and getattr(self.runtime, 'memory_runtime', None):
+            try:
+                from arova.core.memory.storage import MemoryEntry
+                mem = MemoryEntry(
+                    id=e_id,
+                    type="journal",
+                    content=f"[{cat.upper()}] {text}",
+                    source_turn_id=e_id,
+                    category=cat,
+                    why_remembered="Developer journal reflection and decision log",
+                    approval_state="saved",
+                    created_at=ts / 1000.0,
+                    last_reinforced_at=ts / 1000.0
+                )
+                await self.runtime.memory_runtime.storage.store_semantic_memory(mem, f"mut_{e_id}")
+            except Exception as me_err:
+                logging.debug(f"Journal semantic memory storage notice: {me_err}")
+                
+        # 3. Emit Timeline Event
+        if self.runtime and getattr(self.runtime, 'timeline', None):
+            try:
+                await self.runtime.timeline.record_event(
+                    event_type="journal_entry",
+                    source="journal",
+                    summary=f"Logged journal ({header_tag}): {text[:60]}...",
+                    data=new_record
+                )
+            except Exception:
+                pass
+                
+        self.ws_manager.broadcast({
+            "type": "journal.sync",
+            "entries": existing_entries
+        })
+
+    async def _handle_journal_query(self, payload: dict):
+        journal_dir = Path(os.path.expanduser("~/.arova/journal"))
+        index_file = journal_dir / "journal_index.json"
+        entries = []
+        if index_file.exists():
+            try:
+                with open(index_file, "r", encoding="utf-8") as f:
+                    entries = json.load(f)
+            except Exception:
+                entries = []
+                
+        # Generate smart contextual reflection insights based on active workspace
+        ambient_ctx = getattr(getattr(self.runtime, 'ambient_observer', None), 'current_context', None)
+        active_app = getattr(ambient_ctx, 'active_app', '') or ''
+        active_win = getattr(ambient_ctx, 'window_title', '') or ''
+        
+        insights = [
+            {"id": "ins_1", "text": "What was the most important breakthrough or architectural choice you made today?", "category": "decision"},
+            {"id": "ins_2", "text": "Are there any pending blockers or mental loose ends before wrapping up your session?", "category": "blocker"},
+            {"id": "ins_3", "text": "Take a breath. Capture what went well and what you want to focus on tomorrow.", "category": "reflection"}
+        ]
+        
+        if "arova" in active_win.lower() or "arova" in active_app.lower():
+            insights.insert(0, {
+                "id": "ins_ctx",
+                "text": "Deep in Arova development — capture recent optimizations and user flows.",
+                "category": "build"
+            })
+            
+        self.ws_manager.broadcast({
+            "type": "journal.query_response",
+            "entries": entries,
+            "insights": insights
+        })
+
+    async def _handle_journal_delete(self, payload: dict):
+        e_id = payload.get("id") or payload.get("entry_id")
+        if not e_id:
+            return
+        journal_dir = Path(os.path.expanduser("~/.arova/journal"))
+        index_file = journal_dir / "journal_index.json"
+        entries = []
+        if index_file.exists():
+            try:
+                with open(index_file, "r", encoding="utf-8") as f:
+                    entries = json.load(f)
+                entries = [e for e in entries if e.get("id") != e_id]
+                with open(index_file, "w", encoding="utf-8") as f:
+                    json.dump(entries, f, indent=2)
+            except Exception:
+                pass
+        
+        if self.runtime and getattr(self.runtime, 'memory_runtime', None):
+            try:
+                await self.runtime.memory_runtime.storage.delete_semantic_memory(e_id, f"del_{e_id}")
+            except Exception:
+                pass
+                
+        self.ws_manager.broadcast({
+            "type": "journal.sync",
+            "entries": entries
+        })
+
     async def _handle_timeline_query(self, payload: dict):
         req_id = payload.get("req_id", "")
         limit = payload.get("limit", 50)
@@ -699,11 +875,9 @@ class ArovaDaemon:
         """Clean up any dangling socket files or orphaned daemon processes holding port 8765."""
         import os
         import signal
-        import socket
         import subprocess
         import time
 
-        import os
         xdg_sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "arova.sock")
         for sock_file in [xdg_sock, "/tmp/arova.sock", "/var/tmp/arova.sock"]:
             if os.path.exists(sock_file):
@@ -713,27 +887,26 @@ class ArovaDaemon:
                 except Exception as e:
                     logging.warning(f"Could not remove stale socket file {sock_file}: {e}")
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        err = s.connect_ex(("127.0.0.1", port))
-        s.close()
-
-        if err == 0:
-            logging.warning(f"Port {port} is occupied by an existing process. Attempting cleanup of orphaned processes...")
-            try:
-                out = subprocess.check_output(f"fuser {port}/tcp 2>/dev/null || true", shell=True).decode().strip()
-                pids = [int(p) for p in out.split() if p.isdigit()]
-                current_pid = os.getpid()
-                for pid in pids:
-                    if pid != current_pid:
-                        logging.warning(f"Terminating orphaned process {pid} holding port {port}...")
-                        try:
-                            os.kill(pid, signal.SIGTERM)
-                            time.sleep(0.3)
-                            os.kill(pid, signal.SIGKILL)
-                        except (ProcessLookupError, OSError):
-                            pass
-            except Exception as e:
-                logging.warning(f"Port cleanup check returned: {e}")
+        try:
+            out = subprocess.check_output(f"fuser {port}/tcp 2>/dev/null || true", shell=True).decode().strip()
+            pids = [int(p) for p in out.split() if p.isdigit()]
+            current_pid = os.getpid()
+            other_pids = [p for p in pids if p != current_pid]
+            if other_pids:
+                logging.warning(f"Port {port} is held by PID(s) {other_pids}. Cleaning up stale processes...")
+                for pid in other_pids:
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except (ProcessLookupError, OSError):
+                        pass
+                time.sleep(0.3)
+                for pid in other_pids:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except (ProcessLookupError, OSError):
+                        pass
+        except Exception as e:
+            logging.warning(f"Port cleanup check returned: {e}")
 
     async def start(self):
         is_safe_mode = "--safe-mode" in sys.argv
@@ -859,14 +1032,16 @@ class ArovaDaemon:
         })
 
     async def _proactive_loop(self):
-        """Background loop that periodically checks telemetry for proactive interventions."""
+        """Background loop that periodically checks telemetry for proactive interventions with CPU-saving idle detection."""
         logging.info("Started proactive investigation loop.")
+        last_eval_signature = None
+        
         while True:
             await asyncio.sleep(15)  # Check every 15 seconds
             
             # Fetch real ambient context telemetry
             ambient_ctx = getattr(getattr(self.runtime, 'ambient_observer', None), 'current_context', None)
-            telemetry = self._latest_telemetry or {}
+            telemetry = dict(self._latest_telemetry or {})
             if ambient_ctx:
                 telemetry.update({
                     "active_app": ambient_ctx.active_app,
@@ -875,6 +1050,19 @@ class ArovaDaemon:
                     "open_windows": ambient_ctx.open_windows,
                     "playing_media": ambient_ctx.playing_media
                 })
+            
+            # Skip redundant heavy evaluation if app, window, and media are completely unchanged
+            current_signature = (
+                telemetry.get("active_app"),
+                telemetry.get("window_title"),
+                telemetry.get("playing_media"),
+                len(telemetry.get("open_windows") or [])
+            )
+            
+            if current_signature == last_eval_signature and (telemetry.get("idle_seconds", 0) > 30):
+                continue
+                
+            last_eval_signature = current_signature
             
             try:
                 completed_work = self.proactive_investigator.evaluate_and_investigate(telemetry)

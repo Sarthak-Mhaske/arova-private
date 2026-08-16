@@ -28,7 +28,7 @@ class CognitiveRouter:
         node = ExecutionNode(id=str(uuid.uuid4()), capability_name=capability, args=args)
         return GraphDefinition(id=str(uuid.uuid4()), name=name, nodes=[node])
 
-    def _get_fast_path(self, text: str) -> Optional[GraphDefinition]:
+    def _get_fast_path(self, text: str, messages: Optional[List[Dict[str, Any]]] = None) -> Optional[GraphDefinition]:
         """Deterministic regex/keyword bypass for maximum TTFA.
         This MUST be aggressive — the LLM fallback router is unreliable for action classification.
         BUT it must NOT false-positive on conversational mentions of keywords like 'video' or 'search'.
@@ -64,8 +64,8 @@ class CognitiveRouter:
             level = 0 if "unmute" not in norm else 50
             return self._build_fast_graph("Set Volume", "set_volume", {"level": level})
         
-        # ── MEDIA CONTROL ──
-        if re.match(r'^(play|pause|stop|next|previous|skip|resume)\s*(music|track|song)?$', norm):
+        # ── MEDIA CONTROL & MUSIC PLAYBACK ──
+        if re.match(r'^(pause|stop|next|previous|skip|resume)\s*(music|track|song|audio)?$', norm):
             if any(w in norm for w in ["next", "skip"]):
                 cmd = "next_track"
             elif "previous" in norm:
@@ -75,17 +75,38 @@ class CognitiveRouter:
             else:
                 cmd = "play_pause"
             return self._build_fast_graph("Media Control", "media_control", {"command": cmd})
-        
-        if any(w in norm for w in ["play music", "play some music", "pause music", "stop music", "next track", "skip track", "previous track"]):
-            if any(w in norm for w in ["next", "skip"]):
-                cmd = "next_track"
-            elif "previous" in norm:
-                cmd = "previous_track"
-            elif "stop" in norm:
-                cmd = "stop"
-            else:
-                cmd = "play_pause"
-            return self._build_fast_graph("Media Control", "media_control", {"command": cmd})
+
+        # Matches "play some chill hindi song", "play starboy", "play lofi", "play arijit singh songs", "play that song", etc.
+        play_match = re.match(r'^(?:can\s+you\s+)?(?:please\s+)?play\s+(?:some\s+|the\s+(?:song\s+|track\s+)?)?(.+)', norm)
+        if play_match:
+            raw_song = play_match.group(1).strip()
+            # Strip trailing polite fluff
+            raw_song = re.sub(r"\s+(?:please|for\s+me|thanks|thank\s+you)\s*$", "", raw_song).strip()
+            
+            if not raw_song or raw_song in ("music", "track", "song", "audio"):
+                return self._build_fast_graph("Media Control", "media_control", {"command": "play_pause"})
+            
+            deictic_words = {
+                "it", "that", "this", "them", "those", "these", "one", "that one", "this one",
+                "that song", "tthat song", "this song", "the song", "the track", "that track",
+                "those songs", "the one you said", "the one you mentioned", "the one you recommended",
+                "the first one", "the second one", "the last one", "what you said", "what you recommended"
+            }
+            
+            # If the query is complex, mood-based, lyrical, or descriptive -> let LLM ActionPlanner resolve dynamically
+            dynamic_triggers = [
+                "lyrics", "chill", "relaxing", "sad", "happy", "party", "lofi", "vibes",
+                "mood", "instrumental", "romantic", "similar to", "like", "recommend",
+                "something by", "some song", "any song", "whose", "called", "named"
+            ]
+            
+            if any(dt in raw_song for dt in dynamic_triggers) or raw_song in deictic_words:
+                # Let ActionPlanner LLM resolve it with full world knowledge & conversation history
+                return None
+            
+            clean_query = re.sub(r'^(?:song|songs|track|tracks|music)\s+(?:of\s+|by\s+)?', '', raw_song).strip()
+            song_query = clean_query if clean_query else raw_song
+            return self._build_fast_graph(f"Play {song_query}", "play_music", {"song_query": song_query})
             
         # ── SCREENSHOT ──
         if any(w in norm for w in ["screenshot", "capture screen", "take a screenshot"]):
@@ -302,7 +323,7 @@ class CognitiveRouter:
                     )
 
         # 1. Attempt Fast Path (Zero-Shot Deterministic Bypass)
-        fast_graph = self._get_fast_path(text)
+        fast_graph = self._get_fast_path(text, messages=messages)
         if fast_graph:
             self._emit_state("EXECUTING_FAST_PATH", f"Matched route: {fast_graph.name}")
             # Special category for opening links from prior assistant turn

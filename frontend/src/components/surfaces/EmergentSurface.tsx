@@ -19,6 +19,7 @@ import { AwarenessSurface } from './AwarenessSurface';
 import { CommandPaletteSurface } from './CommandPaletteSurface';
 import { SessionTimelineSurface } from './SessionTimelineSurface';
 import { DeveloperModeSurface } from './DeveloperModeSurface';
+import { JournalSurface } from './JournalSurface';
 import { SettingsLayout } from '../../surfaces/settings/SettingsLayout';
 import { sheetEnter, scrimEnter, easeSpring, easeSoft } from '../../motion';
 
@@ -79,7 +80,14 @@ export const EmergentSurface: React.FC = () => {
   return (
     <AnimatePresence>
       {activeSurface && activeSurface !== 'environment' && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, pointerEvents: 'none' }}>
+        <div style={{ 
+          position: 'fixed', 
+          inset: 0, 
+          zIndex: 100, 
+          display: 'grid', 
+          placeItems: 'center', 
+          pointerEvents: 'none' 
+        }}>
           <MDiv 
             className="surface-scrim"
             onClick={() => closeSurface()}
@@ -105,13 +113,20 @@ export const EmergentSurface: React.FC = () => {
               width: 'min(1400px, 94vw)',
               height: 'calc(100vh - 80px)',
               maxHeight: 'calc(100vh - 80px)',
-              top: '50%',
               padding: 0,
               overflow: 'hidden'
+            } : activeSurface === 'journal' ? {
+              pointerEvents: 'auto',
+              width: 'min(1160px, 94vw)',
+              height: 'min(820px, calc(100vh - 80px))',
+              maxHeight: '840px',
+              padding: '28px 34px',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
             } : { 
               pointerEvents: 'auto', 
-              maxHeight: 'calc(100vh - 140px)', 
-              top: '45%' 
+              maxHeight: 'calc(100vh - 120px)' 
             }}
           >
             {activeSurface === 'work' && <WorkHubSurface onContinue={() => closeSurface()} />}
@@ -132,6 +147,7 @@ export const EmergentSurface: React.FC = () => {
             {activeSurface === 'command_palette' && <CommandPaletteSurface />}
             {activeSurface === 'session_timeline' && <SessionTimelineSurface />}
             {activeSurface === 'developer_mode' && <DeveloperModeSurface />}
+            {activeSurface === 'journal' && <JournalSurface />}
 
             {activeSurface === 'settings' && <SettingsLayout />}
           </MDiv>

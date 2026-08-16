@@ -13,6 +13,9 @@ export const CognitiveStream: React.FC = () => {
   const streamRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
+  const { continueCardDismissed } = useAwarenessState();
+  const initialScrollDone = useRef(false);
+
   useEffect(() => {
     if (!streamRef.current || !innerRef.current) return;
     
@@ -20,11 +23,26 @@ export const CognitiveStream: React.FC = () => {
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        if (streamRef.current) {
-          streamRef.current.scrollTo({
-            top: streamRef.current.scrollHeight,
-            behavior: 'smooth'
-          });
+        if (!streamRef.current) return;
+        
+        // On initial startup with an active recovery card, stay focused at top
+        if (!initialScrollDone.current) {
+          initialScrollDone.current = true;
+          if (activeWorkspace && !continueCardDismissed) {
+            streamRef.current.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+            return;
+          }
+        }
+
+        // When user chats or new items are added, scroll smoothly to bottom
+        if (items.length > 0) {
+          const lastItem = items[items.length - 1];
+          if (lastItem.type === 'userSaid' || lastItem.type === 'surfacing') {
+            streamRef.current.scrollTo({
+              top: streamRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
         }
       });
     });
@@ -34,7 +52,7 @@ export const CognitiveStream: React.FC = () => {
       observer.disconnect();
       cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [items, activeWorkspace, continueCardDismissed]);
 
   return (
     <>

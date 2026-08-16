@@ -17,6 +17,8 @@ import { useCognitionState, useEnvironmentState, usePresenceState, useSurfaceSta
 import { fetchStreamItems, fetchAwareness } from './ipc';
 import { socket } from './runtime/socket';
 
+import { SyncStatusPill } from './components/layout/SyncStatusPill';
+
 const DEMO_MODE = false;
 
 function App() {
@@ -115,6 +117,14 @@ function App() {
           state.closeSurface();
         } else {
           state.openSurface('command_palette');
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyJ' || e.key.toLowerCase() === 'j') && !e.shiftKey) {
+        e.preventDefault();
+        const state = useSurfaceState.getState();
+        if (state.activeSurface === 'journal') {
+          state.closeSurface();
+        } else {
+          state.openSurface('journal');
         }
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.code === 'KeyD' || e.key.toLowerCase() === 'd')) {
         e.preventDefault();
@@ -218,6 +228,7 @@ function App() {
       <CursorBleed />
       <Environment>
         <SpatialRail />
+        <SyncStatusPill />
         <TopAnchors />
         <OrbStage />
         <CognitiveStream />

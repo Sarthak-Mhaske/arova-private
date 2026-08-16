@@ -37,6 +37,10 @@ export const CommandZone: React.FC = () => {
   const clearChat = () => {
     socket.sendEvent({ type: 'client.new_thread' });
     useCognitionState.getState().setItems([]);
+    useCognitionState.getState().setActiveAction(null);
+    import('../../state/orbState').then(({ useOrbState }) => {
+      useOrbState.getState().setMode('idle', '');
+    });
     import('../../state/awarenessState').then(({ useAwarenessState }) => {
       useAwarenessState.getState().resetContinueCard();
     });
@@ -245,7 +249,9 @@ export const CommandZone: React.FC = () => {
     <div className="command-zone">
       {activeAction && (
         <div className="active-action-overlay">
-          <span className="spinner">⚙️</span>
+          <svg className="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12"/>
+          </svg>
           <span className="action-text">{activeAction}...</span>
         </div>
       )}
@@ -307,7 +313,7 @@ export const CommandZone: React.FC = () => {
           ref={inputRef}
           id="command-input"
           type="text" 
-          placeholder="Ask about your current context… try @ to mention files"  
+          placeholder="Ask Arova about your work, decisions, or understanding..."  
           value={val}
           onChange={handleChange}
           onKeyDown={handleInputKeyDown}
@@ -356,10 +362,49 @@ export const CommandZone: React.FC = () => {
           </button>
         </div>
       </div>
-      <div className="command-hint">
-        <span><kbd>⌘K</kbd> invoke</span>
-        <span><kbd>@</kbd> mention verbatim file</span>
-        <span><kbd>esc</kbd> dismiss</span>
+      <div className="command-hint" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <span 
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            import('../../state').then(({ useSurfaceState }) => {
+              useSurfaceState.getState().openSurface('command_palette');
+            });
+          }}
+        >
+          <kbd>⌘K</kbd> COMMANDS
+        </span>
+        <span 
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            if (inputRef.current) {
+              inputRef.current.focus();
+              setVal(prev => prev ? `${prev} @` : '@');
+              setShowMentions(true);
+            }
+          }}
+        >
+          <kbd>@</kbd> CONTEXT
+        </span>
+        <span 
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            import('../../state').then(({ useSurfaceState }) => {
+              useSurfaceState.getState().openSurface('journal');
+            });
+          }}
+        >
+          <kbd>⌘J</kbd> JOURNAL
+        </span>
+        <span 
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            import('../../state').then(({ useSurfaceState }) => {
+              useSurfaceState.getState().closeSurface();
+            });
+          }}
+        >
+          <kbd>ESC</kbd> DISMISS
+        </span>
       </div>
     </div>
   );

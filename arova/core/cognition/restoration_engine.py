@@ -102,6 +102,13 @@ class EnvironmentRestorationEngine:
         if self.event_bus:
             self.event_bus.emit("environment", "LAUNCH_PLAN_READY", plan.to_dict())
 
+        # Switch to dedicated workspace 2 so restored applications do not crowd/cover Arova
+        if shutil.which("hyprctl"):
+            try:
+                subprocess.run(["hyprctl", "dispatch", "workspace", "2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
         # 2. Process File & Repository intents
         restore_files = options.get("restore_vscode", options.get("restore_editors", True))
         if not restore_files:
@@ -116,25 +123,26 @@ class EnvironmentRestorationEngine:
 
             code_intents = [
                 i for i in (file_intents + repo_intents)
-                if not i.preferred_application or i.preferred_application in ("code", "code-oss", "cursor", "VS Code")
+                if not i.preferred_application or i.preferred_application in ("code", "code-oss", "cursor", "VS Code", "antigravity", "antigravity-ide", "Antigravity IDE")
             ]
             other_intents = [i for i in (file_intents + repo_intents) if i not in code_intents]
 
             if code_intents:
                 primary_intent = repo_intents[0] if repo_intents else file_intents[0]
                 res = self.executor.execute_single(primary_intent, self.backend, self.affinity)
+                app_display = res.application_name or primary_intent.preferred_application or "Editor"
                 if len(code_intents) > 1 or repo_intents:
                     file_names = [os.path.basename(i.resource_path or "") for i in file_intents if i.resource_path]
                     detail = f"Restored window with {len(file_names)} files ({', '.join(file_names[:3])})" if file_names else f"Restored project workspace"
                     summary.items.append(RestoreOutcomeItem(
-                        name="VS Code",
+                        name=app_display,
                         resource_id=f"file://{primary_intent.resource_path}" if primary_intent.resource_path else None,
                         status="restored" if res.success else ("skipped" if res.dismissed else "failed"),
                         detail=detail
                     ))
                 else:
                     summary.items.append(RestoreOutcomeItem(
-                        name=res.application_name or "VS Code",
+                        name=app_display,
                         resource_id=f"file://{primary_intent.resource_path}" if primary_intent.resource_path else None,
                         status="restored" if res.success else ("skipped" if res.dismissed else "failed"),
                         detail=res.detail
@@ -178,26 +186,32 @@ class EnvironmentRestorationEngine:
 
         # 4. Process Browser / URL items
         # 4. Process Browser / URL items
+        selected_urls = options.get("selected_urls", None)
         restore_all = options.get("restore_all", False)
-        restore_chrome = options.get("restore_chrome", False) or options.get("restore_browsers", False) or restore_all
-        selected_urls = options.get("selected_urls", [])
+        restore_chrome = options.get("restore_chrome", False) or options.get("restore_browsers", False)
 
         url_items = [r for r in self.resource_registry.all_resources() if r.type == "url"]
         for k, v in resources_dict.items():
             if isinstance(v, dict) and (v.get("type") in ["url", "browser"] or str(k).startswith("http")):
                 url_items.append(self.resource_registry.register_url(k, title=v.get("summary")))
 
-        if hasattr(workspace, "interpretation") and getattr(workspace.interpretation, "browser_domains", None):
-            for domain in workspace.interpretation.browser_domains:
-                d_url = f"https://{domain}" if not domain.startswith("http") else domain
-                url_items.append(self.resource_registry.register_url(d_url, title=domain))
+        # Deduplicate url_items
+        seen_urls = set()
+        unique_url_items = []
+        for u in url_items:
+            if u.url and u.url not in seen_urls:
+                seen_urls.add(u.url)
+                unique_url_items.append(u)
 
-        for u_item in url_items:
-            if not u_item.url:
-                continue
-            is_selected = restore_chrome or (u_item.url in selected_urls) or (u_item.display_name in selected_urls) or (u_item.resource_id in selected_urls)
-            if not options or (len(options) == 1 and "selected_urls" in options and not selected_urls) or options.get("restore_defaults", False):
+        for u_item in unique_url_items:
+            # STRICT SELECTION ENFORCEMENT:
+            if selected_urls is not None:
+                # User explicitly checked/unchecked URLs — strictly restore ONLY what user selected
+                is_selected = (u_item.url in selected_urls) or (u_item.display_name in selected_urls) or (u_item.resource_id in selected_urls)
+            elif restore_all:
                 is_selected = True
+            else:
+                is_selected = restore_chrome
 
             if is_selected:
                 url_intent = RestoreIntent("webpage", Capability.OPEN_URL, resource_url=u_item.url)
@@ -213,7 +227,7 @@ class EnvironmentRestorationEngine:
                     name=u_item.display_name or u_item.url,
                     resource_id=u_item.resource_id,
                     status="skipped",
-                    detail="Opt-in checkmark not selected by user"
+                    detail="Deselected by user"
                 ))
 
         self.last_outcome = summary

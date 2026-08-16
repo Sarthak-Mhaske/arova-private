@@ -6,17 +6,17 @@ import { easeSoft } from '../../motion';
 
 const getColorsForMode = (mode: string) => {
   switch (mode) {
-    case 'thinking': return { bg: 'rgba(230,225,242,0.85)', waveA: 'rgba(168,157,200,0.85)', waveB: 'rgba(168,157,200,0.55)' };
-    case 'streaming': return { bg: 'rgba(240,245,255,0.95)', waveA: 'rgba(160,200,240,0.95)', waveB: 'rgba(120,180,250,0.75)' };
-    case 'executing': return { bg: 'rgba(218,232,245,0.85)', waveA: 'rgba(154,184,212,0.85)', waveB: 'rgba(154,184,212,0.55)' };
-    case 'listening': return { bg: 'rgba(235,240,230,0.85)', waveA: 'rgba(160,200,160,0.85)', waveB: 'rgba(180,210,180,0.55)' };
-    case 'reflecting': return { bg: 'rgba(240,230,220,0.85)', waveA: 'rgba(200,160,140,0.85)', waveB: 'rgba(210,180,160,0.55)' };
-    case 'interrupted': return { bg: 'rgba(245,225,225,0.95)', waveA: 'rgba(220,150,150,0.9)', waveB: 'rgba(200,120,120,0.7)' };
-    case 'error': return { bg: 'rgba(250,210,210,0.9)', waveA: 'rgba(230,100,100,0.9)', waveB: 'rgba(200,80,80,0.8)' };
-    case 'disconnected': return { bg: 'rgba(230,225,220,0.4)', waveA: 'rgba(180,175,170,0.25)', waveB: 'rgba(190,185,180,0.15)' };
-    case 'reconnecting': return { bg: 'rgba(220,210,230,0.7)', waveA: 'rgba(180,160,200,0.6)', waveB: 'rgba(160,140,180,0.5)' };
+    case 'thinking': return { bg: 'rgba(50,45,65,0.9)', waveA: 'rgba(190,175,230,0.95)', waveB: 'rgba(168,157,200,0.7)' };
+    case 'streaming': return { bg: 'rgba(40,55,75,0.9)', waveA: 'rgba(120,200,255,0.95)', waveB: 'rgba(80,160,240,0.75)' };
+    case 'executing': return { bg: 'rgba(35,50,65,0.9)', waveA: 'rgba(140,190,230,0.95)', waveB: 'rgba(100,160,210,0.7)' };
+    case 'listening': return { bg: 'rgba(40,55,40,0.9)', waveA: 'rgba(140,220,150,0.95)', waveB: 'rgba(110,190,120,0.7)' };
+    case 'reflecting': return { bg: 'rgba(60,45,35,0.9)', waveA: 'rgba(230,170,130,0.95)', waveB: 'rgba(210,140,100,0.7)' };
+    case 'interrupted': return { bg: 'rgba(65,35,35,0.9)', waveA: 'rgba(240,140,140,0.95)', waveB: 'rgba(210,100,100,0.7)' };
+    case 'error': return { bg: 'rgba(70,30,30,0.9)', waveA: 'rgba(250,110,110,0.95)', waveB: 'rgba(220,80,80,0.8)' };
+    case 'disconnected': return { bg: 'rgba(40,35,30,0.5)', waveA: 'rgba(160,150,140,0.4)', waveB: 'rgba(140,130,120,0.25)' };
+    case 'reconnecting': return { bg: 'rgba(50,40,60,0.8)', waveA: 'rgba(200,170,230,0.8)', waveB: 'rgba(170,140,200,0.6)' };
     case 'idle':
-    default: return { bg: 'rgba(225,232,245,0.85)', waveA: 'rgba(140,170,210,0.85)', waveB: 'rgba(170,185,215,0.55)' };
+    default: return { bg: 'rgba(45,35,25,0.9)', waveA: 'rgba(230,185,115,0.95)', waveB: 'rgba(195,150,85,0.65)' };
   }
 };
 

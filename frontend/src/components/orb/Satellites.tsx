@@ -35,11 +35,25 @@ export const Satellites: React.FC = () => {
         el.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${scale})`;
         el.style.zIndex = zIndex.toString();
       });
-      frameId = requestAnimationFrame(animate);
+      if (!document.hidden) {
+        frameId = requestAnimationFrame(animate);
+      }
     };
 
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (frameId) cancelAnimationFrame(frameId);
+      } else {
+        frameId = requestAnimationFrame(animate);
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
     frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      cancelAnimationFrame(frameId);
+    };
   }, []);
 
   return (

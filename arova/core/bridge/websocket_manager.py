@@ -121,21 +121,16 @@ class WebSocketManager:
         logger.info(f"Starting WebSocket bridge on ws://{self.host}:{self.port}")
         for attempt in range(1, 6):
             try:
-                # Try to bind with reuse_port where available
-                kwargs = {}
-                import sys
-                if sys.platform != "win32":
-                    kwargs["reuse_port"] = True
-                self._server = await websockets.serve(self._handle_connection, self.host, self.port, **kwargs)
+                self._server = await websockets.serve(
+                    self._handle_connection,
+                    self.host,
+                    self.port,
+                    ping_interval=20,
+                    ping_timeout=20,
+                    close_timeout=10
+                )
                 return
-            except (OSError, TypeError) as e:
-                # Fallback without reuse_port if TypeError raised on unsupported platforms
-                if isinstance(e, TypeError):
-                    try:
-                        self._server = await websockets.serve(self._handle_connection, self.host, self.port)
-                        return
-                    except OSError as os_err:
-                        e = os_err
+            except OSError as e:
                 if getattr(e, "errno", None) == 98 or "address already in use" in str(e).lower():
                     if attempt < 5:
                         logger.warning(f"Port {self.port} in use (Errno 98). Retrying in 1s (attempt {attempt}/5)...")

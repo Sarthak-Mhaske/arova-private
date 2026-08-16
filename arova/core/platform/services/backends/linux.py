@@ -236,6 +236,34 @@ class LinuxPlatformLauncher(PlatformLauncher):
                 return self.open_url(intent.resource_url, app=app)
             return LaunchResult(intent, False, "", f"Unsupported capability: {cap.name}")
 
+    def _is_window_active(self, keyword: str) -> bool:
+        if not keyword:
+            return False
+        kw = keyword.lower()
+        if shutil.which("hyprctl"):
+            try:
+                import json
+                proc = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=1.5)
+                if proc.returncode == 0:
+                    data = json.loads(proc.stdout)
+                    for client in data:
+                        title = (client.get("title") or "").lower()
+                        cls = (client.get("class") or "").lower()
+                        if kw in title or kw in cls:
+                            return True
+            except Exception:
+                pass
+        if shutil.which("wmctrl"):
+            try:
+                proc = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=1.5)
+                if proc.returncode == 0:
+                    for line in proc.stdout.splitlines():
+                        if kw in line.lower():
+                            return True
+            except Exception:
+                pass
+        return False
+
     def open_file(self, path: str, line: Optional[int] = None, col: Optional[int] = None,
                   app: Optional[ApplicationEntry] = None) -> LaunchResult:
         if not path or not os.path.exists(path):
@@ -245,6 +273,18 @@ class LinuxPlatformLauncher(PlatformLauncher):
             )
 
         intent = RestoreIntent("source_file", Capability.OPEN_FILE, resource_path=path, metadata={"line": line, "col": col})
+        fname = os.path.basename(path)
+
+        # Idempotency check: If file or editor is already open, focus rather than duplicate
+        if self._is_window_active(fname):
+            self.focus_window(fname)
+            return LaunchResult(intent, True, app.name if app else "Editor", f"{fname} is already open in editor", executed=True)
+
+        if not app or not app.executable:
+            exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("cursor") or shutil.which("code")
+            if exec_bin:
+                friendly = "Antigravity IDE" if "antigravity" in exec_bin else "Editor"
+                app = ApplicationEntry(app_id="antigravity" if "antigravity" in exec_bin else "editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
 
         exec_to_try = app.executable if app else None
         adapter = get_adapter(os.path.basename(exec_to_try).lower()) if exec_to_try else None
@@ -303,6 +343,19 @@ class LinuxPlatformLauncher(PlatformLauncher):
             return LaunchResult(RestoreIntent("repository", Capability.OPEN_FOLDER, resource_path=path), False, "", f"Directory does not exist: {path}", error="DirNotFound")
 
         intent = RestoreIntent("repository", Capability.OPEN_FOLDER, resource_path=path)
+        proj = os.path.basename(path)
+
+        # Idempotency check: If project window is already open, focus it rather than duplicate
+        if self._is_window_active(proj):
+            self.focus_window(proj)
+            return LaunchResult(intent, True, app.name if app else "Editor", f"Project {proj} is already open", executed=True)
+
+        if not app or not app.executable:
+            exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("cursor") or shutil.which("code")
+            if exec_bin:
+                friendly = "Antigravity IDE" if "antigravity" in exec_bin else "Editor"
+                app = ApplicationEntry(app_id="editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
+
         if app and app.executable and shutil.which(app.executable):
             try:
                 proc = subprocess.Popen([app.executable, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -324,6 +377,19 @@ class LinuxPlatformLauncher(PlatformLauncher):
             return LaunchResult(intent, False, "Terminal", f"Working directory no longer exists or was renamed: {cwd}")
 
         term_app = self.catalog.get_default_terminal()
+
+        # Idempotency check: Check if terminal in this exact directory is already active
+        try:
+            from arova.core.ambience.process_tracker import ProcessContextTracker
+            proc_ctx = ProcessContextTracker.get_active_process_contexts()
+            active_cwds = proc_ctx.get("terminal_cwds", [])
+            if target_dir in active_cwds or any(os.path.abspath(c) == os.path.abspath(target_dir) for c in active_cwds):
+                self.focus_window("terminal")
+                detail = f"Terminal session in {target_dir} is already active" + (f" (Recent command: '{command_hint}')" if command_hint else "")
+                return LaunchResult(intent, True, term_app.name if term_app else "Terminal", detail, executed=True)
+        except Exception:
+            pass
+
         exec_to_try = term_app.executable if term_app else (shutil.which("x-terminal-emulator") or shutil.which("gnome-terminal") or shutil.which("alacritty") or shutil.which("kitty"))
 
         pid = None
@@ -429,6 +495,17 @@ class LinuxBackend(PlatformBackend):
     def _resolve_app(self, app_name: str) -> Optional[ApplicationEntry]:
         if not app_name:
             return None
+        name_lower = app_name.lower()
+        if "antigravity" in name_lower or name_lower in ("editor", "ide", "code", "code-oss", "vscode", "visual studio code"):
+            exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity")
+            if exec_bin:
+                return ApplicationEntry(
+                    app_id="antigravity",
+                    name="Antigravity IDE",
+                    executable=exec_bin,
+                    exec_template=f"{exec_bin} %f",
+                    installed=True
+                )
         app = self._catalog.get_application(app_name)
         if not app and shutil.which(app_name):
             friendly = "VS Code" if app_name in ("code", "code-oss", "VS Code") else app_name
@@ -439,7 +516,7 @@ class LinuxBackend(PlatformBackend):
         """
         Directly execute a RestoreIntent on Linux using the catalog and launcher.
         """
-        app = self._resolve_app(intent.preferred_application or "")
+        app = self._resolve_app(intent.preferred_application) if intent.preferred_application else None
         return self._launcher.execute_intent(intent, app=app)
 
     def get_open_windows(self) -> list[str]:

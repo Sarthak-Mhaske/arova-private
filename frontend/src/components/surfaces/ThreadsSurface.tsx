@@ -34,6 +34,10 @@ export const ThreadsSurface: React.FC = () => {
           onClick={() => {
             socket.sendEvent({ type: 'client.new_thread' });
             useCognitionState.getState().setItems([]);
+            useCognitionState.getState().setActiveAction(null);
+            import('../../state/orbState').then(({ useOrbState }) => {
+              useOrbState.getState().setMode('idle', '');
+            });
             useSurfaceState.getState().closeSurface();
           }}
           style={{

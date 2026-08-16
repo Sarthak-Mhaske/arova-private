@@ -6,10 +6,10 @@ import { useOrbState } from '../../state';
 
 const getHaloColors = (mode: string) => {
   switch (mode) {
-    case 'thinking': return 'rgba(208, 195, 228, 0.45)';
-    case 'executing': return 'rgba(190, 210, 235, 0.45)';
+    case 'thinking': return 'rgba(168, 157, 200, 0.15)';
+    case 'executing': return 'rgba(154, 184, 212, 0.15)';
     case 'present':
-    default: return 'rgba(220, 232, 245, 0.55)'; // var(--rl-near)
+    default: return 'rgba(224, 163, 82, 0.12)';
   }
 };
 

@@ -30,117 +30,124 @@
    Both elevated with atmospheric depth tokens.
    ============================================================================ */
 
+/* ============================================================================
+   DAYLIGHT THEME (Warm Pearl Sand / Champagne Studio Glass — Reference 2)
+   ============================================================================ */
 :root,
 [data-theme="daylight"] {
-  /* Base — warm cream pearl, softened to feel like natural sunlight without harsh brightness */
-  --base-0: #efeade;
-  --base-1: #e7e2d5;
-  --base-2: #ded9cc;
-  --base-3: #d4cfc1;
+  /* Base — warm pearl sand / champagne greige studio canvas */
+  --base-0: #eae4dc;
+  --base-1: #e2dbd1;
+  --base-2: #d6cfc4;
+  --base-3: #c8c0b4;
 
-  /* Type — warm graphite, never pure black */
-  --ink:         #2a2620;
-  --ink-2:       #4a463e;
-  --ink-3:       #6b6558;
-  --ink-mute:    #8a8478;
-  --ink-whisper: #a8a294;
+  /* Type — deep, rich warm espresso charcoal */
+  --ink:         #1c1712;
+  --ink-2:       #383229;
+  --ink-3:       #595246;
+  --ink-mute:    #7d7568;
+  --ink-whisper: #9e9587;
 
-  /* Glass — warm pearl with golden undertone */
-  --glass-1: rgba(255, 252, 244, 0.55);
-  --glass-2: rgba(255, 252, 244, 0.68);
-  --glass-3: rgba(255, 252, 244, 0.82);
-  --glass-edge: rgba(255, 252, 244, 0.95);
-  --glass-hover: rgba(255, 254, 248, 0.92);
+  /* Glass — frosted translucent warm pearl acrylic */
+  --glass-1: rgba(255, 252, 246, 0.65);
+  --glass-2: rgba(255, 252, 246, 0.80);
+  --glass-3: rgba(255, 255, 255, 0.92);
+  --glass-edge: rgba(255, 255, 255, 0.85);
+  --glass-hover: rgba(255, 255, 255, 0.96);
 
-  /* Hairlines — warm graphite */
-  --hairline:   rgba(80, 70, 55, 0.08);
-  --hairline-2: rgba(80, 70, 55, 0.12);
+  /* Hairlines — delicate crisp glass borders */
+  --hairline:   rgba(60, 50, 40, 0.07);
+  --hairline-2: rgba(60, 50, 40, 0.12);
 
-  /* Semantic accents — warm-leaning */
-  --accent-ice:    #8eb0d0;
-  --accent-violet: #a89dc8;
-  --accent-cyan:   #a5c5cf;
-  --accent-gold:   #c9a878;
-  --accent-sage:   #a8c0a8;
-  --accent-amber:  #d4a878;
+  /* Semantic accents */
+  --accent-ice:    #0284c7;
+  --accent-violet: #7c3aed;
+  --accent-cyan:   #0891b2;
+  --accent-gold:   #c2822a;
+  --accent-sage:   #16a34a;
+  --accent-amber:  #d97706;
 
-  /* Room light — warm golden hour */
-  --room-near:  rgba(245, 222, 180, 0.45);
-  --room-far:   rgba(230, 215, 235, 0.32);
-  --room-edge:  rgba(250, 240, 220, 0.28);
+  /* Room light — clean glare-free ambient refractions */
+  --room-near:  transparent;
+  --room-far:   transparent;
+  --room-edge:  transparent;
 
-  /* Orb bleed */
-  --orb-bleed-color: rgba(245, 222, 180, 0.18);
-  --orb-bleed-size: 700px;
-  --orb-halo-opacity: 0.9;
+  /* Orb bleed — transparent, no white glare */
+  --orb-bleed-color: transparent;
+  --orb-bleed-size: 0px;
+  --orb-halo-opacity: 0.2;
 
-  /* Veil — warm cream falloff */
-  --veil-color: rgba(246, 243, 236, 0.92);
+  /* Veil — smooth warm pearl falloff */
+  --veil-color: rgba(234, 228, 220, 0.92);
 
-  /* Send button */
-  --send-from: #ffffff;
-  --send-to: rgba(245, 222, 180, 0.85);
-  --send-glow: rgba(212, 168, 120, 0.32);
+  /* Send button & primary actions */
+  --send-from: #faecd4;
+  --send-to: #ecd6b2;
+  --send-glow: rgba(212, 168, 90, 0.35);
 
-  /* Shadows */
-  --shadow-sm: 0 8px 30px rgba(80, 70, 55, 0.05), 0 1px 2px rgba(80, 70, 55, 0.04);
-  --shadow-md: 0 16px 48px rgba(80, 70, 55, 0.09);
-  --shadow-lg: 0 30px 80px rgba(80, 70, 55, 0.14);
+  /* Shadows — soft floating glass depth */
+  --shadow-sm: 0 4px 16px rgba(50, 40, 30, 0.05), 0 1px 2px rgba(50, 40, 30, 0.03);
+  --shadow-md: 0 12px 36px rgba(50, 40, 30, 0.08);
+  --shadow-lg: 0 24px 64px rgba(50, 40, 30, 0.12);
 }
 
+/* ============================================================================
+   NOCTURNE THEME (Dark Warm Coffee / Amber Obsidian Shadow — Reference 1)
+   ============================================================================ */
 [data-theme="nocturne"] {
-  /* Warm graphite — coffee shadow */
-  --base-0: #1a1612;
-  --base-1: #1e1a14;
-  --base-2: #221d17;
-  --base-3: #2a241c;
+  /* Warm graphite — deep coffee shadow */
+  --base-0: #12100e;
+  --base-1: #181512;
+  --base-2: #201c18;
+  --base-3: #2a2520;
 
-  /* Warm cream on warm dark */
-  --ink:         #f5f0e6;
-  --ink-2:       #d8d0c2;
-  --ink-3:       #b8b09e;
-  --ink-mute:    #8a8478;
-  --ink-whisper: #5e5a52;
+  /* Warm cream on dark espresso */
+  --ink:         #fbf7f0;
+  --ink-2:       #ded6ca;
+  --ink-3:       #b8b0a2;
+  --ink-mute:    #857d70;
+  --ink-whisper: #5c5549;
 
-  /* Glass — fogged amber */
-  --glass-1: rgba(58, 50, 40, 0.55);
-  --glass-2: rgba(68, 58, 46, 0.72);
-  --glass-3: rgba(78, 66, 52, 0.85);
-  --glass-edge: rgba(255, 240, 215, 0.08);
-  --glass-hover: rgba(88, 74, 58, 0.85);
+  /* Glass — frosted dark warm acrylic */
+  --glass-1: rgba(36, 30, 24, 0.65);
+  --glass-2: rgba(48, 40, 32, 0.80);
+  --glass-3: rgba(60, 50, 40, 0.92);
+  --glass-edge: rgba(255, 235, 200, 0.09);
+  --glass-hover: rgba(56, 46, 37, 0.90);
 
   /* Warm hairlines */
   --hairline:   rgba(255, 235, 200, 0.06);
-  --hairline-2: rgba(255, 235, 200, 0.10);
+  --hairline-2: rgba(255, 235, 200, 0.11);
 
-  /* Accents */
-  --accent-ice:    #a8c2dc;
-  --accent-violet: #b5a8d0;
-  --accent-cyan:   #b0d0d8;
-  --accent-gold:   #e2c896;
-  --accent-sage:   #b0c4b0;
-  --accent-amber:  #e8d0a4;
+  /* Semantic accents */
+  --accent-ice:    #58a6ff;
+  --accent-violet: #a855f7;
+  --accent-cyan:   #38bdf8;
+  --accent-gold:   #e0a352;
+  --accent-sage:   #4ade80;
+  --accent-amber:  #f59e0b;
 
-  /* Room light — warm dusk */
-  --room-near:  rgba(180, 140, 90, 0.22);
-  --room-far:   rgba(140, 120, 160, 0.18);
-  --room-edge:  rgba(80, 70, 90, 0.15);
+  /* Room light — transparent, no white glare */
+  --room-near:  transparent;
+  --room-far:   transparent;
+  --room-edge:  transparent;
 
   /* Orb as sun */
-  --orb-bleed-color: rgba(255, 235, 200, 0.20);
-  --orb-bleed-size: 900px;
-  --orb-halo-opacity: 1;
+  --orb-bleed-color: transparent;
+  --orb-bleed-size: 0px;
+  --orb-halo-opacity: 0.2;
 
   /* Veil — deep warm */
-  --veil-color: rgba(26, 22, 18, 0.92);
+  --veil-color: rgba(18, 16, 14, 0.92);
 
-  --send-from: #f5e6d0;
-  --send-to: #d4bc8a;
-  --send-glow: rgba(212, 188, 138, 0.35);
+  /* Send button */
+  --send-from: #6e502c;
+  --send-to: #4a341b;
+  --send-glow: rgba(220, 160, 80, 0.35);
 
-  --shadow-sm: 0 8px 30px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 16px 48px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 8px 30px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
 }
 
 /* Removed .theme-transitioning wildcard because it caused severe DOM thrashing and broke component-specific transitions */

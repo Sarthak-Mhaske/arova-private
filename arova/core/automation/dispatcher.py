@@ -581,7 +581,7 @@ class PlayMusicBackend(ActionBackend):
             elif sys.platform == "darwin":
                 cmd = "osascript -e 'tell application \"Spotify\" to pause' -e 'tell application \"Music\" to pause'"
             else:
-                cmd = "playerctl stop || pkill -f spotify || pkill -f vlc || true"
+                cmd = "playerctl -a pause 2>/dev/null || playerctl pause 2>/dev/null || playerctl stop 2>/dev/null || true"
             
             proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             await proc.communicate()
@@ -589,8 +589,8 @@ class PlayMusicBackend(ActionBackend):
             logger.debug(f"Failed to stop current playback: {e}")
 
     async def _close_yt_music_pwa_windows(self):
-        """Closes existing YouTube Music PWA windows across macOS, Windows, and Linux."""
-        import sys, os, asyncio, json, shlex
+        """Closes existing YouTube Music windows and tabs across macOS, Windows, and Linux to prevent duplicate audio."""
+        import sys, os, asyncio, json, shlex, shutil
         try:
             if sys.platform == "darwin":
                 script = '''
@@ -598,7 +598,7 @@ class PlayMusicBackend(ActionBackend):
                     tell application "Google Chrome"
                         repeat with w in windows
                             repeat with t in tabs of w
-                                if URL of t contains "music.youtube" then close t
+                                if URL of t contains "music.youtube" or URL of t contains "youtube.com/watch" then close t
                             end repeat
                         end repeat
                     end tell
@@ -607,7 +607,16 @@ class PlayMusicBackend(ActionBackend):
                     tell application "Brave Browser"
                         repeat with w in windows
                             repeat with t in tabs of w
-                                if URL of t contains "music.youtube" then close t
+                                if URL of t contains "music.youtube" or URL of t contains "youtube.com/watch" then close t
+                            end repeat
+                        end repeat
+                    end tell
+                end try
+                try
+                    tell application "Safari"
+                        repeat with w in windows
+                            repeat with t in tabs of w
+                                if URL of t contains "music.youtube" or URL of t contains "youtube.com/watch" then close t
                             end repeat
                         end repeat
                     end tell
@@ -622,35 +631,36 @@ class PlayMusicBackend(ActionBackend):
                 await proc.communicate()
 
             elif sys.platform.startswith("linux"):
-                import signal
-                proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                stdout, _ = await proc.communicate()
-                if proc.returncode == 0 and stdout:
-                    clients = json.loads(stdout.decode())
-                    for c in clients:
-                        cls_name = str(c.get("class", "")).lower()
-                        title = str(c.get("title", "")).lower()
-                        pid = c.get("pid")
-                        addr = c.get("address", "")
-                        if ("music.youtube" in cls_name or "music.youtube" in title or "youtube music" in title):
-                            if pid:
-                                try:
-                                    os.kill(int(pid), signal.SIGKILL)
-                                except Exception:
-                                    pass
-                            if addr:
-                                try:
-                                    w_proc = await asyncio.create_subprocess_exec("wmctrl", "-i", "-c", addr, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                                    await w_proc.communicate()
-                                except Exception:
-                                    pass
+                # 1. On Hyprland: Close any existing YouTube Music standalone/browser windows cleanly
+                if shutil.which("hyprctl"):
+                    try:
+                        proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        stdout, _ = await proc.communicate()
+                        if proc.returncode == 0 and stdout:
+                            clients = json.loads(stdout.decode())
+                            for c in clients:
+                                cls_name = str(c.get("class", "")).lower()
+                                title = str(c.get("title", "")).lower()
+                                addr = c.get("address", "")
+                                if ("music.youtube" in cls_name or "music.youtube" in title or ("youtube music" in title and "code" not in cls_name and "antigravity" not in cls_name)):
+                                    if addr:
+                                        await (await asyncio.create_subprocess_shell(f"hyprctl dispatch closewindow address:{addr}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)).communicate()
+                    except Exception:
+                        pass
 
-                # Also run pkill fallback to clean any existing music.youtube PWA instances
-                try:
-                    k_proc = await asyncio.create_subprocess_shell("pkill -9 -f 'music.youtube.com'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                    await k_proc.communicate()
-                except Exception:
-                    pass
+                # 2. On X11 (wmctrl): Close any window with YouTube Music title
+                if shutil.which("wmctrl"):
+                    try:
+                        proc = await asyncio.create_subprocess_exec("wmctrl", "-l", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        stdout, _ = await proc.communicate()
+                        if proc.returncode == 0 and stdout:
+                            for line in stdout.decode().splitlines():
+                                l_low = line.lower()
+                                if "youtube music" in l_low or "music.youtube" in l_low:
+                                    w_id = line.split()[0]
+                                    await (await asyncio.create_subprocess_exec("wmctrl", "-i", "-c", w_id, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)).communicate()
+                    except Exception:
+                        pass
         except Exception as e:
             logger.debug(f"YT Music window cleanup notice: {e}")
 
@@ -668,7 +678,7 @@ class PlayMusicBackend(ActionBackend):
             
         import asyncio, json, shlex, urllib.parse, sys, subprocess, webbrowser
         try:
-            # 1. Stop active audio and close existing YouTube Music PWA windows
+            # 1. Stop active audio and close existing YouTube Music windows
             await self._stop_current_playback()
             await self._close_yt_music_pwa_windows()
 
@@ -714,49 +724,55 @@ class PlayMusicBackend(ActionBackend):
                 await launch_proc.communicate()
                 return BackendObservation(f"Playing '{query}' in YouTube Music App.", True)
 
-            # 5. Find browser & launch PWA (--app=) mode
+            # 5. Open in user's preferred or system default browser as a clean tab
             browser = self._find_browser()
-            if browser and self._is_chromium_based(browser):
-                launch_cmd = f"{shlex.quote(browser)} --app={shlex.quote(url)}"
-                logger.info(f"PlayMusicBackend: Launching PWA mode: {launch_cmd}")
-                subprocess.Popen(launch_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            elif browser:
+            if browser:
                 launch_cmd = f"{shlex.quote(browser)} {shlex.quote(url)}"
+                logger.info(f"PlayMusicBackend: Opening in browser tab: {launch_cmd}")
                 subprocess.Popen(launch_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif shutil.which("xdg-open"):
+                subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 webbrowser.open(url)
 
             # 6. On Hyprland (Linux): Route to workspace 3 and refocus original user window seamlessly
             if sys.platform.startswith("linux") and (orig_window or orig_ws):
-                await asyncio.sleep(0.6)
-                new_addr = ""
-                for _ in range(12):
-                    try:
-                        c_proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                        c_out, _ = await c_proc.communicate()
-                        if c_out:
-                            clients = json.loads(c_out.decode())
-                            yt_wins = [c.get("address", "") for c in clients if "music.youtube" in str(c.get("class", "")).lower() or "music.youtube" in str(c.get("title", "")).lower()]
-                            if yt_wins:
-                                new_addr = yt_wins[0]
-                                break
-                    except Exception:
-                        pass
-                    await asyncio.sleep(0.3)
+                try:
+                    await asyncio.sleep(0.6)
+                    new_addr = ""
+                    for _ in range(10):
+                        try:
+                            c_proc = await asyncio.create_subprocess_exec("hyprctl", "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                            c_out, _ = await asyncio.wait_for(c_proc.communicate(), timeout=2.0)
+                            if c_out:
+                                clients = json.loads(c_out.decode())
+                                yt_wins = [c.get("address", "") for c in clients if "music.youtube" in str(c.get("class", "")).lower() or "music.youtube" in str(c.get("title", "")).lower()]
+                                if yt_wins:
+                                    new_addr = yt_wins[0]
+                                    break
+                        except Exception:
+                            pass
+                        await asyncio.sleep(0.3)
 
-                if new_addr:
-                    await asyncio.create_subprocess_shell(f"hyprctl dispatch movetoworkspacesilent 3,address:{new_addr}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                    await asyncio.sleep(0.1)
+                    if new_addr:
+                        m_proc = await asyncio.create_subprocess_shell(f"hyprctl dispatch movetoworkspacesilent 3,address:{new_addr}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await m_proc.communicate()
+                        await asyncio.sleep(0.1)
 
-                if orig_ws:
-                    await asyncio.create_subprocess_shell(f"hyprctl dispatch workspace {orig_ws}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                    await asyncio.sleep(0.05)
-                if orig_window:
-                    await asyncio.create_subprocess_shell(f"hyprctl dispatch focuswindow address:{orig_window}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    if orig_ws:
+                        w_proc = await asyncio.create_subprocess_shell(f"hyprctl dispatch workspace {orig_ws}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await w_proc.communicate()
+                        await asyncio.sleep(0.05)
+                    if orig_window:
+                        f_proc = await asyncio.create_subprocess_shell(f"hyprctl dispatch focuswindow address:{orig_window}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await f_proc.communicate()
+                except Exception as hex_err:
+                    logger.debug(f"Hyprland workspace shifting notice: {hex_err}")
 
-            return BackendObservation(f"Playing '{query}' on YouTube Music PWA.", True)
+            return BackendObservation(f"Playing '{query}' on YouTube Music.", True)
         except Exception as e:
-            return BackendObservation("", False, str(e))
+            logger.error(f"PlayMusicBackend error: {e}", exc_info=True)
+            return BackendObservation("", False, f"Failed to play music: {e}")
 
 class FocusWindowBackend(ActionBackend):
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:

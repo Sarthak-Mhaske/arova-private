@@ -46,15 +46,13 @@ class RuntimeContainer:
     def __init__(self):
         self.config = load_config()
         # === TIER 0.3: Beta minimal gate — only Capture→Workspace→Restore→Chat ===
-        beta_cfg = self.config.get("beta", {})
-        is_beta_minimal = beta_cfg.get("profile", "minimal") == "minimal"
-        # Voice is always enabled (UI mic button requires it)
+        # Core continuous perception engines (Voice, Presence, Ambience) are active
         self.enable_voice = True
-        self.enable_presence = (not is_beta_minimal) and beta_cfg.get("enable_presence", True)
-        self.enable_ambience = (not is_beta_minimal) and beta_cfg.get("enable_ambience", True)
-        self.enable_warmup = (not is_beta_minimal) and beta_cfg.get("enable_warmup", True)
-        self.beta_mode = "minimal" if is_beta_minimal else "full"
-        logging.info(f"RuntimeContainer: BETA_{self.beta_mode.upper()} mode (voice={self.enable_voice}, presence={self.enable_presence}, ambience={self.enable_ambience})")
+        self.enable_presence = True
+        self.enable_ambience = True
+        self.enable_warmup = True
+        self.beta_mode = "full"
+        logging.info(f"RuntimeContainer: Active mode (voice={self.enable_voice}, presence={self.enable_presence}, ambience={self.enable_ambience})")
         self.event_bus = RuntimeEventBus()
         
         # Privacy & Trust Engine (Phase 10A)

@@ -41,11 +41,7 @@ class LiveOSAmbientProvider(AmbientProvider):
         self._event_callbacks: list = []
 
     def is_event_driven(self) -> bool:
-        # If Hyprland socket exists, we can run event-driven without polling (`P0-4`)
-        import os
-        xdg = os.environ.get("XDG_RUNTIME_DIR", "")
-        if self._has_hyprctl and xdg and os.path.exists(f"{xdg}/hypr"):
-            return True
+        # Polling ensures continuous robust discovery across all Linux WMs (Hyprland / Sway / X11)
         return False
 
     def subscribe(self, callback: Callable[[AmbientContext], None]):
@@ -68,8 +64,51 @@ class LiveOSAmbientProvider(AmbientProvider):
         is_idle = False
         idle_time_seconds = 0.0
 
+        import sys
         try:
-            if self._has_hyprctl:
+            if sys.platform == "darwin":
+                # macOS active application and window tracking via AppleScript
+                script = '''
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    set frontAppName to name of frontApp
+                    set windowTitle to ""
+                    try
+                        set windowTitle to name of front window of frontApp
+                    end try
+                    return frontAppName & "|||" & windowTitle
+                end tell
+                '''
+                proc = await asyncio.create_subprocess_exec(
+                    "osascript", "-e", script,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode == 0 and stdout:
+                    out_str = stdout.decode('utf-8', errors='ignore').strip()
+                    if "|||" in out_str:
+                        app_part, title_part = out_str.split("|||", 1)
+                        active_app = app_part.strip() or active_app
+                        window_title = title_part.strip() or window_title
+
+            elif sys.platform == "win32":
+                # Windows active window tracking via PowerShell / Win32
+                ps_cmd = "$w = (Get-Process | Where-Object {$_.MainWindowHandle -eq (Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();' -Name 'Win32' -Namespace 'Native' -PassThru)::GetForegroundWindow()}); if($w){$w.ProcessName + '|||' + $w.MainWindowTitle}"
+                proc = await asyncio.create_subprocess_shell(
+                    f"powershell -NoProfile -Command \"{ps_cmd}\"",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode == 0 and stdout:
+                    out_str = stdout.decode('utf-8', errors='ignore').strip()
+                    if "|||" in out_str:
+                        app_part, title_part = out_str.split("|||", 1)
+                        active_app = app_part.strip() or active_app
+                        window_title = title_part.strip() or window_title
+
+            elif self._has_hyprctl:
                 proc = await asyncio.create_subprocess_exec(
                     "hyprctl", "activewindow", "-j",
                     stdout=asyncio.subprocess.PIPE,

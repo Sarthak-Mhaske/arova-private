@@ -111,7 +111,8 @@ export const TimelineSurface: React.FC = () => {
             gap: '6px'
           }}
         >
-          <span>⚡ View Canonical Activity Stream</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span>View Canonical Activity Stream</span>
           <span>→</span>
         </button>
       </div>
@@ -141,9 +142,18 @@ export const TimelineSurface: React.FC = () => {
             <div>
               <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Time Allocation</div>
               <div style={{ fontSize: '13px', color: 'var(--ink-1)', fontWeight: 500, display: 'flex', gap: '12px' }}>
-                <span>💻 Code: <strong style={{ color: '#d4a878' }}>{timeInsights.category_breakdown.coding}%</strong></span>
-                <span>🐚 CLI: <strong style={{ color: '#60a5fa' }}>{timeInsights.category_breakdown.terminal}%</strong></span>
-                <span>🌐 Web: <strong style={{ color: '#a78bfa' }}>{timeInsights.category_breakdown.browsing}%</strong></span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <span>Code: <strong style={{ color: '#d4a878' }}>{timeInsights.category_breakdown.coding}%</strong></span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  <span>CLI: <strong style={{ color: '#60a5fa' }}>{timeInsights.category_breakdown.terminal}%</strong></span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span>Web: <strong style={{ color: '#a78bfa' }}>{timeInsights.category_breakdown.browsing}%</strong></span>
+                </span>
               </div>
             </div>
           )}

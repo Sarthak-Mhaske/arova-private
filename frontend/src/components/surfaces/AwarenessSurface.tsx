@@ -84,7 +84,7 @@ export const AwarenessSurface: React.FC = () => {
         <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Privacy & Filtering</div>
           <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>🔒</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Protected
           </div>
         </div>

@@ -30,6 +30,9 @@ export function routeEvent(event: any) {
 
     case 'stream.end':
       useCognitionState.getState().streamEnd(event.stream_id);
+      if (useOrbState.getState().mode === 'streaming') {
+        useOrbState.getState().setMode('idle');
+      }
       break;
 
     case 'stream.interrupted':
@@ -112,10 +115,11 @@ export function routeEvent(event: any) {
     case 'session.sync':
       if (Array.isArray(event.messages)) {
         const parsedItems = event.messages.map((m: any) => {
+          const ts = (m.timestamp || Date.now() / 1000) * 1000;
           if (m.role === 'user') {
-            return { id: m.id, type: 'userSaid', timestamp: m.timestamp * 1000, text: m.content };
-          } else if (m.role === 'assistant') {
-            return { id: m.id, type: 'surfacing', timestamp: m.timestamp * 1000, from: 'Arova', paragraphs: [m.content] };
+            return { id: m.id || Math.random().toString(36).substring(7), type: 'userSaid', timestamp: ts, text: m.content };
+          } else if (m.role === 'assistant' || m.role === 'system') {
+            return { id: m.id || Math.random().toString(36).substring(7), type: 'surfacing', timestamp: ts, from: m.from || 'Arova', paragraphs: [m.content] };
           }
           return null;
         }).filter(Boolean);

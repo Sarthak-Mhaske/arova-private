@@ -167,10 +167,10 @@ class UnderstandingLayer:
     completed_work: List[Dict[str, Any]] = field(default_factory=list)
     story_narrative: List[str] = field(default_factory=list)
     explainability_reasons: List[str] = field(default_factory=list)
-    state_summary: str = "Active trajectory progression"
-    what_changed: str = "Initial workspace observations established."
+    state_summary: str = "Active workspace context"
+    what_changed: str = ""
     delta_changes: List[str] = field(default_factory=list)
-    trajectory_story: str = "Trajectory is developing through steady focus and activity."
+    trajectory_story: str = ""
     last_synthesized_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:

@@ -54,6 +54,17 @@ class RestorePlanner:
         restore_browsers = options.get("restore_chrome", options.get("restore_browsers", False))
         selected_urls = options.get("selected_urls", [])
 
+        # Extract any detected editor app from reality resources or categorized items
+        detected_editor_app = None
+        for res_k, res_v in resources_dict.items():
+            if isinstance(res_v, dict) and res_v.get("category") == "editor" and res_v.get("app"):
+                detected_editor_app = res_v.get("app")
+                break
+        if not detected_editor_app and getattr(workspace, "categorized_items", None):
+            editors_list = getattr(workspace, "categorized_items", {}).get("editors", [])
+            if editors_list and isinstance(editors_list[0], dict) and editors_list[0].get("app"):
+                detected_editor_app = editors_list[0].get("app")
+
         # 1. Check repository paths from interpretation layer first (priority 1)
         interpretation = getattr(workspace, "interpretation", None)
         repo_paths = getattr(interpretation, "repo_paths", []) if interpretation else []
@@ -65,7 +76,7 @@ class RestorePlanner:
                 key = ("repository", abs_rp)
                 if key not in seen_keys:
                     seen_keys.add(key)
-                    pref_app = self._get_preferred_app_for_folder(abs_rp)
+                    pref_app = self._resolve_editor_app(detected_editor_app) if detected_editor_app else self._get_preferred_app_for_folder(abs_rp)
                     intents.append(RestoreIntent(
                         kind="repository",
                         capability=Capability.OPEN_FOLDER,
@@ -82,7 +93,7 @@ class RestorePlanner:
                 key = ("repository", abs_rp)
                 if key not in seen_keys:
                     seen_keys.add(key)
-                    pref_app = self._get_preferred_app_for_folder(abs_rp)
+                    pref_app = self._resolve_editor_app(detected_editor_app) if detected_editor_app else self._get_preferred_app_for_folder(abs_rp)
                     intents.append(RestoreIntent(
                         kind="repository",
                         capability=Capability.OPEN_FOLDER,
@@ -105,7 +116,8 @@ class RestorePlanner:
                 key = ("repository", abs_path)
                 if key not in seen_keys:
                     seen_keys.add(key)
-                    pref_app = self._get_preferred_app_for_folder(abs_path)
+                    app_hint = res_meta.get("app") or detected_editor_app
+                    pref_app = self._resolve_editor_app(app_hint) if app_hint else self._get_preferred_app_for_folder(abs_path)
                     intents.append(RestoreIntent(
                         kind="repository",
                         capability=Capability.OPEN_FOLDER,
@@ -120,12 +132,20 @@ class RestorePlanner:
                     continue
                 clean_path = identity.replace("file://", "")
                 abs_path = os.path.abspath(os.path.expanduser(clean_path))
+                
+                selected_files = options.get("selected_files", None)
+                if selected_files is not None:
+                    base_name = os.path.basename(abs_path)
+                    if not any(f == abs_path or f == clean_path or f == base_name or abs_path.endswith("/" + f.lstrip("/")) for f in selected_files):
+                        continue
+
                 key = ("source_file", abs_path)
                 if key not in seen_keys:
                     seen_keys.add(key)
                     line = res_meta.get("line")
                     col = res_meta.get("col")
-                    pref_app = self._get_preferred_app_for_file(abs_path)
+                    app_hint = res_meta.get("app")
+                    pref_app = self._resolve_editor_app(app_hint) if app_hint else self._get_preferred_app_for_file(abs_path)
                     intents.append(RestoreIntent(
                         kind="source_file",
                         capability=Capability.OPEN_FILE,
@@ -156,7 +176,7 @@ class RestorePlanner:
 
             elif r_type in ["url", "browser"] or identity.startswith("http") or identity.startswith("url://"):
                 clean_url = identity.replace("url://", "").strip()
-                is_selected = restore_browsers or (clean_url in selected_urls) or (res_meta.get("summary") in selected_urls)
+                is_selected = restore_browsers or (selected_urls is not None and any(u in clean_url or clean_url in u for u in selected_urls)) or (clean_url in selected_urls) or (res_meta.get("summary") in selected_urls)
                 if is_selected and clean_url not in seen_urls:
                     seen_urls.add(clean_url)
                     pref_app = self._get_preferred_app_for_url(clean_url)
@@ -257,44 +277,78 @@ class RestorePlanner:
             approved=auto_approve
         )
 
+    def _resolve_editor_app(self, app_hint: str) -> str:
+        hint_lower = (app_hint or "").lower()
+        if "antigravity" in hint_lower:
+            if shutil.which("antigravity-ide"):
+                return "antigravity-ide"
+            if shutil.which("antigravity"):
+                return "antigravity"
+            return "antigravity-ide"
+        if "cursor" in hint_lower and shutil.which("cursor"):
+            return "cursor"
+        # If no explicit hint or generic code requested, prefer Antigravity IDE if present
+        if not app_hint or hint_lower in ("editor", "ide", "code", "code-oss", "vscode", "visual studio code"):
+            if shutil.which("antigravity-ide"):
+                return "antigravity-ide"
+            if shutil.which("antigravity"):
+                return "antigravity"
+        if "code-oss" in hint_lower and shutil.which("code-oss"):
+            return "code-oss"
+        if ("vscode" in hint_lower or "visual studio code" in hint_lower or hint_lower == "code") and shutil.which("code"):
+            return "code"
+        if "pycharm" in hint_lower and (shutil.which("pycharm") or shutil.which("pycharm-community")):
+            return "pycharm"
+        if "zed" in hint_lower and shutil.which("zed"):
+            return "zed"
+        if "sublime" in hint_lower and shutil.which("subl"):
+            return "subl"
+        return app_hint or "antigravity-ide"
+
     def _get_preferred_app_for_file(self, file_path: str) -> str:
         ext = os.path.splitext(file_path)[1]
-        if ext:
+        if ext and self.affinity:
             aff_app = self.affinity.get_preferred_app(ext)
             if aff_app:
-                return aff_app
+                return self._resolve_editor_app(aff_app)
 
         handler = self.catalog.find_handler_for_file(file_path)
         if handler and handler.executable and "gnome-software" not in handler.executable:
-            return os.path.basename(handler.executable)
+            return self._resolve_editor_app(os.path.basename(handler.executable))
 
-        for code_app in ("code", "cursor", "idea"):
-            if self.catalog.get_application(code_app) or shutil.which(code_app):
-                return code_app
+        # Check currently installed/active modern IDEs in order of preference
+        for ide_candidate in ("antigravity-ide", "antigravity", "cursor", "code", "code-oss", "idea"):
+            if shutil.which(ide_candidate):
+                return ide_candidate
 
         editor = self.catalog.get_default_editor()
         if editor and editor.executable and "gnome-software" not in editor.executable:
-            return os.path.basename(editor.executable)
+            return self._resolve_editor_app(os.path.basename(editor.executable))
 
         return "code"
 
     def _get_preferred_app_for_folder(self, folder_path: str) -> str:
-        aff_app = self.affinity.get_preferred_app(".project") or self.affinity.get_preferred_app(".folder")
-        if aff_app:
-            return aff_app
-        for code_app in ("code", "cursor", "idea"):
-            if self.catalog.get_application(code_app) or shutil.which(code_app):
-                return code_app
+        if self.affinity:
+            aff_app = self.affinity.get_preferred_app(".project") or self.affinity.get_preferred_app(".folder")
+            if aff_app:
+                return self._resolve_editor_app(aff_app)
+        for ide_candidate in ("antigravity-ide", "antigravity", "cursor", "code", "code-oss", "idea"):
+            if shutil.which(ide_candidate):
+                return ide_candidate
         editor = self.catalog.get_default_editor()
         if editor and editor.executable and "gnome-software" not in editor.executable:
             return os.path.basename(editor.executable)
         return "code"
 
     def _get_preferred_app_for_url(self, url: str) -> str:
-        aff_app = self.affinity.get_preferred_app(".html") or self.affinity.get_preferred_app(".url")
-        if aff_app:
-            return aff_app
+        if self.affinity:
+            aff_app = self.affinity.get_preferred_app(".html") or self.affinity.get_preferred_app(".url")
+            if aff_app:
+                return aff_app
         browser = self.catalog.get_default_browser()
-        if browser and browser.executable:
+        if browser and browser.executable and "gnome-software" not in browser.executable:
             return os.path.basename(browser.executable)
+        for b in ["brave", "google-chrome-stable", "google-chrome", "chromium", "firefox", "zen-browser", "msedge"]:
+            if shutil.which(b):
+                return b
         return ""
