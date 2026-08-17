@@ -31,34 +31,60 @@ class ProcessContextTracker:
             cls._scan_windows_proc(terminal_cwds, editor_projects)
 
         home = os.path.abspath(os.path.expanduser("~"))
+        win_dir = os.environ.get("WINDIR", "C:\\Windows")
+        temp_dir = os.environ.get("TEMP", "")
+        
         def _is_clean(p: str) -> bool:
             if not p or not isinstance(p, str) or not os.path.isdir(p):
                 return False
             ap = os.path.abspath(p)
-            if (
-                ap in [home, "/", "/root"]
-                or ap.startswith(("/tmp", "/var/tmp", "/usr", "/opt", "/etc"))
-                or any(noisy in ap for noisy in [
-                    "/.cache",
-                    "/.vscode/extensions",
-                    "/.vscode-server",
-                    "/.cursor/extensions",
-                    "/.antigravity",
-                    "/.config",
-                    "/.local/share",
-                    "/node_modules",
-                    "/site-packages",
-                    "/__pycache__",
-                    "/venv",
-                    "/.venv",
-                    "/.git",
-                    "/arova/frontend",
-                    "/arova/release",
-                    "/arova/dist",
-                    "/arova/src-tauri",
-                ])
-            ):
-                return False
+            if sys.platform == "win32":
+                ap_low = ap.lower()
+                if (
+                    ap_low in [home.lower(), "c:\\", "c:\\users", "c:\\windows"]
+                    or ap_low.startswith((win_dir.lower(), "c:\\windows", "c:\\programdata", temp_dir.lower()))
+                    or any(noisy in ap_low for noisy in [
+                        "\\appdata\\local\\temp",
+                        "\\appdata\\local\\microsoft",
+                        "\\.vscode\\extensions",
+                        "\\.cursor\\extensions",
+                        "\\node_modules",
+                        "\\site-packages",
+                        "\\__pycache__",
+                        "\\venv",
+                        "\\.venv",
+                        "\\.git",
+                        "\\arova\\release",
+                        "\\arova\\dist",
+                        "\\arova\\src-tauri",
+                    ])
+                ):
+                    return False
+            else:
+                if (
+                    ap in [home, "/", "/root"]
+                    or ap.startswith(("/tmp", "/var/tmp", "/usr", "/opt", "/etc"))
+                    or any(noisy in ap for noisy in [
+                        "/.cache",
+                        "/.vscode/extensions",
+                        "/.vscode-server",
+                        "/.cursor/extensions",
+                        "/.antigravity",
+                        "/.config",
+                        "/.local/share",
+                        "/node_modules",
+                        "/site-packages",
+                        "/__pycache__",
+                        "/venv",
+                        "/.venv",
+                        "/.git",
+                        "/arova/frontend",
+                        "/arova/release",
+                        "/arova/dist",
+                        "/arova/src-tauri",
+                    ])
+                ):
+                    return False
             return True
 
         clean_terms = [p for p in terminal_cwds if _is_clean(p)]
@@ -127,23 +153,30 @@ class ProcessContextTracker:
     @classmethod
     def _scan_windows_proc(cls, terminal_cwds: Set[str], editor_projects: Set[str]):
         try:
-            cmd = "Get-CimInstance Win32_Process | Select-Object Name, CommandLine, ProcessId | ConvertTo-Json"
-            proc = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=3)
-            if proc.returncode == 0:
-                import json
-                items = json.loads(proc.stdout)
-                if isinstance(items, dict):
-                    items = [items]
-                for item in items:
-                    name = str(item.get("Name", "")).lower()
-                    cmdline = str(item.get("CommandLine", ""))
+            import psutil
+            for p in psutil.process_iter(['name', 'cmdline', 'cwd']):
+                try:
+                    name = (p.info.get('name') or '').lower()
+                    if name.endswith('.exe'):
+                        name = name[:-4]
+                    
+                    proc_cwd = p.info.get('cwd')
+                    if proc_cwd and os.path.isdir(proc_cwd):
+                        if any(term in name for term in cls.TERMINAL_NAMES):
+                            terminal_cwds.add(proc_cwd)
+                        elif any(ed in name for ed in cls.EDITOR_NAMES):
+                            editor_projects.add(proc_cwd)
+
+                    cmdline = p.info.get('cmdline') or []
                     if any(ed in name for ed in cls.EDITOR_NAMES) or any(term in name for term in cls.TERMINAL_NAMES):
-                        for arg in cmdline.split():
+                        for arg in cmdline:
                             arg_clean = arg.strip('"\'')
                             if os.path.isabs(arg_clean) and os.path.isdir(arg_clean):
                                 if any(term in name for term in cls.TERMINAL_NAMES):
                                     terminal_cwds.add(arg_clean)
                                 else:
                                     editor_projects.add(arg_clean)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
         except Exception as e:
             logger.debug(f"ProcessContextTracker windows scan error: {e}")

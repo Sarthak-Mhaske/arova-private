@@ -45,8 +45,16 @@ class MemoryStorage:
             self._conn = await loop.run_in_executor(self._executor, self._connect_and_migrate)
 
     def _connect_and_migrate(self):
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        import os
+        if self.db_path != ":memory:":
+            os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+        conn = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        except Exception:
+            pass
         
         # 1. Episodic Memory: Raw conversations & capability execution logs
         conn.execute('''

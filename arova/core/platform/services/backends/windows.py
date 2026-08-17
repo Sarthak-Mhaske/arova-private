@@ -342,7 +342,36 @@ class WindowsPlatformLauncher(PlatformLauncher):
 
     def focus_window(self, window_class: str) -> LaunchResult:
         intent = RestoreIntent("window", Capability.FOCUS_WINDOW, metadata={"window_class": window_class})
-        return LaunchResult(intent, False, "", "Win32 window focus requires pywin32 / ctypes SetForegroundWindow integration")
+        if not window_class:
+            return LaunchResult(intent, False, "", "No window class/title provided")
+
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            found = False
+            target_lower = window_class.lower().strip()
+
+            def enum_win_callback(hwnd, lparam):
+                nonlocal found
+                if user32.IsWindowVisible(hwnd):
+                    length = user32.GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(hwnd, buff, length + 1)
+                        if target_lower in buff.value.lower():
+                            user32.ShowWindowAsync(hwnd, 9)  # SW_RESTORE
+                            user32.SetForegroundWindow(hwnd)
+                            found = True
+                            return False
+                return True
+
+            ENUM_PROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            user32.EnumWindows(ENUM_PROC(enum_win_callback), 0)
+            if found:
+                return LaunchResult(intent, True, window_class, f"Focused Win32 window '{window_class}'")
+            return LaunchResult(intent, False, window_class, f"Win32 window '{window_class}' not found")
+        except Exception as e:
+            return LaunchResult(intent, False, "", f"Win32 focus_window error: {e}")
 
     def reveal_file(self, path: str) -> LaunchResult:
         intent = RestoreIntent("source_file", Capability.REVEAL_FILE, resource_path=path)
@@ -406,15 +435,24 @@ class WindowsBackend(PlatformBackend):
     def get_open_windows(self) -> list[str]:
         windows = set()
         try:
-            # Quick powershell to get main window titles
-            script = "Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -ExpandProperty MainWindowTitle"
-            proc = subprocess.run(["powershell", "-Command", script], capture_output=True, text=True, timeout=3)
-            if proc.returncode == 0 and proc.stdout:
-                for line in proc.stdout.splitlines():
-                    if line.strip():
-                        windows.add(line.strip())
+            import ctypes
+            user32 = ctypes.windll.user32
+
+            def enum_win_proc(hwnd, lparam):
+                if user32.IsWindowVisible(hwnd):
+                    length = user32.GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(hwnd, buff, length + 1)
+                        title = buff.value.strip()
+                        if title and title not in ["Program Manager", "Settings", "Search", "Default IME", "MSCTFIME UI"]:
+                            windows.add(title)
+                return True
+
+            ENUM_PROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            user32.EnumWindows(ENUM_PROC(enum_win_proc), 0)
         except Exception as e:
-            logger.debug(f"WindowsBackend window tracking failed: {e}")
+            logger.debug(f"Windows ctypes get_open_windows error: {e}")
         return list(windows)
 
     def get_playing_media(self) -> list[str]:

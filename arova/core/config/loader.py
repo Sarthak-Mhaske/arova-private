@@ -131,12 +131,32 @@ DEFAULT_CONFIG: dict[str, Any] = {
 def load_config(config_path: str | None = None) -> dict[str, Any]:
     """Load configuration from a YAML or JSON file, falling back to safe defaults."""
     if config_path is None:
+        import sys
+        cands = []
+        if sys.platform == "win32":
+            local_app_data = os.environ.get("LOCALAPPDATA")
+            if local_app_data:
+                cands.append(Path(local_app_data) / "Arova")
+            app_data = os.environ.get("APPDATA")
+            if app_data:
+                cands.append(Path(app_data) / "Arova")
+        elif sys.platform == "darwin":
+            cands.append(Path.home() / "Library" / "Application Support" / "Arova")
+        
         home = Path.home()
-        path = home / ".config" / "arova" / "config.json"
-        if not path.exists():
-            path = home / ".config" / "arova" / "config.yml"
-        if not path.exists():
-            path = home / ".config" / "arova" / "config.yaml"
+        cands.append(home / ".config" / "arova")
+
+        path = None
+        for dir_path in cands:
+            for fname in ["config.json", "config.yml", "config.yaml"]:
+                p = dir_path / fname
+                if p.exists():
+                    path = p
+                    break
+            if path:
+                break
+        if not path:
+            path = home / ".config" / "arova" / "config.json"
     else:
         path = Path(config_path)
 
