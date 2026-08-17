@@ -146,15 +146,19 @@ class CognitiveRouter:
         
         search_query = None
         
-        # Pattern group 1: "search google for X", "search web for X", "search for X"
-        for prefix in ["search google for ", "google search ", "search web for ", "search the web for ", "search for "]:
+        # Pattern group 1: "search google for X", "search web for X", "search for X", "find for X", "do google search for X"
+        for prefix in [
+            "do a google search for ", "do google search for ", "google search for ", "google search ",
+            "search google for ", "search web for ", "search the web for ", "search for ",
+            "find for list of ", "find list of ", "find for ", "find me "
+        ]:
             if norm.startswith(prefix):
                 search_query = norm[len(prefix):].strip()
                 break
         
         # Pattern group 2: "search X on google", "find X on google", "look up X on google"
         if not search_query:
-            m = re.match(r'(?:search|find|look\s*up)\s+(.+?)\s+on\s+google', norm)
+            m = re.match(r'(?:search|find|look\s*up|do\s+a\s+search\s+for|do\s+google\s+search\s+for)\s+(.+?)\s+on\s+google', norm)
             if m:
                 search_query = m.group(1).strip()
         
@@ -175,14 +179,22 @@ class CognitiveRouter:
             m = re.match(r'^(?:look\s*up|find)\s+(.+)', norm)
             if m:
                 candidate = m.group(1).strip()
-                if len(candidate.split()) >= 2 or any(w in candidate for w in ["news", "weather", "price", "score", "result", "update"]):
+                if len(candidate.split()) >= 2 or any(w in candidate for w in ["news", "weather", "price", "score", "result", "update", "latest", "models", "list"]):
                     search_query = candidate
         
-        # Pattern group 6: "find on google", "search on google" (no query)
+        # Pattern group 6: "do google search", "do a google search", "search google", "find on google", "search on google"
         if not search_query:
-            if re.match(r'^(?:find|search|look)\s+(?:on|in|with)\s+(?:google|the\s+web|browser|brave|chrome)', norm):
-                # Fall through to LLM to resolve from conversation context
-                return None
+            if re.match(r'^(?:do\s+(?:a\s+)?google\s+search|do\s+search|search\s+google|google\s+it|search\s+it|find|search|look)\s*(?:on|in|with)?\s*(?:google|the\s+web|browser|brave|chrome)?$', norm):
+                if messages and len(messages) >= 2:
+                    for prev_msg in reversed(messages[:-1]):
+                        if prev_msg.get("role") == "user" and prev_msg.get("content"):
+                            prev_content = prev_msg.get("content").strip()
+                            if len(prev_content) > 3 and not re.match(r'^(?:do\s+google\s+search|yes|no|ok|sure|thanks)$', prev_content.lower()):
+                                search_query = prev_content
+                                break
+                if not search_query:
+                    # Fall through to LLM ActionPlanner to resolve from conversation context
+                    return None
         
         if search_query:
             # PRONOUN GUARD: if query is just a pronoun, fall through to LLM ActionPlanner

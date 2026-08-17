@@ -448,11 +448,11 @@ export const SettingsLayout: React.FC = () => {
                   saveConfig({ ...config, preferred_provider: val });
                 }}
               >
-                <option value="groq" style={{ background: '#1a1714', color: '#f5eedb' }}>Groq LPU (Qwen 3.6 / Llama 3.3 - Fast Cloud)</option>
-                <option value="gemini" style={{ background: '#1a1714', color: '#f5eedb' }}>Google AI (Gemini 2.0 Flash / Pro)</option>
-                <option value="anthropic" style={{ background: '#1a1714', color: '#f5eedb' }}>Anthropic (Claude 3.7 Sonnet)</option>
-                <option value="openai" style={{ background: '#1a1714', color: '#f5eedb' }}>OpenAI (GPT-4o / o3-mini)</option>
-                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local - Qwen 2.5 Coder / Llama 3.3)</option>
+                <option value="groq" style={{ background: '#1a1714', color: '#f5eedb' }}>Groq LPU (GPT OSS 120B / Qwen 3.6 / Llama 3.3)</option>
+                <option value="gemini" style={{ background: '#1a1714', color: '#f5eedb' }}>Google AI (Gemini 3.1 Pro / 3.7 Flash)</option>
+                <option value="anthropic" style={{ background: '#1a1714', color: '#f5eedb' }}>Anthropic (Claude Sonnet 5 / Fable 5)</option>
+                <option value="openai" style={{ background: '#1a1714', color: '#f5eedb' }}>OpenAI (GPT-5.6 Sol / o3 / o4-mini)</option>
+                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local - GPT OSS 120B / Qwen 3)</option>
               </select>
             </div>
 
@@ -489,11 +489,11 @@ export const SettingsLayout: React.FC = () => {
             {/* Providers List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {[
-                { id: 'groq', name: 'Groq (Qwen 3.6 & Llama 3.3)', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
-                { id: 'gemini', name: 'Google AI (Gemini 2.0)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
-                { id: 'anthropic', name: 'Anthropic (Claude 3.7)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
-                { id: 'openai', name: 'OpenAI (GPT-4o & o3-mini)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
-                { id: 'ollama', name: 'Ollama (Local Qwen / Llama)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434', directUrl: 'https://ollama.com/download' }
+                { id: 'groq', name: 'Groq (GPT OSS 120B & Qwen 3.6)', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
+                { id: 'gemini', name: 'Google AI (Gemini 3.1 Pro & 3.7 Flash)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
+                { id: 'anthropic', name: 'Anthropic (Claude Sonnet 5 & Fable 5)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
+                { id: 'openai', name: 'OpenAI (GPT-5.6 Sol & o3)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
+                { id: 'ollama', name: 'Ollama (Local GPT OSS & Qwen 3)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434', directUrl: 'https://ollama.com/download' }
               ].map(p => {
                 const status = getModelStatus(p.id);
                 const isConnected = status === 'connected';

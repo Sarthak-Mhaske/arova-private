@@ -386,8 +386,9 @@ class IntentRuntime:
                             success = getattr(result_payload, "success", False)
                             results = getattr(result_payload, "results", [])
                             
-                        # Check if any action node produced rich informational analysis output (ONLY for analyze_screen or read_file)
+                        # Check if any action node produced rich informational analysis output
                         info_output = None
+                        search_output = None
                         for res in results:
                             if isinstance(res, dict) and res.get("status") == "success":
                                 cap = res.get("capability", "")
@@ -395,43 +396,51 @@ class IntentRuntime:
                                 if cap in ("analyze_screen", "read_file") and out and len(out) > 40:
                                     info_output = out
                                     break
+                                elif cap == "search_web" and out:
+                                    search_output = out
                                     
+                        from arova.core.tools.web_search import strip_emojis
                         final_msg = ""
                         if info_output:
                             # Preserve the full, detailed rich markdown analysis from vision/file tools for the UI
-                            final_msg = info_output.strip()
+                            final_msg = strip_emojis(info_output.strip())
                         else:
                             # Generate refined LLM response that directly answers the user's prompt & summarizes actions
                             user_home = os.path.expanduser("~")
+                            search_context = f"\n\nLIVE WEB SEARCH RESULTS:\n{search_output}\nUse these live web search results above to answer accurately, factually, and with source citations.\n" if search_output else ""
                             prompt = (
                                 f"The user asked: '{transcript}'.\n"
-                                f"I executed these background actions for them: {results}.\n"
+                                f"I executed these background actions for them: {results}.{search_context}\n"
                                 "Instructions:\n"
-                                "1. If the user asked a question or wanted advice, a roadmap, or recommendations, ANSWER THEM directly, warmly, and completely.\n"
-                                "2. Briefly mention what actions were taken for them (e.g. 'I've also opened the link in your browser').\n"
-                                f"3. EXPLICIT FOLDER / PATH MENTION: If a folder, directory, file, or project was created or opened, EXPLICITLY state its exact real path e.g. '{user_home}/PythonLearning' or '~/PythonLearning'. NEVER use fake paths like '/home/user'.\n"
-                                "4. FORMATTING RULE: Do NOT wrap URLs or file paths in broken bold asterisks `**` across line breaks. Write URLs as plain `https://...` or standard markdown links [text](url). Write file paths in plain text or code ticks e.g. `~/PythonLearning`.\n"
-                                "5. Respond in natural conversational text."
+                                "1. If the user asked a question or wanted advice, a roadmap, recommendations, or search results, ANSWER THEM directly, completely, and accurately.\n"
+                                "2. STRICT ANTI-EMOJI RULE: NEVER output emojis under any circumstances (no 📚, 🎨, 🤖, 📦, 🔍, 🚀, 💡, ⚡, etc.). Maintain clean, dense, minimalist markdown typography.\n"
+                                "3. If live search results were provided above, synthesize them into a concise, well-structured response citing key information.\n"
+                                "4. Briefly mention what actions were taken for them (e.g. 'I searched the web for the latest models').\n"
+                                f"5. EXPLICIT FOLDER / PATH MENTION: If a folder, directory, file, or project was created or opened, EXPLICITLY state its exact real path e.g. '{user_home}/PythonLearning' or '~/PythonLearning'. NEVER use fake paths like '/home/user'.\n"
+                                "6. FORMATTING RULE: Do NOT wrap URLs or file paths in broken bold asterisks `**` across line breaks. Write URLs as plain `https://...` or standard markdown links [text](url). Write file paths in plain text or code ticks e.g. `~/PythonLearning`.\n"
+                                "7. Respond in natural conversational text without emojis."
                             )
                             try:
                                 final_msg = await self._router.models.generate(
                                     messages=messages + [{"role": "user", "content": prompt}],
-                                    system_prompt="You are Arova, a helpful ambient AI assistant. Give a warm, helpful, complete answer to the user.",
+                                    system_prompt="You are Arova, a high-precision ambient AI operating system partner. Give a direct, accurate, emoji-free answer to the user.",
                                     depth=ReasoningDepth.STANDARD,
-                                    budget=ReasoningBudget(max_tokens=600)
+                                    budget=ReasoningBudget(max_tokens=1024)
                                 )
                             except Exception as e:
                                 logging.error(f"Failed to generate refined response: {e}")
                                 if success:
-                                    if graph and hasattr(graph, 'name') and graph.name:
-                                        final_msg = f"Done! I've completed: {graph.name}."
+                                    if search_output:
+                                        final_msg = f"Here are the live search results for your query:\n\n{search_output}"
+                                    elif graph and hasattr(graph, 'name') and graph.name:
+                                        final_msg = f"Done. I've completed: {graph.name}."
                                     elif feedback_message and feedback_message != "Executing action...":
-                                        final_msg = f"Done! {feedback_message}"
+                                        final_msg = f"Done. {feedback_message}"
                                     else:
-                                        final_msg = "Done! I've executed the requested actions."
+                                        final_msg = "Done. I've executed the requested actions."
                                 else:
                                     final_msg = "I attempted the action, but it didn't complete successfully. Let me know if you'd like me to try again."
-                        final_msg = final_msg.strip()
+                        final_msg = strip_emojis(final_msg.strip())
                             
                     except asyncio.TimeoutError:
                         final_msg = "The action is taking longer than expected, but it is running in the background."
@@ -591,6 +600,7 @@ class IntentRuntime:
             url_policy = "• NEVER output raw URLs in spoken voice mode." if vocalize else "• Include full https:// URLs when recommending web resources."
             response_policy_block = (
                 "RESPONSE POLICY:\n"
+                "• STRICT ANTI-EMOJI RULE: NEVER output emojis under any circumstances (no 📚, 🎨, 🤖, 📦, 🔍, 🚀, 💡, ⚡, 💻, ✨, etc.). Keep all responses clean, dense, minimalist, and typographically elegant.\n"
                 "• Natural, authentic conversational style. Daily intelligent partner, not corporate assistant.\n"
                 "• Never fabricate results or pretend you performed actions you didn't.\n"
                 "• NEVER say 'I am a large language model', 'I don't have the capability to play music', or 'I cannot control your computer'. You ARE Arova and you DO have full system control capabilities.\n"
@@ -668,10 +678,13 @@ class IntentRuntime:
             
             collected_chunks = []
             async def _on_chunk_batch(text_chunk: str, seq: int):
-                logging.info(f"IntentRuntime: LLM batch seq {seq}: '{text_chunk}'")
-                collected_chunks.append(text_chunk)
+                clean_chunk = strip_emojis(text_chunk)
+                if not clean_chunk:
+                    return
+                logging.info(f"IntentRuntime: LLM batch seq {seq}: '{clean_chunk}'")
+                collected_chunks.append(clean_chunk)
                 self._event_bus.emit("voice", "TEXT_CHUNK_GENERATED", {
-                    "text": text_chunk,
+                    "text": clean_chunk,
                     "turn_id": turn_id,
                     "vocalize": vocalize,
                     "seq": seq

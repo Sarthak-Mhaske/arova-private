@@ -442,6 +442,7 @@ class WebSearchBackend(ActionBackend):
             
         import urllib.parse
         import webbrowser
+        from arova.core.tools.web_search import live_web_search
         
         encoded_query = urllib.parse.quote(query)
         url = f"https://google.com/search?q={encoded_query}"
@@ -451,8 +452,19 @@ class WebSearchBackend(ActionBackend):
             return BackendObservation(f"Simulated search: {query}", True)
             
         try:
-            webbrowser.open(url)
-            return BackendObservation("Web search launched", True)
+            # Perform live web search to extract real-time results
+            search_res = await live_web_search(query, max_results=6)
+            text_block = search_res.get("text_block", "")
+            
+            # Also open browser tab if requested or in background
+            if request.payload.get("open_browser", False):
+                try:
+                    webbrowser.open(url)
+                except Exception:
+                    pass
+                    
+            output_msg = text_block if text_block else f"Web search completed for: {query}"
+            return BackendObservation(output_msg, True)
         except Exception as e:
             return BackendObservation("", False, str(e))
 

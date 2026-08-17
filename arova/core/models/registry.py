@@ -268,94 +268,164 @@ class ModelRegistry:
         """
         self._candidates["groq"] = [
             ModelCandidate(
-                id="qwen-3.6-27b", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=140, cost_per_1k_tokens=0.25, selection_reason=["High throughput Qwen 3.6 frontier reasoning model on Groq LPU"]
+                id="openai/gpt-oss-120b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=180, cost_per_1k_tokens=0.40, selection_reason=["Blazing-fast open-source OpenAI workflows on Groq LPU"]
             ),
             ModelCandidate(
-                id="qwen-2.5-coder-32b", provider="groq", context_window=131072,
+                id="openai/gpt-oss-20b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=90, cost_per_1k_tokens=0.10, selection_reason=["Instant sub-second enterprise API responses on Groq LPU"]
+            ),
+            ModelCandidate(
+                id="qwen-3.6-27b", provider="groq", context_window=32768,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=140, cost_per_1k_tokens=0.25, selection_reason=["Rapid multilingual conversion and code generation on Groq LPU"]
+            ),
+            ModelCandidate(
+                id="qwen-3-32b", provider="groq", context_window=32768,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=180, cost_per_1k_tokens=0.30, selection_reason=["High capacity Groq Qwen coding specialist model"]
+                latency_ms=160, cost_per_1k_tokens=0.30, selection_reason=["High-frequency code snippet and JSON generation on Groq LPU"]
             ),
             ModelCandidate(
                 id="llama-3.3-70b-versatile", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=260, cost_per_1k_tokens=0.59, selection_reason=["High capacity 70k TPM Groq versatile model"]
+                latency_ms=260, cost_per_1k_tokens=0.59, selection_reason=["Complex agentic workflows and fast repeated reasoning round-trips"]
             ),
             ModelCandidate(
                 id="llama-3.1-8b-instant", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=90, cost_per_1k_tokens=0.08, selection_reason=["Ultra low latency instant Groq model"]
+                latency_ms=70, cost_per_1k_tokens=0.08, selection_reason=["Ultra-fast sub-second conversational interface on Groq LPU"]
+            ),
+            ModelCandidate(
+                id="mixtral-8x22b-instruct", provider="groq", context_window=65536,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=220, cost_per_1k_tokens=0.50, selection_reason=["European language logic and structured database commands on Groq"]
+            ),
+            ModelCandidate(
+                id="deepseek-r1-distill-llama-70b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=280, cost_per_1k_tokens=0.75, selection_reason=["Sub-second math logic, structural coding, and open reasoning on Groq LPU"]
             )
         ]
         self._candidates["openai"] = [
             ModelCandidate(
-                id="gpt-4o", provider="openai", context_window=128000,
+                id="gpt-5.6-sol", provider="openai", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=450, cost_per_1k_tokens=2.50, selection_reason=["Baseline OpenAI multimodal flagship model"]
+                latency_ms=750, cost_per_1k_tokens=3.00, selection_reason=["Flagship OpenAI creative intelligence and multimodal reasoning"]
             ),
             ModelCandidate(
-                id="o3-mini", provider="openai", context_window=200000,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=650, cost_per_1k_tokens=1.10, selection_reason=["Baseline OpenAI fast reasoning model"]
+                id="gpt-5.6-terra", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=450, cost_per_1k_tokens=1.20, selection_reason=["Balanced OpenAI frontier intelligence model"]
             ),
             ModelCandidate(
-                id="gpt-4o-mini", provider="openai", context_window=128000,
+                id="gpt-5.6-luna", provider="openai", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=220, cost_per_1k_tokens=0.15, selection_reason=["Baseline OpenAI fast lightweight model"]
-            )
-        ]
-        self._candidates["ollama"] = [
-            ModelCandidate(
-                id="qwen2.5-coder:32b", provider="ollama", context_window=32768,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=1100, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Qwen reasoning and coding model"]
+                latency_ms=200, cost_per_1k_tokens=0.15, selection_reason=["Fast high-volume text sorting and classification"]
             ),
             ModelCandidate(
-                id="llama3.3", provider="ollama", context_window=128000,
-                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=1200, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Llama 3.3 model"]
+                id="o3", provider="openai", context_window=200000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=900, cost_per_1k_tokens=2.50, selection_reason=["Deep test-time compute thought chain reasoning"]
             ),
             ModelCandidate(
-                id="deepseek-r1:32b", provider="ollama", context_window=65536,
+                id="o3-pro", provider="openai", context_window=200000,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=1400, cost_per_1k_tokens=0.0, selection_reason=["Baseline local DeepSeek R1 reasoning model"]
+                latency_ms=1200, cost_per_1k_tokens=5.00, selection_reason=["Frontier competitive coding and mathematical proofing"]
+            ),
+            ModelCandidate(
+                id="o4-mini", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=300, cost_per_1k_tokens=0.50, selection_reason=["High-speed autonomous agent orchestration"]
+            ),
+            ModelCandidate(
+                id="gpt-oss-120b", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=600, cost_per_1k_tokens=0.80, selection_reason=["Open-weight enterprise Apache 2.0 system"]
             )
         ]
         self._candidates["anthropic"] = [
             ModelCandidate(
-                id="claude-3-7-sonnet", provider="anthropic", context_window=200000,
+                id="claude-fable-5", provider="anthropic", context_window=1000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=600, cost_per_1k_tokens=3.00, selection_reason=["Baseline Anthropic frontier hybrid reasoning model"]
+                latency_ms=700, cost_per_1k_tokens=4.00, selection_reason=["Multi-step autonomous business strategies and technical auditing"]
             ),
             ModelCandidate(
-                id="claude-3-5-sonnet", provider="anthropic", context_window=200000,
+                id="claude-sonnet-5", provider="anthropic", context_window=1000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=550, cost_per_1k_tokens=3.00, selection_reason=["Baseline Anthropic coding and reasoning model"]
+                latency_ms=500, cost_per_1k_tokens=2.00, selection_reason=["Software engineering, daily programming, and heavy markdown"]
             ),
             ModelCandidate(
-                id="claude-3-5-haiku", provider="anthropic", context_window=200000,
-                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=250, cost_per_1k_tokens=0.80, selection_reason=["Baseline Anthropic fast chat model"]
+                id="claude-opus-4.8", provider="anthropic", context_window=1000000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=850, cost_per_1k_tokens=5.00, selection_reason=["1M token deep multi-document research"]
+            ),
+            ModelCandidate(
+                id="claude-mythos-5", provider="anthropic", context_window=1000000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=800, cost_per_1k_tokens=5.00, selection_reason=["Experimental sandbox reasoning and data analytics"]
             )
         ]
         self._candidates["gemini"] = [
             ModelCandidate(
-                id="gemini-2.0-flash", provider="gemini", context_window=1000000,
+                id="gemini-3.1-pro", provider="gemini", context_window=2000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=260, cost_per_1k_tokens=0.10, selection_reason=["Baseline Google Gemini 2.0 real-time flagship model"]
+                latency_ms=650, cost_per_1k_tokens=1.50, selection_reason=["2M token active code repository and full video review"]
             ),
             ModelCandidate(
-                id="gemini-2.0-pro-exp", provider="gemini", context_window=2000000,
+                id="gemini-3.7-flash", provider="gemini", context_window=2000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=750, cost_per_1k_tokens=1.25, selection_reason=["Baseline Google Gemini frontier reasoning model"]
+                latency_ms=220, cost_per_1k_tokens=0.10, selection_reason=["Rapid developer feedback loops and fast live chat"]
+            ),
+            ModelCandidate(
+                id="gemini-3.6-flash", provider="gemini", context_window=2000000,
+                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
+                latency_ms=260, cost_per_1k_tokens=0.07, selection_reason=["Foundation layer for automated content filtering"]
+            ),
+            ModelCandidate(
+                id="gemini-3.5-flash-lite", provider="gemini", context_window=1000000,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=150, cost_per_1k_tokens=0.03, selection_reason=["High-volume web scraping and data indexing"]
+            ),
+            ModelCandidate(
+                id="gemini-3.1-flash-image", provider="gemini", context_window=1000000,
+                supports_tools=False, supports_images=True, reasoning=False, supports_json=True,
+                latency_ms=300, cost_per_1k_tokens=0.15, selection_reason=["Nano Banana 2 graphic formatting and video summaries"]
+            )
+        ]
+        self._candidates["ollama"] = [
+            ModelCandidate(
+                id="gpt-oss:120b", provider="ollama", context_window=65536,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=1400, cost_per_1k_tokens=0.0, selection_reason=["Local GPT OSS 120B open-weight model"]
+            ),
+            ModelCandidate(
+                id="qwen3:32b", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=1100, cost_per_1k_tokens=0.0, selection_reason=["Local Qwen 3 reasoning and coding model"]
+            ),
+            ModelCandidate(
+                id="qwen2.5-coder:32b", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=1100, cost_per_1k_tokens=0.0, selection_reason=["Local Qwen 2.5 Coder specialist"]
+            ),
+            ModelCandidate(
+                id="llama3.3:70b", provider="ollama", context_window=128000,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=1300, cost_per_1k_tokens=0.0, selection_reason=["Local Llama 3.3 70B model"]
+            ),
+            ModelCandidate(
+                id="deepseek-r1:32b", provider="ollama", context_window=65536,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=1500, cost_per_1k_tokens=0.0, selection_reason=["Local DeepSeek R1 reasoning model"]
             )
         ]
         self._candidates["openrouter"] = [
             ModelCandidate(
-                id="qwen/qwen-2.5-coder-32b-instruct", provider="openrouter", context_window=131072,
+                id="qwen/qwen-3-32b", provider="openrouter", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=350, cost_per_1k_tokens=0.20, selection_reason=["OpenRouter Qwen coder reasoning model"]
+                latency_ms=350, cost_per_1k_tokens=0.20, selection_reason=["OpenRouter Qwen 3 reasoning model"]
             ),
             ModelCandidate(
                 id="deepseek/deepseek-r1", provider="openrouter", context_window=128000,
@@ -363,9 +433,9 @@ class ModelRegistry:
                 latency_ms=650, cost_per_1k_tokens=0.55, selection_reason=["OpenRouter DeepSeek R1 reasoning model"]
             ),
             ModelCandidate(
-                id="anthropic/claude-3.7-sonnet", provider="openrouter", context_window=200000,
+                id="anthropic/claude-sonnet-5", provider="openrouter", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=500, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter Claude 3.7 Sonnet model"]
+                latency_ms=500, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter Claude Sonnet 5 model"]
             )
         ]
 
@@ -402,12 +472,18 @@ class ModelRegistry:
 
     async def discover_and_cache(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        Queries active provider endpoints right on startup or when requested via manual UI refresh button.
+        Dynamically probes provider endpoints (HyprVoice-style live auto-discovery)
+        with denylist filtering and local 24h caching TTL.
         """
         from arova.core.config.manager import get_config_manager
         manager = get_config_manager()
         saved_providers = manager.load_providers()
         updated_any = False
+        denylist_pattern = re.compile(r'whisper|tts|guard|embed|moderation|audio|image|playai|safeguard|realtime|dall-e|prompt-guard|bison|gecko|aqa', re.IGNORECASE)
+
+        if not aiohttp:
+            logger.warning("aiohttp not installed; skipping remote live discovery.")
+            return self.get_summary_report()
 
         async with aiohttp.ClientSession() as session:
             # 1. Discover Groq
@@ -423,24 +499,119 @@ class ModelRegistry:
                                 live_list = []
                                 for m in models:
                                     m_id = m.get("id", "")
-                                    if not m_id or "whisper" in m_id or "tts" in m_id or "embed" in m_id:
+                                    if not m_id or denylist_pattern.search(m_id):
                                         continue
                                     live_list.append(ModelCandidate(
                                         id=m_id, provider="groq",
-                                        context_window=131072 if "70b" in m_id or "3.3" in m_id else 32768,
+                                        context_window=131072 if "70b" in m_id or "3.3" in m_id or "120b" in m_id else 32768,
                                         supports_tools=True, supports_images="vision" in m_id,
-                                        supports_reasoning="qwen" in m_id or "r1" in m_id or "deepseek" in m_id,
-                                        supports_json=True, latency_ms=400 if "70b" in m_id else 210,
-                                        cost_per_1k_tokens=0.59 if "70b" in m_id else 0.05,
-                                        selection_reason=["Discovered via Groq live API catalog"]
+                                        supports_reasoning="qwen" in m_id or "r1" in m_id or "deepseek" in m_id or "oss" in m_id,
+                                        supports_json=True, latency_ms=260 if "70b" in m_id else 140,
+                                        cost_per_1k_tokens=0.59 if "70b" in m_id else 0.10,
+                                        selection_reason=["Discovered via live Groq LPU catalog"]
                                     ))
                                 if live_list:
                                     self._candidates["groq"] = live_list
                                     updated_any = True
                 except Exception as e:
-                    logger.warning("Groq live discovery failed, using baseline/cache: %s", e)
+                    logger.warning("Groq live discovery failed: %s", e)
 
-            # 2. Discover Ollama
+            # 2. Discover OpenAI
+            openai_key = os.environ.get("OPENAI_API_KEY", "").strip() or (saved_providers.get("openai", {}).get("api_keys", [""])[0])
+            if openai_key:
+                try:
+                    headers = {"Authorization": f"Bearer {openai_key}"}
+                    async with session.get("https://api.openai.com/v1/models", headers=headers, timeout=5.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            models = data.get("data", [])
+                            if models:
+                                live_list = []
+                                for m in models:
+                                    m_id = m.get("id", "")
+                                    if not m_id or denylist_pattern.search(m_id):
+                                        continue
+                                    live_list.append(ModelCandidate(
+                                        id=m_id, provider="openai",
+                                        context_window=200000 if "o3" in m_id or "o1" in m_id else 128000,
+                                        supports_tools=True, supports_images="gpt-4" in m_id or "gpt-5" in m_id or "sol" in m_id,
+                                        supports_reasoning="o3" in m_id or "o1" in m_id or "o4" in m_id or "sol" in m_id,
+                                        supports_json=True, latency_ms=450,
+                                        cost_per_1k_tokens=1.50,
+                                        selection_reason=["Discovered via live OpenAI catalog"]
+                                    ))
+                                if live_list:
+                                    self._candidates["openai"] = live_list
+                                    updated_any = True
+                except Exception as e:
+                    logger.warning("OpenAI live discovery failed: %s", e)
+
+            # 3. Discover Google Gemini
+            gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or (saved_providers.get("gemini", {}).get("api_keys", [""])[0])
+            if gemini_key:
+                try:
+                    async with session.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={gemini_key}", timeout=5.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            models = data.get("models", [])
+                            if models:
+                                live_list = []
+                                for m in models:
+                                    m_name = (m.get("name", "")).replace("models/", "")
+                                    if not m_name or denylist_pattern.search(m_name):
+                                        continue
+                                    methods = m.get("supportedGenerationMethods", [])
+                                    if "generateContent" not in methods:
+                                        continue
+                                    live_list.append(ModelCandidate(
+                                        id=m_name, provider="gemini",
+                                        context_window=2000000 if "pro" in m_name or "flash" in m_name else 1000000,
+                                        supports_tools=True, supports_images=True,
+                                        supports_reasoning="pro" in m_name or "3.7" in m_name or "3.1" in m_name,
+                                        supports_json=True, latency_ms=250,
+                                        cost_per_1k_tokens=0.10,
+                                        selection_reason=["Discovered via live Google Gemini catalog"]
+                                    ))
+                                if live_list:
+                                    self._candidates["gemini"] = live_list
+                                    updated_any = True
+                except Exception as e:
+                    logger.warning("Gemini live discovery failed: %s", e)
+
+            # 4. Discover Anthropic
+            anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip() or (saved_providers.get("anthropic", {}).get("api_keys", [""])[0])
+            if anthropic_key:
+                try:
+                    headers = {
+                        "x-api-key": anthropic_key,
+                        "anthropic-version": "2023-06-01"
+                    }
+                    async with session.get("https://api.anthropic.com/v1/models", headers=headers, timeout=5.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            models = data.get("data", [])
+                            if models:
+                                live_list = []
+                                for m in models:
+                                    m_id = m.get("id", "")
+                                    if not m_id or denylist_pattern.search(m_id):
+                                        continue
+                                    live_list.append(ModelCandidate(
+                                        id=m_id, provider="anthropic",
+                                        context_window=1000000 if "fable" in m_id or "sonnet" in m_id or "opus" in m_id else 200000,
+                                        supports_tools=True, supports_images=True,
+                                        supports_reasoning="fable" in m_id or "sonnet" in m_id or "mythos" in m_id or "opus" in m_id,
+                                        supports_json=True, latency_ms=550,
+                                        cost_per_1k_tokens=2.00,
+                                        selection_reason=["Discovered via live Anthropic catalog"]
+                                    ))
+                                if live_list:
+                                    self._candidates["anthropic"] = live_list
+                                    updated_any = True
+                except Exception as e:
+                    logger.warning("Anthropic live discovery failed: %s", e)
+
+            # 5. Discover Ollama (Local)
             ollama_host = saved_providers.get("ollama", {}).get("host", "http://localhost:11434")
             try:
                 async with session.get(f"{ollama_host}/api/tags", timeout=3.0) as resp:
@@ -451,14 +622,14 @@ class ModelRegistry:
                             live_list = []
                             for m in models:
                                 m_name = m.get("name", "")
-                                if not m_name:
+                                if not m_name or denylist_pattern.search(m_name):
                                     continue
                                 live_list.append(ModelCandidate(
                                     id=m_name, provider="ollama",
-                                    context_window=32768 if "qwen" in m_name else 8192,
+                                    context_window=65536 if "oss" in m_name or "r1" in m_name else 32768,
                                     supports_tools=False, supports_images="vision" in m_name or "llava" in m_name,
-                                    supports_reasoning="qwen" in m_name or "deepseek" in m_name,
-                                    supports_json=True, latency_ms=1300, cost_per_1k_tokens=0.0,
+                                    supports_reasoning="qwen" in m_name or "r1" in m_name or "deepseek" in m_name or "oss" in m_name,
+                                    supports_json=True, latency_ms=1200, cost_per_1k_tokens=0.0,
                                     selection_reason=["Discovered via local Ollama tags"]
                                 ))
                             if live_list:

@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_NAMES = {
-    "groq": "Qwen 3.6 / Llama 3.3 (Groq LPU)",
-    "gemini": "Gemini 2.0 Flash / Pro (Google AI)",
-    "anthropic": "Claude 3.7 Sonnet (Anthropic)",
-    "openai": "GPT-4o / o3-mini (OpenAI)",
-    "openrouter": "Qwen 2.5 / DeepSeek R1 (OpenRouter)",
-    "ollama": "Qwen 2.5 Coder 32B (Local Ollama)",
+    "groq": "GPT OSS 120B / Qwen 3.6 / Llama 3.3 (Groq LPU)",
+    "gemini": "Gemini 3.1 Pro / 3.7 Flash (Google AI)",
+    "anthropic": "Claude Sonnet 5 / Fable 5 (Anthropic)",
+    "openai": "GPT-5.6 Sol / o3 (OpenAI)",
+    "openrouter": "Qwen 3 / DeepSeek R1 (OpenRouter)",
+    "ollama": "GPT OSS 120B / Qwen 3 (Local Ollama)",
     "lmstudio": "LM Studio (Local)",
     "mock": "Mock Model"
 }

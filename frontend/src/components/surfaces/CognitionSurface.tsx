@@ -3,11 +3,11 @@ import { useCognitionState, useSurfaceState } from '../../state';
 import { socket } from '../../runtime/socket';
 
 const PROVIDER_MODEL_NAMES: Record<string, string> = {
-  groq: 'Qwen 3.6 / Llama 3.3 (Groq LPU)',
-  openai: 'GPT-4o / o3-mini (OpenAI)',
-  gemini: 'Gemini 2.0 Flash / Pro (Google AI)',
-  anthropic: 'Claude 3.7 Sonnet (Anthropic)',
-  ollama: 'Qwen 2.5 Coder 32B (Local Ollama)',
+  groq: 'GPT OSS 120B / Qwen 3.6 (Groq LPU)',
+  openai: 'GPT-5.6 Sol / o3 (OpenAI)',
+  gemini: 'Gemini 3.1 Pro / 3.7 Flash (Google AI)',
+  anthropic: 'Claude Sonnet 5 / Fable 5 (Anthropic)',
+  ollama: 'GPT OSS 120B / Qwen 3 (Local Ollama)',
   lmstudio: 'LM Studio (Local)',
   openrouter: 'Frontier Swarm (OpenRouter)',
   mock: 'Local Simulation Engine'
