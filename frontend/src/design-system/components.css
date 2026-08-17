@@ -1334,6 +1334,15 @@ body::after {
   will-change: transform;
 }
 
+.command-row {
+  pointer-events: auto;
+}
+
+.model-switcher-pill-btn {
+  pointer-events: auto;
+  user-select: none;
+}
+
 .active-action-overlay {
   position: absolute;
   top: -45px;

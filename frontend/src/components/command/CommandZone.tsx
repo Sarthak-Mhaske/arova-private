@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useCognitionState, useAwarenessState } from '../../state';
 import { socket } from '../../runtime/socket';
 
@@ -6,6 +6,7 @@ interface ModelOption {
   id: string;
   name: string;
   provider: string;
+  providerKey: 'groq' | 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openrouter';
   category: 'fast' | 'frontier' | 'local';
   goodAt: string;
   tag: string;
@@ -13,22 +14,22 @@ interface ModelOption {
 
 const MODEL_OPTIONS: ModelOption[] = [
   // Fast & Coding (Groq LPU)
-  { id: 'qwen-3.6-27b', name: 'Qwen 3.6 27B', provider: 'Groq LPU', category: 'fast', goodAt: 'Fast multilingual reasoning & active code refactoring', tag: 'Fast / Code' },
-  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', provider: 'Groq LPU', category: 'fast', goodAt: 'High-throughput enterprise code generation & API reasoning', tag: 'Enterprise Code' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq LPU', category: 'fast', goodAt: 'Sub-second conversation & quick questions', tag: 'Sub-Second' },
-  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B', provider: 'Groq LPU', category: 'fast', goodAt: 'Complex math proofing & algorithmic logic on LPU', tag: 'Math / Logic' },
+  { id: 'qwen-3.6-27b', name: 'Qwen 3.6 27B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Fast multilingual reasoning & active code refactoring', tag: 'Fast / Code' },
+  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'High-throughput enterprise code generation & API reasoning', tag: 'Enterprise Code' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Sub-second conversation & quick questions', tag: 'Sub-Second' },
+  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Complex math proofing & algorithmic logic on LPU', tag: 'Math / Logic' },
   
   // Deep Frontier Reasoning
-  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI', category: 'frontier', goodAt: 'Flagship creative intelligence, multimodal assets & architecture', tag: 'Flagship' },
-  { id: 'o3', name: 'OpenAI o3', provider: 'OpenAI', category: 'frontier', goodAt: 'Deep test-time compute thought chains & hard problem solving', tag: 'Deep Thought' },
-  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', category: 'frontier', goodAt: 'Software engineering, multi-file AST diffs & rich markdown', tag: 'Code Specialist' },
-  { id: 'claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', category: 'frontier', goodAt: 'Multi-step autonomous business strategy & technical audits', tag: 'Strategy' },
-  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', provider: 'Google AI', category: 'frontier', goodAt: '2M token full repo context analysis & continuous video understanding', tag: '2M Context' },
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', provider: 'Google AI', category: 'frontier', goodAt: 'Fast live developer feedback loop & hybrid reasoning', tag: 'Fast Hybrid' },
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: '2M token full repo context analysis & continuous video understanding', tag: '2M Context' },
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Fast live developer feedback loop & hybrid reasoning', tag: 'Fast Hybrid' },
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship creative intelligence, multimodal assets & architecture', tag: 'Flagship' },
+  { id: 'o3', name: 'OpenAI o3', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Deep test-time compute thought chains & hard problem solving', tag: 'Deep Thought' },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Software engineering, multi-file AST diffs & rich markdown', tag: 'Code Specialist' },
+  { id: 'claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Multi-step autonomous business strategy & technical audits', tag: 'Strategy' },
   
   // Local & Private
-  { id: 'gpt-oss:120b', name: 'GPT OSS 120B (Local)', provider: 'Ollama', category: 'local', goodAt: '100% private on-device open weights for enterprise privacy', tag: 'Private' },
-  { id: 'qwen3:32b', name: 'Qwen 3 32B (Local)', provider: 'Ollama', category: 'local', goodAt: 'Local offline coding & chat without cloud connectivity', tag: 'Offline' }
+  { id: 'gpt-oss:120b', name: 'GPT OSS 120B (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: '100% private on-device open weights for enterprise privacy', tag: 'Private' },
+  { id: 'qwen3:32b', name: 'Qwen 3 32B (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Local offline coding & chat without cloud connectivity', tag: 'Offline' }
 ];
 
 export const CommandZone: React.FC = () => {
@@ -41,6 +42,7 @@ export const CommandZone: React.FC = () => {
   });
   const [showModelMenu, setShowModelMenu] = useState(false);
   const lastSubmitRef = useRef<{ text: string; ts: number }>({ text: '', ts: 0 });
+
   // TIER 1.3: @-mention autocomplete
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -49,7 +51,101 @@ export const CommandZone: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const pillBtnRef = useRef<HTMLButtonElement>(null);
   const { activeWorkspace } = useAwarenessState();
+
+  // Active providers discovery state
+  const [activeProviders, setActiveProviders] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    try {
+      const savedAgreement = localStorage.getItem('arova_onboarding_agreement');
+      if (savedAgreement) {
+        const parsed = JSON.parse(savedAgreement);
+        if (parsed.provider) s.add(parsed.provider);
+      }
+    } catch {}
+    return s;
+  });
+
+  // Sync active providers from daemon configuration
+  useEffect(() => {
+    // Request provider configuration & discovery on mount
+    socket.sendEvent({ type: 'config.get_request' });
+    socket.sendEvent({ type: 'provider.discovery_request' });
+
+    const handleMessage = (data: any) => {
+      if (!data) return;
+      if (data.type === 'config.sync' && data.providers) {
+        const next = new Set<string>();
+        for (const [pKey, pVal] of Object.entries(data.providers)) {
+          const cfg = pVal as any;
+          if (pKey === 'ollama') {
+            if (cfg?.host) next.add('ollama');
+          } else if (cfg?.api_keys && Array.isArray(cfg.api_keys) && cfg.api_keys.some((k: string) => typeof k === 'string' && k.trim().length > 0)) {
+            next.add(pKey);
+          }
+        }
+        if (next.size > 0) {
+          setActiveProviders(next);
+        }
+      } else if (data.type === 'provider.discovery' && Array.isArray(data.providers)) {
+        const next = new Set<string>();
+        for (const p of data.providers) {
+          if (p.available || p.configured) {
+            next.add(p.id);
+          }
+        }
+        if (next.size > 0) {
+          setActiveProviders(prev => new Set([...prev, ...next]));
+        }
+      } else if (data.type === 'provider.reloaded' && Array.isArray(data.active_providers)) {
+        setActiveProviders(new Set(data.active_providers));
+      }
+    };
+
+    const unsub = socket.onMessage(handleMessage);
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  // Filter models to ONLY those whose provider is configured and available
+  const availableModels = useMemo(() => {
+    if (activeProviders.size === 0) {
+      return [];
+    }
+    return MODEL_OPTIONS.filter(m => activeProviders.has(m.providerKey));
+  }, [activeProviders]);
+
+  // Click outside listener for model popover
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        showModelMenu &&
+        modelMenuRef.current &&
+        !modelMenuRef.current.contains(e.target as Node) &&
+        pillBtnRef.current &&
+        !pillBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowModelMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showModelMenu]);
+
+  // Reset selected model to 'auto' if current selection is no longer available
+  useEffect(() => {
+    if (selectedModel !== 'auto' && availableModels.length > 0) {
+      const exists = availableModels.some(m => m.id === selectedModel);
+      if (!exists) {
+        setSelectedModel('auto');
+        localStorage.setItem('arova_preferred_model', 'auto');
+      }
+    }
+  }, [availableModels, selectedModel]);
 
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
@@ -58,7 +154,7 @@ export const CommandZone: React.FC = () => {
   };
 
   // Build suggestion list from verbatim RealityLayer.resources + search index fallback
-  const allResources = React.useMemo(() => {
+  const allResources = useMemo(() => {
     const resourcesObj = (activeWorkspace as any)?.reality?.resources || {};
     return Object.keys(resourcesObj).map((k: string) => {
       const r: any = resourcesObj[k];
@@ -67,7 +163,7 @@ export const CommandZone: React.FC = () => {
   }, [activeWorkspace]);
   
   // Filter by mention query
-  const filteredSuggestions = React.useMemo(() => {
+  const filteredSuggestions = useMemo(() => {
     if (!showMentions) return [];
     const q = mentionQuery.toLowerCase();
     if (!q) return allResources.slice(0, 50);
@@ -141,17 +237,30 @@ export const CommandZone: React.FC = () => {
       return;
     }
     
-    const mentions = extractMentions(val);
+    // Extract mentions for strict grounded context extraction
+    const mentions = extractMentions(trimmed);
+    
+    // Set UI state to reflecting
+    import('../../state/orbState').then(({ useOrbState }) => {
+      useOrbState.getState().setMode('reflecting', trimmed);
+    });
+
+    useCognitionState.getState().addUserInput(trimmed);
+
+    // Send payload over WebSocket with vocalize & preferred model override
     const payload: any = {
       type: 'user.message',
-      text: val.trim(),
+      text: trimmed,
       vocalize,
+      model_override: selectedModel === 'auto' ? undefined : selectedModel,
       mentions
     };
-    console.log('[CommandZone] Sending user.message (vocalize=' + vocalize + ', mentions=' + mentions.length + '):', payload);
+    console.log('[CommandZone] Sending user.message (vocalize=' + vocalize + ', model=' + selectedModel + ', mentions=' + mentions.length + '):', payload);
     socket.sendEvent(payload);
+
     setVal('');
     setShowMentions(false);
+    setShowModelMenu(false);
   };
 
   React.useEffect(() => {
@@ -231,7 +340,7 @@ export const CommandZone: React.FC = () => {
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (showMentions && dropdownRef.current) {
       const selectedEl = dropdownRef.current.children[selectedIdx + 1] as HTMLElement;
       if (selectedEl && typeof selectedEl.scrollIntoView === 'function') {
@@ -283,7 +392,7 @@ export const CommandZone: React.FC = () => {
     }
   };
 
-  const modelDisplayLabel = React.useMemo(() => {
+  const modelDisplayLabel = useMemo(() => {
     if (selectedModel === 'auto') return 'Auto (Dynamic)';
     const found = MODEL_OPTIONS.find(m => m.id === selectedModel);
     if (!found) return selectedModel;
@@ -366,7 +475,8 @@ export const CommandZone: React.FC = () => {
           gap: '8px',
           width: 'min(720px, calc(100% - 40px))',
           margin: '0 auto',
-          position: 'relative'
+          position: 'relative',
+          pointerEvents: 'auto'
         }}
       >
         {/* Main Command Bar */}
@@ -427,10 +537,15 @@ export const CommandZone: React.FC = () => {
         </div>
 
         {/* Wide & Small Pill Button (Outside & to the RIGHT of chat bar - Zero Emojis) */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ position: 'relative', flexShrink: 0, pointerEvents: 'auto' }}>
           <button
+            ref={pillBtnRef}
             className="model-switcher-pill-btn"
-            onClick={() => { setShowModelMenu(prev => !prev); setShowMentions(false); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowModelMenu(prev => !prev);
+              setShowMentions(false);
+            }}
             title={`Active Model: ${selectedModel === 'auto' ? 'Auto Dynamic Routing' : selectedModel}. Click to change.`}
             style={{
               height: '34px',
@@ -446,6 +561,7 @@ export const CommandZone: React.FC = () => {
               justifyContent: 'center',
               gap: '6px',
               cursor: 'pointer',
+              pointerEvents: 'auto',
               transition: 'all 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
               color: selectedModel === 'auto' ? 'var(--ink-2, #ccc)' : 'var(--accent-gold, #e0ba75)'
             }}
@@ -464,10 +580,11 @@ export const CommandZone: React.FC = () => {
             </svg>
           </button>
 
-          {/* Model Selector Popover - Clean Minimal (No Emojis) */}
+          {/* Model Selector Popover - Clean Minimal (No Emojis, Connected Models Only) */}
           {showModelMenu && (
             <div 
               ref={modelMenuRef}
+              onClick={(e) => e.stopPropagation()}
               style={{
                 position: 'absolute',
                 bottom: '44px',
@@ -480,7 +597,7 @@ export const CommandZone: React.FC = () => {
                 padding: '12px',
                 overflowY: 'auto',
                 pointerEvents: 'auto',
-                zIndex: 70,
+                zIndex: 100,
                 backdropFilter: 'blur(24px)',
                 WebkitBackdropFilter: 'blur(24px)',
                 boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
@@ -492,7 +609,9 @@ export const CommandZone: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '6px', borderBottom: '1px solid var(--hairline-2)' }}>
                 <div>
                   <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--ink, #fff)' }}>Inference Model Routing</div>
-                  <div style={{ fontSize: '10.5px', color: 'var(--ink-3)' }}>Select preferred model or auto-route</div>
+                  <div style={{ fontSize: '10.5px', color: 'var(--ink-3)' }}>
+                    {activeProviders.size > 0 ? `${activeProviders.size} provider${activeProviders.size > 1 ? 's' : ''} connected` : 'Auto dynamic routing'}
+                  </div>
                 </div>
                 <button 
                   onClick={() => setShowModelMenu(false)}
@@ -526,7 +645,9 @@ export const CommandZone: React.FC = () => {
                     <span style={{ fontSize: '9.5px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(224, 186, 117, 0.25)', color: 'var(--accent-gold)', fontWeight: 600 }}>Default</span>
                   </div>
                   <div style={{ fontSize: '10.5px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: 1.3 }}>
-                    Routes across Groq LPU, Gemini & OpenAI based on intent depth
+                    {activeProviders.size > 0 
+                      ? `Dynamically routes across your active providers (${Array.from(activeProviders).join(', ')})`
+                      : 'Intelligently routes based on prompt depth & task complexity'}
                   </div>
                 </div>
                 {selectedModel === 'auto' && (
@@ -536,13 +657,14 @@ export const CommandZone: React.FC = () => {
                 )}
               </div>
 
-              {/* Categorized Models - Clean Typography */}
+              {/* Categorized Models - Only categories with connected providers */}
               {[
                 { cat: 'fast', label: 'Ultra-Fast & Coding (Groq LPU)', color: '#4caf50' },
                 { cat: 'frontier', label: 'Deep Frontier Reasoning', color: '#29b6f6' },
                 { cat: 'local', label: 'Local & Private (Ollama)', color: '#ab47bc' }
               ].map(group => {
-                const items = MODEL_OPTIONS.filter(m => m.category === group.cat);
+                const items = availableModels.filter(m => m.category === group.cat);
+                if (items.length === 0) return null;
                 return (
                   <div key={group.cat} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ fontSize: '10px', fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 2px' }}>
@@ -581,6 +703,36 @@ export const CommandZone: React.FC = () => {
                   </div>
                 );
               })}
+
+              {/* Notice if no direct provider keys are configured yet */}
+              {availableModels.length === 0 && (
+                <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--hairline-2)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11.5px', color: 'var(--ink-2)', marginBottom: '4px' }}>No direct API keys configured yet</div>
+                  <div style={{ fontSize: '10.5px', color: 'var(--ink-3)', marginBottom: '8px' }}>
+                    Connect Groq, Gemini, Anthropic or OpenAI in Settings to unlock specific model selectors.
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowModelMenu(false);
+                      import('../../state').then(({ useSurfaceState }) => {
+                        useSurfaceState.getState().openSurface('settings');
+                      });
+                    }}
+                    style={{
+                      background: 'rgba(224, 186, 117, 0.15)',
+                      border: '1px solid var(--accent-gold, #e0ba75)',
+                      color: 'var(--accent-gold, #e0ba75)',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Open Settings
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

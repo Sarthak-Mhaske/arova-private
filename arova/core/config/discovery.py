@@ -69,8 +69,56 @@ class ProviderDiscovery:
             "detected_automatically": openai_env and not openai_saved,
             "recommended": False
         })
+
+        # 3. Check Gemini
+        gemini_configured = False
+        gemini_env = bool(os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip())
+        gemini_saved = bool(saved_providers.get("gemini", {}).get("api_keys", []))
+        if gemini_env or gemini_saved:
+            gemini_configured = True
+
+        results.append({
+            "id": "gemini",
+            "name": "Google Gemini",
+            "available": gemini_configured,
+            "configured": gemini_configured,
+            "detected_automatically": gemini_env and not gemini_saved,
+            "recommended": True
+        })
+
+        # 4. Check Anthropic
+        anthropic_configured = False
+        anthropic_env = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+        anthropic_saved = bool(saved_providers.get("anthropic", {}).get("api_keys", []))
+        if anthropic_env or anthropic_saved:
+            anthropic_configured = True
+
+        results.append({
+            "id": "anthropic",
+            "name": "Anthropic",
+            "available": anthropic_configured,
+            "configured": anthropic_configured,
+            "detected_automatically": anthropic_env and not anthropic_saved,
+            "recommended": False
+        })
+
+        # 5. Check OpenRouter
+        openrouter_configured = False
+        openrouter_env = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
+        openrouter_saved = bool(saved_providers.get("openrouter", {}).get("api_keys", []))
+        if openrouter_env or openrouter_saved:
+            openrouter_configured = True
+
+        results.append({
+            "id": "openrouter",
+            "name": "OpenRouter",
+            "available": openrouter_configured,
+            "configured": openrouter_configured,
+            "detected_automatically": openrouter_env and not openrouter_saved,
+            "recommended": False
+        })
         
-        # 3. Check Ollama (Requires network ping)
+        # 6. Check Ollama (Requires network ping)
         ollama_running = False
         ollama_host = saved_providers.get("ollama", {}).get("host", "http://localhost:11434")
         if not ollama_host:
@@ -93,7 +141,7 @@ class ProviderDiscovery:
         })
         
         # Determine Recommendation
-        has_cloud = groq_configured or openai_configured
+        has_cloud = groq_configured or openai_configured or gemini_configured or anthropic_configured or openrouter_configured
         has_local = ollama_running
         
         if has_local and not has_cloud:
