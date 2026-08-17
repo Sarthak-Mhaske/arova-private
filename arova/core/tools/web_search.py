@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-def strip_emojis(text: str) -> str:
+def strip_emojis(text: str, preserve_whitespace: bool = True) -> str:
     """
-    Strictly removes all emojis and Unicode pictographs from text.
+    Strictly removes all emojis and Unicode pictographs from text while preserving natural word spacing.
     """
     if not text:
         return ""
@@ -26,10 +26,10 @@ def strip_emojis(text: str) -> str:
         "]+",
         flags=re.UNICODE
     )
-    # Clean emojis and normalize whitespace
     cleaned = emoji_pattern.sub("", text)
-    cleaned = re.sub(r' +', ' ', cleaned)
-    return cleaned.strip()
+    if not preserve_whitespace:
+        cleaned = re.sub(r' +', ' ', cleaned).strip()
+    return cleaned
 
 
 def live_web_search_sync(query: str, max_results: int = 6) -> Dict[str, Any]:

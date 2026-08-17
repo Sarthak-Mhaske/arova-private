@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
         "continuity_decay": "standard"
     },
     "preferred_provider": None,
+    "preferred_model": "auto",
     "allow_fallback": True
 }
 

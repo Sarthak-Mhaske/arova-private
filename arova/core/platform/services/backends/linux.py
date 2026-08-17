@@ -275,35 +275,27 @@ class LinuxPlatformLauncher(PlatformLauncher):
         intent = RestoreIntent("source_file", Capability.OPEN_FILE, resource_path=path, metadata={"line": line, "col": col})
         fname = os.path.basename(path)
 
-        # Idempotency check: If file or editor is already open, focus rather than duplicate
-        if self._is_window_active(fname):
-            self.focus_window(fname)
-            return LaunchResult(intent, True, app.name if app else "Editor", f"{fname} is already open in editor", executed=True)
-
-        if not app or not app.executable:
-            exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("cursor") or shutil.which("code")
-            if exec_bin:
-                friendly = "Antigravity IDE" if "antigravity" in exec_bin else "Editor"
-                app = ApplicationEntry(app_id="antigravity" if "antigravity" in exec_bin else "editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
-
-        exec_to_try = app.executable if app else None
-        adapter = get_adapter(os.path.basename(exec_to_try).lower()) if exec_to_try else None
+        # Prefer native editor binaries on PATH first
+        exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("code") or shutil.which("code-oss") or shutil.which("cursor")
+        if exec_bin:
+            friendly = "Antigravity IDE" if "antigravity" in exec_bin else "VS Code" if "code" in exec_bin else "Editor"
+            app = ApplicationEntry(app_id="editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
 
         if app and app.executable and shutil.which(app.executable):
             cmd = [app.executable]
-            if adapter:
-                cmd = adapter.enhance_launch_args(cmd, intent)
+            if line:
+                cmd.extend(["-g", f"{path}:{line}"])
             else:
                 cmd.append(path)
             try:
-                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
                 detail = f"Opened {os.path.basename(path)} in {app.name}" + (f" at line {line}" if line else "")
                 return LaunchResult(intent, True, app.name, detail, pid=proc.pid)
             except Exception as e:
                 logger.warning(f"Failed to launch {app.name} for {path}: {e}")
 
         try:
-            proc = subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc = subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return LaunchResult(intent, True, "System Default (xdg-open)", f"Opened {os.path.basename(path)} using system default handler", pid=proc.pid)
         except Exception as e:
             return LaunchResult(intent, False, "", f"Failed to open file via xdg-open: {e}", error=str(e))
@@ -313,28 +305,28 @@ class LinuxPlatformLauncher(PlatformLauncher):
             return LaunchResult(RestoreIntent("webpage", Capability.OPEN_URL), False, "", "Empty URL provided")
 
         intent = RestoreIntent("webpage", Capability.OPEN_URL, resource_url=url)
-        browser = app or self.catalog.get_default_browser()
+        browser_exec = (app.executable if app and app.executable and shutil.which(app.executable) else None) or \
+                       shutil.which("brave") or shutil.which("brave-browser") or \
+                       shutil.which("google-chrome") or shutil.which("chromium") or \
+                       shutil.which("firefox")
 
-        # 1. If we have a concrete browser executable, launch it directly via subprocess
-        if browser and browser.executable and shutil.which(browser.executable):
+        if browser_exec:
             try:
-                proc = subprocess.Popen([browser.executable, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return LaunchResult(intent, True, browser.name, f"Opened browser tab for {url} in {browser.name}", pid=proc.pid)
+                proc = subprocess.Popen([browser_exec, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                b_name = os.path.basename(browser_exec).capitalize()
+                return LaunchResult(intent, True, b_name, f"Opened browser tab for {url} in {b_name}", pid=proc.pid)
             except Exception as e:
-                logger.warning(f"Failed to launch browser executable {browser.executable}: {e}")
+                logger.warning(f"Failed to launch browser executable {browser_exec}: {e}")
 
-        # 2. Try direct xdg-open subprocess call
         try:
-            proc = subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc = subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return LaunchResult(intent, True, "System Default (xdg-open)", f"Opened browser tab for {url} via xdg-open", pid=proc.pid)
         except Exception as e:
             logger.warning(f"Failed to launch via xdg-open: {e}")
 
-        # 3. Fallback to webbrowser.open
         try:
             webbrowser.open(url)
-            app_name = browser.name if browser else "System Browser"
-            return LaunchResult(intent, True, app_name, f"Opened browser tab for {url}")
+            return LaunchResult(intent, True, "System Browser", f"Opened browser tab for {url}")
         except Exception as e:
             return LaunchResult(intent, False, "", f"Failed to open URL: {e}", error=str(e))
 
@@ -345,26 +337,21 @@ class LinuxPlatformLauncher(PlatformLauncher):
         intent = RestoreIntent("repository", Capability.OPEN_FOLDER, resource_path=path)
         proj = os.path.basename(path)
 
-        # Idempotency check: If project window is already open, focus it rather than duplicate
-        if self._is_window_active(proj):
-            self.focus_window(proj)
-            return LaunchResult(intent, True, app.name if app else "Editor", f"Project {proj} is already open", executed=True)
-
-        if not app or not app.executable:
-            exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("cursor") or shutil.which("code")
-            if exec_bin:
-                friendly = "Antigravity IDE" if "antigravity" in exec_bin else "Editor"
-                app = ApplicationEntry(app_id="editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
+        # Prefer native editor binaries on PATH first
+        exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("code") or shutil.which("code-oss") or shutil.which("cursor")
+        if exec_bin:
+            friendly = "Antigravity IDE" if "antigravity" in exec_bin else "VS Code" if "code" in exec_bin else "Editor"
+            app = ApplicationEntry(app_id="editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
 
         if app and app.executable and shutil.which(app.executable):
             try:
-                proc = subprocess.Popen([app.executable, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                proc = subprocess.Popen([app.executable, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
                 return LaunchResult(intent, True, app.name, f"Opened project {os.path.basename(path)} in {app.name}", pid=proc.pid)
             except Exception as e:
                 logger.warning(f"Failed to open folder in {app.name}: {e}")
 
         try:
-            proc = subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc = subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return LaunchResult(intent, True, "File Manager", f"Opened folder {path} in file manager", pid=proc.pid)
         except Exception as e:
             return LaunchResult(intent, False, "", f"Failed to open folder via xdg-open: {e}", error=str(e))
@@ -376,32 +363,19 @@ class LinuxPlatformLauncher(PlatformLauncher):
         if not os.path.isdir(target_dir):
             return LaunchResult(intent, False, "Terminal", f"Working directory no longer exists or was renamed: {cwd}")
 
-        term_app = self.catalog.get_default_terminal()
-
-        # Idempotency check: Check if terminal in this exact directory is already active
-        try:
-            from arova.core.ambience.process_tracker import ProcessContextTracker
-            proc_ctx = ProcessContextTracker.get_active_process_contexts()
-            active_cwds = proc_ctx.get("terminal_cwds", [])
-            if target_dir in active_cwds or any(os.path.abspath(c) == os.path.abspath(target_dir) for c in active_cwds):
-                self.focus_window("terminal")
-                detail = f"Terminal session in {target_dir} is already active" + (f" (Recent command: '{command_hint}')" if command_hint else "")
-                return LaunchResult(intent, True, term_app.name if term_app else "Terminal", detail, executed=True)
-        except Exception:
-            pass
-
-        exec_to_try = term_app.executable if term_app else (shutil.which("x-terminal-emulator") or shutil.which("gnome-terminal") or shutil.which("alacritty") or shutil.which("kitty"))
+        exec_to_try = shutil.which("kitty") or shutil.which("xfce4-terminal") or shutil.which("alacritty") or shutil.which("gnome-terminal") or shutil.which("konsole") or shutil.which("x-terminal-emulator") or shutil.which("xterm")
 
         pid = None
-        if exec_to_try and shutil.which(exec_to_try):
+        if exec_to_try:
             try:
-                proc = subprocess.Popen([exec_to_try], cwd=target_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                proc = subprocess.Popen([exec_to_try], cwd=target_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
                 pid = proc.pid
             except Exception as e:
                 logger.debug(f"Terminal popen failed: {e}")
 
-        detail = f"Prepared working directory {target_dir}" + (f" (Recent command: '{command_hint}')" if command_hint else " without auto-executing commands")
-        return LaunchResult(intent, True, term_app.name if term_app else "Terminal", detail, pid=pid)
+        term_name = os.path.basename(exec_to_try).capitalize() if exec_to_try else "Terminal"
+        detail = f"Opened {term_name} in {target_dir}" + (f" (Recent command: '{command_hint}')" if command_hint else "")
+        return LaunchResult(intent, True, term_name, detail, pid=pid)
 
     def focus_window(self, window_class: str) -> LaunchResult:
         intent = RestoreIntent("window", Capability.FOCUS_WINDOW, metadata={"window_class": window_class})

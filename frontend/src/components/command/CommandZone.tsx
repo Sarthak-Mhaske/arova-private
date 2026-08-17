@@ -14,22 +14,22 @@ interface ModelOption {
 
 const MODEL_OPTIONS: ModelOption[] = [
   // Fast & Coding (Groq LPU)
-  { id: 'qwen-3.6-27b', name: 'Qwen 3.6 27B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Fast multilingual reasoning & active code refactoring', tag: 'Fast / Code' },
-  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'High-throughput enterprise code generation & API reasoning', tag: 'Enterprise Code' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Sub-second conversation & quick questions', tag: 'Sub-Second' },
-  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Complex math proofing & algorithmic logic on LPU', tag: 'Math / Logic' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Fast versatile reasoning and code generation', tag: 'Fast / Code' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Sub-second conversation and quick questions', tag: 'Sub-Second' },
+  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Complex math proofing and algorithmic logic on LPU', tag: 'Math / Logic' },
+  { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Balanced multilingual mixture-of-experts reasoning', tag: 'Balanced' },
   
   // Deep Frontier Reasoning
-  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: '2M token full repo context analysis & continuous video understanding', tag: '2M Context' },
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Fast live developer feedback loop & hybrid reasoning', tag: 'Fast Hybrid' },
-  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship creative intelligence, multimodal assets & architecture', tag: 'Flagship' },
-  { id: 'o3', name: 'OpenAI o3', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Deep test-time compute thought chains & hard problem solving', tag: 'Deep Thought' },
-  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Software engineering, multi-file AST diffs & rich markdown', tag: 'Code Specialist' },
-  { id: 'claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Multi-step autonomous business strategy & technical audits', tag: 'Strategy' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Fast hybrid reasoning with large context window', tag: 'Fast Hybrid' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: '2M token full repo context analysis and deep reasoning', tag: '2M Context' },
+  { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship multimodal intelligence and architecture', tag: 'Flagship' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Fast cost-effective reasoning for everyday tasks', tag: 'Efficient' },
+  { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Software engineering, multi-file diffs and rich markdown', tag: 'Code Specialist' },
+  { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Balanced coding and analysis with strong reasoning', tag: 'Balanced' },
   
   // Local & Private
-  { id: 'gpt-oss:120b', name: 'GPT OSS 120B (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: '100% private on-device open weights for enterprise privacy', tag: 'Private' },
-  { id: 'qwen3:32b', name: 'Qwen 3 32B (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Local offline coding & chat without cloud connectivity', tag: 'Offline' }
+  { id: 'llama3.3', name: 'Llama 3.3 (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: '100% private on-device open weights', tag: 'Private' },
+  { id: 'qwen2.5-coder', name: 'Qwen 2.5 Coder (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Local offline coding without cloud connectivity', tag: 'Offline Code' }
 ];
 
 export const CommandZone: React.FC = () => {
@@ -136,21 +136,32 @@ export const CommandZone: React.FC = () => {
     };
   }, [showModelMenu]);
 
-  // Reset selected model to 'auto' if current selection is no longer available
+  // Only reset if the provider for the selected model is completely gone (provider removed)
+  // Do NOT reset just because availableModels changed — user's choice persists
   useEffect(() => {
-    if (selectedModel !== 'auto' && availableModels.length > 0) {
-      const exists = availableModels.some(m => m.id === selectedModel);
-      if (!exists) {
+    if (selectedModel !== 'auto' && activeProviders.size > 0) {
+      const opt = MODEL_OPTIONS.find(m => m.id === selectedModel);
+      if (opt && !activeProviders.has(opt.providerKey)) {
+        // Provider was removed entirely — fall back to auto
         setSelectedModel('auto');
         localStorage.setItem('arova_preferred_model', 'auto');
       }
     }
-  }, [availableModels, selectedModel]);
+  }, [activeProviders]);
 
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
     localStorage.setItem('arova_preferred_model', modelId);
     setShowModelMenu(false);
+    // Persist to daemon config so it survives restarts
+    const opt = MODEL_OPTIONS.find(m => m.id === modelId);
+    socket.sendEvent({
+      type: 'config.update_request',
+      config: {
+        preferred_model: modelId,
+        ...(opt ? { preferred_provider: opt.providerKey } : {})
+      }
+    });
   };
 
   // Build suggestion list from verbatim RealityLayer.resources + search index fallback

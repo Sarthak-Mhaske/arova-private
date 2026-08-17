@@ -104,13 +104,6 @@ class EnvironmentRestorationEngine:
         if self.event_bus:
             self.event_bus.emit("environment", "LAUNCH_PLAN_READY", plan.to_dict())
 
-        # Switch to dedicated workspace 2 so restored applications do not crowd/cover Arova
-        if shutil.which("hyprctl"):
-            try:
-                subprocess.run(["hyprctl", "dispatch", "workspace", "2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-
         # 2. Process File & Repository intents
         restore_files = options.get("restore_vscode", options.get("restore_editors", True))
         if not restore_files:

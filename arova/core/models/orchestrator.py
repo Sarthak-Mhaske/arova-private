@@ -142,9 +142,10 @@ class ModelOrchestrator:
                             messages: List[Dict[str, Any]], 
                             system_prompt: str, 
                             depth: ReasoningDepth = ReasoningDepth.STANDARD, 
-                            budget: Optional[ReasoningBudget] = None):
+                            budget: Optional[ReasoningBudget] = None,
+                            model: str = ""):
         cap = Capability.REASONING if depth in (ReasoningDepth.DEEP, ReasoningDepth.REFLECTIVE) else Capability.CHAT
         max_tokens = budget.max_tokens if budget else 4096
         
-        async for chunk in self.router.stream(messages, system_prompt, capability=cap, max_tokens=max_tokens):
+        async for chunk in self.router.stream(messages, system_prompt, capability=cap, model=model, max_tokens=max_tokens):
             yield chunk

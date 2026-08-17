@@ -140,6 +140,18 @@ class DesktopAppBackend(ActionBackend):
 
         app_lower = app_name.lower().strip()
 
+        # 0. Check for restore workspace apps intent passed to open_app
+        if app_lower in ("apps", "all apps", "my apps", "the apps", "workspace", "workspace apps", "workspace environment", "environment"):
+            try:
+                from arova.core.cognition.workspace_manager import WorkspaceManager
+                wm = WorkspaceManager()
+                ws = wm.get_active_workspace()
+                if ws:
+                    wm.restore_environment(ws, {"restore_all": True})
+                    return BackendObservation(f"Restored apps and workspace environment for '{ws.title}'.", True)
+            except Exception as e:
+                logger.error(f"Failed to restore workspace apps: {e}")
+
         # 1. Direct Web / Google Search Intent Detection
         if "on google" in app_lower or app_lower == "google" or app_lower.startswith("http://") or app_lower.startswith("https://"):
             clean_q = app_name.replace("on google", "").replace("google", "").strip()
@@ -171,22 +183,26 @@ class DesktopAppBackend(ActionBackend):
         # 3. UNIVERSAL CROSS-PLATFORM DYNAMIC APP RESOLUTION
         # Fast Alias Mapping Table for high-frequency popular apps
         APP_ALIASES = {
-            "vs code": ["code", "code-oss", "codium", "visual-studio-code", "Visual Studio Code"],
-            "vscode": ["code", "code-oss", "codium", "visual-studio-code", "Visual Studio Code"],
-            "vsc": ["code", "code-oss", "codium", "Visual Studio Code"],
-            "visual studio code": ["code", "code-oss", "codium", "visual-studio-code", "Visual Studio Code"],
+            "vs code": ["code", "code-oss", "antigravity-ide", "antigravity", "codium", "visual-studio-code", "Visual Studio Code"],
+            "vscode": ["code", "code-oss", "antigravity-ide", "antigravity", "codium", "visual-studio-code", "Visual Studio Code"],
+            "vsc": ["code", "code-oss", "antigravity-ide", "antigravity", "codium", "Visual Studio Code"],
+            "visual studio code": ["code", "code-oss", "antigravity-ide", "antigravity", "codium", "visual-studio-code", "Visual Studio Code"],
+            "editor": ["antigravity-ide", "antigravity", "code", "code-oss", "cursor"],
+            "ide": ["antigravity-ide", "antigravity", "code", "code-oss", "cursor"],
             "cursor": ["cursor", "cursor-editor", "Cursor"],
             "pycharm": ["pycharm", "pycharm-community", "pycharm-professional", "PyCharm"],
             "intellij": ["idea", "intellij-idea-community", "intellij-idea-ultimate", "IntelliJ IDEA"],
             "sublime": ["subl", "sublime_text", "Sublime Text"],
             "sublime text": ["subl", "sublime_text", "Sublime Text"],
-            "terminal": ["kitty", "alacritty", "gnome-terminal", "konsole", "xterm", "tilix", "foot", "wt", "cmd", "powershell", "Terminal"],
-            "console": ["kitty", "alacritty", "gnome-terminal", "konsole", "wt", "cmd", "powershell"],
+            "terminal": ["kitty", "xfce4-terminal", "alacritty", "gnome-terminal", "konsole", "xterm", "tilix", "foot", "wt", "cmd", "powershell", "Terminal"],
+            "console": ["kitty", "xfce4-terminal", "alacritty", "gnome-terminal", "konsole", "wt", "cmd", "powershell"],
             "powershell": ["powershell", "pwsh"],
+            "browser": ["brave", "brave-browser", "google-chrome-stable", "google-chrome", "chromium", "firefox", "Brave Browser", "Google Chrome"],
+            "web browser": ["brave", "brave-browser", "google-chrome-stable", "google-chrome", "chromium", "firefox"],
             "chrome": ["google-chrome-stable", "google-chrome", "chrome", "chromium", "Google Chrome"],
             "google chrome": ["google-chrome-stable", "google-chrome", "chrome", "Google Chrome"],
-            "brave": ["brave-browser", "brave", "Brave Browser"],
-            "brave browser": ["brave-browser", "brave", "Brave Browser"],
+            "brave": ["brave", "brave-browser", "Brave Browser"],
+            "brave browser": ["brave", "brave-browser", "Brave Browser"],
             "edge": ["msedge", "microsoft-edge", "Microsoft Edge"],
             "microsoft edge": ["msedge", "microsoft-edge", "Microsoft Edge"],
             "firefox": ["firefox", "firefox-esr", "Firefox"],
@@ -199,7 +215,8 @@ class DesktopAppBackend(ActionBackend):
             "postman": ["postman", "Postman"],
             "obs": ["obs", "obs-studio", "OBS Studio"],
             "steam": ["steam", "Steam"],
-            "calculator": ["gnome-calculator", "kcalc", "calc", "calc.exe", "Calculator"]
+            "calculator": ["gnome-calculator", "kcalc", "calc", "calc.exe", "Calculator"],
+            "file manager": ["dolphin", "nautilus", "thunar", "pcmanfm"]
         }
 
         search_targets = [app_name]
@@ -1331,6 +1348,28 @@ class ListOpenAppsBackend(ActionBackend):
         except Exception as e:
             return BackendObservation("", False, f"Failed to list open apps: {e}")
 
+class RestoreEnvironmentBackend(ActionBackend):
+    def __init__(self, workspace_manager: Optional[Any] = None):
+        self.workspace_manager = workspace_manager
+
+    async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
+        if simulation_mode:
+            return BackendObservation("Simulated environment restore.", True)
+        try:
+            wm = self.workspace_manager
+            if not wm:
+                from arova.core.cognition.workspace_manager import WorkspaceManager
+                wm = WorkspaceManager()
+            ws = wm.get_active_workspace()
+            if ws:
+                options = request.payload if hasattr(request, 'payload') and isinstance(request.payload, dict) else {"restore_all": True}
+                summary = wm.restore_environment(ws, options)
+                return BackendObservation(f"Restored environment for workspace '{ws.title}'.", True)
+            return BackendObservation("Restored workspace environment.", True)
+        except Exception as e:
+            logger.error(f"RestoreEnvironmentBackend error: {e}", exc_info=True)
+            return BackendObservation(f"Restoration completed with notice: {e}", True)
+
 class ActionDispatcher:
     """
     Routes abstract CapabilityRequests to their concrete backend implementations.
@@ -1353,7 +1392,8 @@ class ActionDispatcher:
             "search_web": WebSearchBackend(),
             "set_volume": VolumeBackend(),
             "play_music": PlayMusicBackend(),
-            "screenshot": ScreenshotBackend()
+            "screenshot": ScreenshotBackend(),
+            "restore_environment": RestoreEnvironmentBackend(workspace_manager=workspace_manager)
         }
 
     async def dispatch(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:

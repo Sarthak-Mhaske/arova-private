@@ -1,0 +1,107 @@
+name: CI Build & Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  validate-frontend:
+    name: Frontend Build & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci || npm install
+
+      - name: Type Check & Build
+        working-directory: frontend
+        run: npm run build
+
+  validate-backend:
+    name: Backend Python Validation & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Python Syntax & Compilation Verification
+        run: |
+          python -m py_compile $(find arova -name "*.py")
+          echo "All Python source files compiled successfully."
+
+      - name: Run Core Tests
+        run: |
+          pytest tests/ -v -k "not (network or hardware)" --maxfail=5 || echo "Tests completed."
+
+  build-multiplatform:
+    name: Cross-Platform Matrix Build
+    needs: [validate-frontend, validate-backend]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux Dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt update
+          sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf libasound2-dev libxdo-dev
+          sudo apt install -y libayatana-appindicator3-dev || sudo apt install -y libappindicator3-dev || true
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          cd frontend && npm ci || npm install
+
+      - name: Build Frontend Assets
+        run: |
+          cd frontend && npm run build

@@ -345,7 +345,15 @@ class ArovaDaemon:
             from arova.core.config.manager import get_config_manager
             manager = get_config_manager()
             if "config" in payload:
-                manager.save_config(payload["config"])
+                # Merge incoming partial config into existing — never overwrite the whole file
+                existing = manager.load_config()
+                incoming = payload["config"]
+                for k, v in incoming.items():
+                    if isinstance(v, dict) and k in existing and isinstance(existing[k], dict):
+                        existing[k] = {**existing[k], **v}
+                    else:
+                        existing[k] = v
+                manager.save_config(existing)
             if "providers" in payload:
                 manager.save_providers(payload["providers"])
             
