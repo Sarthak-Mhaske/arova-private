@@ -34,8 +34,13 @@ class OSConfigManager:
     Separates OS-level UI config from provider credentials.
     Replaces the legacy loader.py which dumped everything into config.yml.
     """
-    def __init__(self, config_dir: str = "~/.config/arova"):
-        self.config_dir = Path(os.path.expanduser(config_dir))
+    def __init__(self, config_dir: str | None = None):
+        if config_dir:
+            self.config_dir = Path(os.path.expanduser(config_dir))
+        else:
+            from arova.core.config.loader import get_arova_config_dir
+            self.config_dir = get_arova_config_dir()
+            
         self.config_dir.mkdir(parents=True, exist_ok=True)
         
         self.config_path = self.config_dir / "config.json"

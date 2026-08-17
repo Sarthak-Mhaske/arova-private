@@ -23,10 +23,10 @@ class EmbeddingEngine:
                 self._model = SentenceTransformer(self.model_name)
                 logging.info("Embedding model loaded.")
             except ImportError:
-                logging.warning("sentence-transformers not installed — using deterministic hash fallback (384-dim). Install sentence-transformers for true semantic embeddings.")
+                logging.warning("sentence-transformers not installed -- using deterministic hash fallback (384-dim). Install sentence-transformers for true semantic embeddings.")
                 self._use_fallback = True
             except Exception as e:
-                logging.warning(f"Embedding model load failed ({e}) — using hash fallback")
+                logging.warning(f"Embedding model load failed ({e}) -- using hash fallback")
                 self._use_fallback = True
                 
     def _hash_encode(self, text: str) -> list[float]:

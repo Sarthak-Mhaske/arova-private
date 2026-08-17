@@ -384,7 +384,7 @@ class FileWatcher:
             "lines_removed": removed_count,
         })
 
-        self._logger.info(f"Captured: {relative} — {summary}")
+        self._logger.info(f"Captured: {relative} - {summary}")
 
     async def watch_with_watchfiles(self):
         """

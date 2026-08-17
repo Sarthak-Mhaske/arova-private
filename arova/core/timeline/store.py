@@ -20,15 +20,14 @@ class TimelineStore:
         self.events: List[TimelineEvent] = []
         self._lock = asyncio.Lock()
         
-        import os
-        import json
-        from pathlib import Path
-        self.events_path = Path(os.path.expanduser("~/.config/arova/timeline_events.json"))
-        self.capsules_path = Path(os.path.expanduser("~/.config/arova/momentum_capsules.json"))
+        from arova.core.config.loader import get_arova_config_dir
+        cfg_dir = get_arova_config_dir()
+        self.events_path = cfg_dir / "timeline_events.json"
+        self.capsules_path = cfg_dir / "momentum_capsules.json"
         
         self.events_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.capsules_path.exists():
-            with open(self.capsules_path, "w") as f:
+            with open(self.capsules_path, "w", encoding="utf-8") as f:
                 json.dump([], f)
                 
         # Hydrate historical timeline events from disk

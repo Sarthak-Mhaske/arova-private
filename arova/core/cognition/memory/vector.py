@@ -28,11 +28,11 @@ class QdrantLocal:
             try:
                 self.client = QdrantClient(path=self.storage_path)
             except Exception as e:
-                logging.warning(f"Qdrant init failed ({e}) — using in-memory fallback")
+                logging.warning(f"Qdrant init failed ({e}) -- using in-memory fallback")
                 self.client = None
         else:
             self.client = None
-            logging.warning("qdrant-client not installed — using in-memory vector fallback (install qdrant-client for persistent Qdrant)")
+            logging.warning("qdrant-client not installed -- using in-memory vector fallback (install qdrant-client for persistent Qdrant)")
             
         self.collection_name = "arova_cognition"
         

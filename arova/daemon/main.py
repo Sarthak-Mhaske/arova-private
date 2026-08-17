@@ -18,6 +18,13 @@ import os
 import traceback
 
 def _setup_daemon_logging():
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     handlers = [logging.StreamHandler(sys.stdout)]
 

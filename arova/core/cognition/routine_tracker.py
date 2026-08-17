@@ -14,9 +14,9 @@ class RoutineTracker:
     """
     def __init__(self, store_path: Optional[str] = None):
         if not store_path:
-            config_dir = os.path.expanduser("~/.config/arova")
-            os.makedirs(config_dir, exist_ok=True)
-            store_path = os.path.join(config_dir, "routine_stats.json")
+            from arova.core.config.loader import get_arova_config_dir
+            config_dir = get_arova_config_dir()
+            store_path = str(config_dir / "routine_stats.json")
         self.store_path = store_path
         self.stats: Dict[str, Any] = self._load_stats()
 

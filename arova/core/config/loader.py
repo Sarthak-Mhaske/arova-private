@@ -128,35 +128,41 @@ DEFAULT_CONFIG: dict[str, Any] = {
     }
 }
 
+def get_arova_config_dir() -> Path:
+    """Returns the platform-standard persistent configuration directory for Arova."""
+    import sys
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            p = Path(local_app_data) / "Arova"
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        user_profile = os.environ.get("USERPROFILE")
+        if user_profile:
+            p = Path(user_profile) / ".config" / "arova"
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+    elif sys.platform == "darwin":
+        p = Path.home() / "Library" / "Application Support" / "Arova"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    p = Path.home() / ".config" / "arova"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
 def load_config(config_path: str | None = None) -> dict[str, Any]:
     """Load configuration from a YAML or JSON file, falling back to safe defaults."""
     if config_path is None:
-        import sys
-        cands = []
-        if sys.platform == "win32":
-            local_app_data = os.environ.get("LOCALAPPDATA")
-            if local_app_data:
-                cands.append(Path(local_app_data) / "Arova")
-            app_data = os.environ.get("APPDATA")
-            if app_data:
-                cands.append(Path(app_data) / "Arova")
-        elif sys.platform == "darwin":
-            cands.append(Path.home() / "Library" / "Application Support" / "Arova")
-        
-        home = Path.home()
-        cands.append(home / ".config" / "arova")
-
+        cfg_dir = get_arova_config_dir()
         path = None
-        for dir_path in cands:
-            for fname in ["config.json", "config.yml", "config.yaml"]:
-                p = dir_path / fname
-                if p.exists():
-                    path = p
-                    break
-            if path:
+        for fname in ["config.json", "config.yml", "config.yaml"]:
+            p = cfg_dir / fname
+            if p.exists():
+                path = p
                 break
         if not path:
-            path = home / ".config" / "arova" / "config.json"
+            path = cfg_dir / "config.json"
     else:
         path = Path(config_path)
 

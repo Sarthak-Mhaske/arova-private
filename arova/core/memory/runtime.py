@@ -37,7 +37,7 @@ class MemoryRuntime:
             self.vector_store = QdrantLocal()
             logging.info("MemoryRuntime: Vector store initialized (hybrid retrieval enabled)")
         except Exception as e:
-            logging.warning(f"MemoryRuntime: Vector store init failed ({e}) — heuristic fallback only")
+            logging.warning(f"MemoryRuntime: Vector store init failed ({e}) -- heuristic fallback only")
             self.vector_store = None
             
         # We hook into capabilities to log them to episodic memory
