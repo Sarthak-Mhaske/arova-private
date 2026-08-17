@@ -7,12 +7,18 @@ hiddenimports = [
     'arova', 'arova.core', 'arova.core.voice', 'arova.core.cognition', 
     'arova.core.ambience', 'arova.core.automation', 'arova.core.platform', 
     'arova.daemon', 'arova.core.cognition.workspace_manager', 
-    'arova.core.projection.projector', 'numpy', 'scipy', 'sklearn', 'websockets'
+    'arova.core.projection.projector', 'numpy', 'scipy', 'sklearn', 'websockets',
+    'edge_tts', 'sounddevice', '_cffi_backend'
 ]
 tmp_ret = collect_all('openwakeword')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('arova')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+try:
+    tmp_ret = collect_all('edge_tts')
+    datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+except Exception:
+    pass
 
 
 a = Analysis(
