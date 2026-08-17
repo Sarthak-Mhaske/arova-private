@@ -34,7 +34,7 @@ npm run build
 # 3. Build Tauri macOS Application Bundle (.app & .dmg)
 echo ""
 echo "▶ [3/4] Compiling Tauri desktop binary and macOS bundle..."
-npm run tauri build
+npm run tauri build || npm run tauri build -- --no-bundle
 
 # 4. Assemble Arova.app Bundle
 echo ""
