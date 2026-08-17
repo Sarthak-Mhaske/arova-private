@@ -34,11 +34,10 @@ class AnthropicProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
-        if not model:
-            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_CODING, QualityTier.HIGH, provider_id="anthropic")
-            model = candidate.id
+        models_to_try = [model] if model else [
+            "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"
+        ]
 
-        t0 = time.time()
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
@@ -53,79 +52,93 @@ class AnthropicProvider(CognitiveProvider):
                 continue
             formatted_messages.append({"role": role, "content": m.get("content", "")})
 
-        payload = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": formatted_messages
-        }
-        if system_prompt:
-            payload["system"] = system_prompt
+        last_err = None
+        for current_model in models_to_try:
+            t0 = time.time()
+            payload = {
+                "model": current_model,
+                "max_tokens": max_tokens,
+                "messages": formatted_messages
+            }
+            if system_prompt:
+                payload["system"] = system_prompt
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        latency = (time.time() - t0) * 1000
-                        self.health.record_success(latency)
-                        content_list = data.get("content", [])
-                        if content_list and isinstance(content_list, list):
-                            return content_list[0].get("text", "")
-                        return ""
-                    else:
-                        err_text = await resp.text()
-                        self.health.record_failure()
-                        raise RuntimeError(f"Anthropic API error {resp.status}: {err_text}")
-        except Exception as e:
-            self.health.record_failure()
-            raise
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            latency = (time.time() - t0) * 1000
+                            self.health.record_success(latency)
+                            content_list = data.get("content", [])
+                            if content_list and isinstance(content_list, list):
+                                return content_list[0].get("text", "")
+                            return ""
+                        else:
+                            err_text = await resp.text()
+                            logger.warning(f"AnthropicProvider: Model {current_model} returned {resp.status}. Trying next candidate...")
+                            last_err = RuntimeError(f"Anthropic API error {resp.status}: {err_text}")
+            except Exception as e:
+                logger.warning(f"AnthropicProvider: Model {current_model} failed ({e}). Trying next candidate...")
+                last_err = e
+
+        self.health.record_failure(str(last_err) if last_err else "All Anthropic models failed")
+        raise last_err or Exception("All Anthropic models failed")
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
-        if not model:
-            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_CODING, QualityTier.HIGH, provider_id="anthropic")
-            model = candidate.id
+        models_to_try = [model] if model else [
+            "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"
+        ]
 
-        t0 = time.time()
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
             "Content-Type": "application/json"
         }
         formatted_messages = [m for m in messages if m.get("role") != "system"]
-        payload = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": formatted_messages,
-            "stream": True
-        }
-        if system_prompt:
-            payload["system"] = system_prompt
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
-                    if resp.status != 200:
-                        err = await resp.text()
-                        self.health.record_failure()
-                        raise RuntimeError(f"Anthropic stream error {resp.status}: {err}")
+        last_err = None
+        for current_model in models_to_try:
+            t0 = time.time()
+            payload = {
+                "model": current_model,
+                "max_tokens": max_tokens,
+                "messages": formatted_messages,
+                "stream": True
+            }
+            if system_prompt:
+                payload["system"] = system_prompt
 
-                    async for line in resp.content:
-                        line_str = line.decode("utf-8").strip()
-                        if line_str.startswith("data: "):
-                            try:
-                                chunk = json.loads(line_str[6:])
-                                if chunk.get("type") == "content_block_delta":
-                                    text = chunk.get("delta", {}).get("text", "")
-                                    if text:
-                                        yield text
-                            except Exception:
-                                pass
-                    latency = (time.time() - t0) * 1000
-                    self.health.record_success(latency)
-        except Exception as e:
-            self.health.record_failure()
-            raise
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
+                        if resp.status != 200:
+                            err = await resp.text()
+                            logger.warning(f"Anthropic stream {current_model} returned {resp.status}. Trying next model...")
+                            last_err = RuntimeError(f"Anthropic stream error {resp.status}: {err}")
+                            continue
+
+                        async for line in resp.content:
+                            line_str = line.decode("utf-8").strip()
+                            if line_str.startswith("data: "):
+                                try:
+                                    chunk = json.loads(line_str[6:])
+                                    if chunk.get("type") == "content_block_delta":
+                                        text = chunk.get("delta", {}).get("text", "")
+                                        if text:
+                                            yield text
+                                except Exception:
+                                    pass
+                        latency = (time.time() - t0) * 1000
+                        self.health.record_success(latency)
+                        return
+            except Exception as e:
+                last_err = e
+                continue
+
+        self.health.record_failure(str(last_err) if last_err else "All Anthropic stream models failed")
+        raise last_err or Exception("All Anthropic stream models failed")
 
     async def health_check(self):
         t0 = time.time()

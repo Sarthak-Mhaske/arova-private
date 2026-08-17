@@ -349,20 +349,35 @@ class ArovaDaemon:
             if "providers" in payload:
                 manager.save_providers(payload["providers"])
             
-            # Hot reload provider manager
-            if self.runtime and self.runtime.model_runtime and self.runtime.model_runtime.provider_manager:
-                self.runtime.model_runtime.provider_manager._discover_and_register()
-                active = list(self.runtime.model_runtime.provider_manager.all_providers.keys())
-                active = [p for p in active if p != "mock"]
-                logging.info(f"Daemon: Hot-reload complete. Active providers: {active}")
-                self.ws_manager.broadcast({
-                    "type": "provider.reloaded",
-                    "active_providers": active
-                })
+            # Hot reload provider manager & active routing policy
+            os_cfg = manager.load_config()
+            pref_p = os_cfg.get("preferred_provider")
+            p_style = os_cfg.get("presence_style", "hybrid")
+            a_fallback = os_cfg.get("allow_fallback", True)
+            c_routing = os_cfg.get("custom_routing", {})
+
+            if self.runtime and hasattr(self.runtime, 'model_runtime') and self.runtime.model_runtime:
+                mr = self.runtime.model_runtime
+                if hasattr(mr, 'provider_manager') and mr.provider_manager:
+                    mr.provider_manager._discover_and_register()
+                    active = list(mr.provider_manager.all_providers.keys())
+                    active = [p for p in active if p != "mock"]
+                    logging.info(f"Daemon: Hot-reload complete. Active providers: {active}")
+                    self.ws_manager.broadcast({
+                        "type": "provider.reloaded",
+                        "active_providers": active
+                    })
+                if hasattr(mr, 'routing_policy') and mr.routing_policy:
+                    mr.routing_policy.set_presence_style(
+                        style=p_style,
+                        custom_routing=c_routing,
+                        preferred_provider=pref_p,
+                        allow_fallback=a_fallback
+                    )
             
             self.ws_manager.broadcast({
                 "type": "config.sync",
-                "config": manager.load_config(),
+                "config": os_cfg,
                 "providers": manager.load_providers(),
                 "autostart_enabled": is_system_autostart_enabled()
             })

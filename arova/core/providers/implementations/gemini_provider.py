@@ -34,11 +34,8 @@ class GeminiProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
-        if not model:
-            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED, provider_id="gemini")
-            model = candidate.id
+        models_to_try = [model] if model else ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite-preview-02-05"]
 
-        t0 = time.time()
         # Gemini expects contents: [{parts: [{text: ...}]}] format
         contents = []
         if system_prompt:
@@ -70,40 +67,43 @@ class GeminiProvider(CognitiveProvider):
                 if parts:
                     contents.append({"role": role, "parts": parts})
 
-        url = f"{self.base_url}/{model}:generateContent?key={self.api_key}"
-        payload = {
-            "contents": contents,
-            "generationConfig": {"maxOutputTokens": max_tokens}
-        }
+        last_err = None
+        for current_model in models_to_try:
+            t0 = time.time()
+            url = f"{self.base_url}/{current_model}:generateContent?key={self.api_key}"
+            payload = {
+                "contents": contents,
+                "generationConfig": {"maxOutputTokens": max_tokens}
+            }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=30.0) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        latency = (time.time() - t0) * 1000
-                        self.health.record_success(latency)
-                        candidates = data.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts:
-                                return parts[0].get("text", "")
-                        return ""
-                    else:
-                        err_text = await resp.text()
-                        self.health.record_failure()
-                        raise RuntimeError(f"Gemini API error {resp.status}: {err_text}")
-        except Exception as e:
-            self.health.record_failure()
-            raise
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, timeout=30.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            latency = (time.time() - t0) * 1000
+                            self.health.record_success(latency)
+                            candidates = data.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                if parts:
+                                    return parts[0].get("text", "")
+                            return ""
+                        else:
+                            err_text = await resp.text()
+                            logger.warning(f"GeminiProvider: Model {current_model} returned HTTP {resp.status}. Trying next candidate...")
+                            last_err = RuntimeError(f"Gemini API error {resp.status}: {err_text}")
+            except Exception as e:
+                logger.warning(f"GeminiProvider: Model {current_model} failed ({e}). Trying next candidate...")
+                last_err = e
+
+        self.health.record_failure(str(last_err) if last_err else "All Gemini models failed")
+        raise last_err or Exception("All Gemini models failed")
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
-        if not model:
-            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED, provider_id="gemini")
-            model = candidate.id
+        models_to_try = [model] if model else ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite-preview-02-05"]
 
-        t0 = time.time()
         contents = []
         if system_prompt:
             contents.append({"role": "user", "parts": [{"text": f"System Instructions:\n{system_prompt}"}]})
@@ -112,34 +112,44 @@ class GeminiProvider(CognitiveProvider):
             role = "user" if m.get("role") in ("user", "system") else "model"
             contents.append({"role": role, "parts": [{"text": m.get("content", "")}]})
 
-        url = f"{self.base_url}/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
-        payload = {"contents": contents, "generationConfig": {"maxOutputTokens": max_tokens}}
+        last_err = None
+        for current_model in models_to_try:
+            t0 = time.time()
+            url = f"{self.base_url}/{current_model}:streamGenerateContent?alt=sse&key={self.api_key}"
+            payload = {"contents": contents, "generationConfig": {"maxOutputTokens": max_tokens}}
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=30.0) as resp:
-                    if resp.status != 200:
-                        err = await resp.text()
-                        self.health.record_failure()
-                        raise RuntimeError(f"Gemini stream error {resp.status}: {err}")
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, timeout=30.0) as resp:
+                        if resp.status != 200:
+                            err = await resp.text()
+                            logger.warning(f"Gemini stream {current_model} returned {resp.status}. Trying next model...")
+                            last_err = RuntimeError(f"Gemini stream error {resp.status}: {err}")
+                            continue
 
-                    async for line in resp.content:
-                        line_str = line.decode("utf-8").strip()
-                        if line_str.startswith("data: "):
-                            try:
-                                chunk = json.loads(line_str[6:])
-                                cands = chunk.get("candidates", [])
-                                if cands:
-                                    parts = cands[0].get("content", {}).get("parts", [])
-                                    if parts and parts[0].get("text"):
-                                        yield parts[0]["text"]
-                            except Exception:
-                                pass
-                    latency = (time.time() - t0) * 1000
-                    self.health.record_success(latency)
-        except Exception as e:
-            self.health.record_failure()
-            raise
+                        chunk_yielded = False
+                        async for line in resp.content:
+                            line_str = line.decode("utf-8").strip()
+                            if line_str.startswith("data: "):
+                                try:
+                                    chunk = json.loads(line_str[6:])
+                                    cands = chunk.get("candidates", [])
+                                    if cands:
+                                        parts = cands[0].get("content", {}).get("parts", [])
+                                        if parts and parts[0].get("text"):
+                                            chunk_yielded = True
+                                            yield parts[0]["text"]
+                                except Exception:
+                                    pass
+                        latency = (time.time() - t0) * 1000
+                        self.health.record_success(latency)
+                        return
+            except Exception as e:
+                last_err = e
+                continue
+
+        self.health.record_failure(str(last_err) if last_err else "All Gemini stream models failed")
+        raise last_err or Exception("All Gemini stream models failed")
 
     async def health_check(self):
         t0 = time.time()

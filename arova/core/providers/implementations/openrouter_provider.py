@@ -35,11 +35,10 @@ class OpenRouterProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
-        if not model:
-            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED, provider_id="openrouter")
-            model = candidate.id
+        models_to_try = [model] if model else [
+            "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "openai/gpt-4o-mini"
+        ]
 
-        t0 = time.time()
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://arova.dev",
@@ -51,38 +50,43 @@ class OpenRouterProvider(CognitiveProvider):
             full_messages.append({"role": "system", "content": system_prompt})
         full_messages.extend(messages)
 
-        payload = {
-            "model": model,
-            "messages": full_messages,
-            "max_tokens": max_tokens
-        }
+        last_err = None
+        for current_model in models_to_try:
+            t0 = time.time()
+            payload = {
+                "model": current_model,
+                "messages": full_messages,
+                "max_tokens": max_tokens
+            }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        latency = (time.time() - t0) * 1000
-                        self.health.record_success(latency)
-                        choices = data.get("choices", [])
-                        if choices:
-                            return choices[0].get("message", {}).get("content", "")
-                        return ""
-                    else:
-                        err_text = await resp.text()
-                        self.health.record_failure()
-                        raise RuntimeError(f"OpenRouter API error {resp.status}: {err_text}")
-        except Exception as e:
-            self.health.record_failure()
-            raise
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            latency = (time.time() - t0) * 1000
+                            self.health.record_success(latency)
+                            choices = data.get("choices", [])
+                            if choices:
+                                return choices[0].get("message", {}).get("content", "")
+                            return ""
+                        else:
+                            err_text = await resp.text()
+                            logger.warning(f"OpenRouterProvider: Model {current_model} returned {resp.status}. Trying next candidate...")
+                            last_err = RuntimeError(f"OpenRouter API error {resp.status}: {err_text}")
+            except Exception as e:
+                logger.warning(f"OpenRouterProvider: Model {current_model} failed ({e}). Trying next candidate...")
+                last_err = e
+
+        self.health.record_failure(str(last_err) if last_err else "All OpenRouter models failed")
+        raise last_err or Exception("All OpenRouter models failed")
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
-        if not model:
-            candidate = get_model_registry().resolve(ArovaCapability.AROVA_CAPABILITY_FAST_CHAT, QualityTier.BALANCED, provider_id="openrouter")
-            model = candidate.id
+        models_to_try = [model] if model else [
+            "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "openai/gpt-4o-mini"
+        ]
 
-        t0 = time.time()
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://arova.dev",
@@ -94,36 +98,46 @@ class OpenRouterProvider(CognitiveProvider):
             full_messages.append({"role": "system", "content": system_prompt})
         full_messages.extend(messages)
 
-        payload = {
-            "model": model,
-            "messages": full_messages,
-            "max_tokens": max_tokens,
-            "stream": True
-        }
+        last_err = None
+        for current_model in models_to_try:
+            t0 = time.time()
+            payload = {
+                "model": current_model,
+                "messages": full_messages,
+                "max_tokens": max_tokens,
+                "stream": True
+            }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
-                    if resp.status != 200:
-                        err = await resp.text()
-                        self.health.record_failure()
-                        raise RuntimeError(f"OpenRouter stream error {resp.status}: {err}")
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
+                        if resp.status != 200:
+                            err = await resp.text()
+                            logger.warning(f"OpenRouter stream {current_model} returned {resp.status}. Trying next model...")
+                            last_err = RuntimeError(f"OpenRouter stream error {resp.status}: {err}")
+                            continue
 
-                    async for line in resp.content:
-                        line_str = line.decode("utf-8").strip()
-                        if line_str.startswith("data: ") and line_str != "data: [DONE]":
-                            try:
-                                chunk = json.loads(line_str[6:])
-                                delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                                if delta:
-                                    yield delta
-                            except Exception:
-                                pass
-                    latency = (time.time() - t0) * 1000
-                    self.health.record_success(latency)
-        except Exception as e:
-            self.health.record_failure()
-            raise
+                        async for line in resp.content:
+                            line_str = line.decode("utf-8").strip()
+                            if line_str.startswith("data: ") and line_str != "data: [DONE]":
+                                try:
+                                    chunk = json.loads(line_str[6:])
+                                    choices = chunk.get("choices", [])
+                                    if choices:
+                                        delta = choices[0].get("delta", {}).get("content", "")
+                                        if delta:
+                                            yield delta
+                                except Exception:
+                                    pass
+                        latency = (time.time() - t0) * 1000
+                        self.health.record_success(latency)
+                        return
+            except Exception as e:
+                last_err = e
+                continue
+
+        self.health.record_failure(str(last_err) if last_err else "All OpenRouter stream models failed")
+        raise last_err or Exception("All OpenRouter stream models failed")
 
     async def health_check(self):
         t0 = time.time()
