@@ -117,6 +117,8 @@ class TTSRuntime:
             self._active_turn_id = turn_id
             self._playback_queue = queue.Queue()
             self._chunk_counter = 0
+            self._cumulative_spoken_chars = 0
+            self._turn_capped = False
             self._pending_futures = {}
             self._cancel_token = self._cancellation.create_token(f"tts_{turn_id}")
             
@@ -170,7 +172,6 @@ class TTSRuntime:
             return None
             
         audio_path = result["audio_path"]
-        # NOTE: No leading silence padding for streamed chunks — it causes inter-chunk gaps
         
         # Push to playback queue in order
         if not token.is_cancelled:
@@ -252,12 +253,10 @@ class TTSRuntime:
     def _on_text_chunk(self, payload):
         text = _get_field(payload, "text", "")
         turn_id = _get_field(payload, "turn_id", None) or "unknown_turn"
-        vocalize = _get_field(payload, "vocalize", True)
+        vocalize = _get_field(payload, "vocalize", False)
         
-        if not vocalize:
-            return
-            
-        if not text.strip():
+        # Strict guard: If vocalize is False, DO NOT do any background processing
+        if not vocalize or not text.strip():
             return
         
         self._ensure_turn(turn_id)
@@ -267,6 +266,21 @@ class TTSRuntime:
             return
             
         with self._lock:
+            # Long-Response TTS Guard: If response is too long (> 350 spoken characters),
+            # cap background TTS synthesis to avoid burning CPU & blocking audio.
+            if getattr(self, "_turn_capped", False):
+                return
+                
+            clean_chunk = _sanitize_text_for_speech(text)
+            self._cumulative_spoken_chars = getattr(self, "_cumulative_spoken_chars", 0) + len(clean_chunk)
+            
+            if self._cumulative_spoken_chars > 350 and self._chunk_counter >= 2:
+                self._turn_capped = True
+                logging.info(f"TTSRuntime: Capping voice playback at ~350 chars for turn {turn_id[:8]}; skipping background TTS for remainder.")
+                if self._playback_queue:
+                    self._playback_queue.put((-1, self._chunk_counter))
+                return
+
             order_index = self._chunk_counter
             self._chunk_counter += 1
         
@@ -277,10 +291,9 @@ class TTSRuntime:
     def _on_text_response(self, payload):
         turn_id = _get_field(payload, "turn_id", None) or "unknown_turn"
         text = _get_field(payload, "text", "")
-        vocalize = _get_field(payload, "vocalize", True)
+        vocalize = _get_field(payload, "vocalize", False)
         
         if not vocalize:
-            # Fake an empty EOF so TTS worker exits immediately without waiting
             with self._lock:
                 if self._active_turn_id == turn_id and self._playback_queue is not None:
                     self._playback_queue.put((-1, 0))
@@ -292,13 +305,21 @@ class TTSRuntime:
                 total_chunks = self._chunk_counter
             self._playback_queue.put((-1, total_chunks))
         elif text.strip():
-            # Non-streamed full response fallback
+            # Non-streamed full response fallback: only speak if concise (<= 250 chars)
+            clean_full = _sanitize_text_for_speech(text)
+            if len(clean_full) > 280:
+                # If too long, synthesize only the leading sentence to confirm without background lockup
+                sentences = re.split(r'(?<=[.!?])\s+', clean_full)
+                concise_text = sentences[0] if sentences else clean_full[:200]
+            else:
+                concise_text = clean_full
+
             self._ensure_turn(turn_id)
             token = self._cancel_token
             if token and not token.is_cancelled:
-                self._synth_pool.submit(self._synthesize_chunk, text, 0, turn_id, token)
+                self._synth_pool.submit(self._synthesize_chunk, concise_text, 0, turn_id, token)
                 import time
-                time.sleep(0.1)
+                time.sleep(0.05)
                 if self._playback_queue:
                     self._playback_queue.put((-1, 1))
         

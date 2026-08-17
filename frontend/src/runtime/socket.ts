@@ -95,6 +95,9 @@ class RuntimeSocket {
         if (payload.type === 'runtime.pong') {
           return; // just a heartbeat response
         }
+        this.messageListeners.forEach(listener => {
+          try { listener(payload); } catch (e) { console.error('Listener error:', e); }
+        });
         routeEvent(payload);
       } catch (err) {
         feLog('[runtime] Failed to parse incoming message: ' + String(err));
@@ -166,6 +169,15 @@ class RuntimeSocket {
       this.ws.close();
       this.ws = null;
     }
+  }
+
+  private messageListeners: Set<(msg: any) => void> = new Set();
+
+  public onMessage(listener: (msg: any) => void): () => void {
+    this.messageListeners.add(listener);
+    return () => {
+      this.messageListeners.delete(listener);
+    };
   }
 
   public sendEvent(payload: Record<string, any>) {

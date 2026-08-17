@@ -2,11 +2,44 @@ import React, { useState, useRef } from 'react';
 import { useCognitionState, useAwarenessState } from '../../state';
 import { socket } from '../../runtime/socket';
 
+interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  category: 'fast' | 'frontier' | 'local';
+  goodAt: string;
+  tag: string;
+}
+
+const MODEL_OPTIONS: ModelOption[] = [
+  // Fast & Coding (Groq LPU)
+  { id: 'qwen-3.6-27b', name: 'Qwen 3.6 27B', provider: 'Groq LPU', category: 'fast', goodAt: 'Fast multilingual reasoning & active code refactoring', tag: 'Fast / Code' },
+  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', provider: 'Groq LPU', category: 'fast', goodAt: 'High-throughput enterprise code generation & API reasoning', tag: 'Enterprise Code' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq LPU', category: 'fast', goodAt: 'Sub-second conversation & quick questions', tag: 'Sub-Second' },
+  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B', provider: 'Groq LPU', category: 'fast', goodAt: 'Complex math proofing & algorithmic logic on LPU', tag: 'Math / Logic' },
+  
+  // Deep Frontier Reasoning
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI', category: 'frontier', goodAt: 'Flagship creative intelligence, multimodal assets & architecture', tag: 'Flagship' },
+  { id: 'o3', name: 'OpenAI o3', provider: 'OpenAI', category: 'frontier', goodAt: 'Deep test-time compute thought chains & hard problem solving', tag: 'Deep Thought' },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', category: 'frontier', goodAt: 'Software engineering, multi-file AST diffs & rich markdown', tag: 'Code Specialist' },
+  { id: 'claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', category: 'frontier', goodAt: 'Multi-step autonomous business strategy & technical audits', tag: 'Strategy' },
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', provider: 'Google AI', category: 'frontier', goodAt: '2M token full repo context analysis & continuous video understanding', tag: '2M Context' },
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', provider: 'Google AI', category: 'frontier', goodAt: 'Fast live developer feedback loop & hybrid reasoning', tag: 'Fast Hybrid' },
+  
+  // Local & Private
+  { id: 'gpt-oss:120b', name: 'GPT OSS 120B (Local)', provider: 'Ollama', category: 'local', goodAt: '100% private on-device open weights for enterprise privacy', tag: 'Private' },
+  { id: 'qwen3:32b', name: 'Qwen 3 32B (Local)', provider: 'Ollama', category: 'local', goodAt: 'Local offline coding & chat without cloud connectivity', tag: 'Offline' }
+];
+
 export const CommandZone: React.FC = () => {
   const [val, setVal] = useState('');
   const [vocalize, setVocalize] = useState(false); // MUTED BY DEFAULT ALWAYS
   const [micActive, setMicActive] = useState(false); // MIC OFF BY DEFAULT
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem('arova_preferred_model') || 'auto';
+  });
+  const [showModelMenu, setShowModelMenu] = useState(false);
   const lastSubmitRef = useRef<{ text: string; ts: number }>({ text: '', ts: 0 });
   // TIER 1.3: @-mention autocomplete
   const [showMentions, setShowMentions] = useState(false);
@@ -15,7 +48,22 @@ export const CommandZone: React.FC = () => {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const { activeWorkspace } = useAwarenessState();
+
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModel(modelId);
+    localStorage.setItem('arova_preferred_model', modelId);
+    setShowModelMenu(false);
+  };
+
+  const getActiveModelLabel = (): string => {
+    if (selectedModel === 'auto') return '⚡ Auto';
+    const found = MODEL_OPTIONS.find(m => m.id === selectedModel);
+    if (!found) return selectedModel;
+    if (found.name.length > 14) return found.name.split(' ')[0] + ' ' + (found.name.split(' ')[1] || '');
+    return found.name;
+  };
 
   // Build suggestion list from verbatim RealityLayer.resources + search index fallback
   const allResources = React.useMemo(() => {
@@ -255,6 +303,121 @@ export const CommandZone: React.FC = () => {
           <span className="action-text">{activeAction}...</span>
         </div>
       )}
+
+      {/* Model Selector Popover */}
+      {showModelMenu && (
+        <div 
+          ref={modelMenuRef}
+          style={{
+            position: 'absolute',
+            bottom: '64px',
+            left: '16px',
+            right: '16px',
+            background: 'rgba(24, 21, 18, 0.95)',
+            border: '1px solid var(--hairline-2, rgba(255,255,255,0.12))',
+            borderRadius: '16px',
+            padding: '14px',
+            maxHeight: '360px',
+            overflowY: 'auto',
+            pointerEvents: 'auto',
+            zIndex: 60,
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 12px 36px rgba(0,0,0,0.5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '8px', borderBottom: '1px solid var(--hairline-2)' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink, #fff)' }}>Inference Model Routing</div>
+              <div style={{ fontSize: '11px', color: 'var(--ink-3)' }}>Choose dynamic auto-routing or lock into a specialized frontier model</div>
+            </div>
+            <button 
+              onClick={() => setShowModelMenu(false)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', padding: '4px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Auto Mode Card */}
+          <div
+            onClick={() => handleSelectModel('auto')}
+            style={{
+              padding: '10px 14px',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              background: selectedModel === 'auto' ? 'rgba(224, 186, 117, 0.15)' : 'var(--glass-1)',
+              border: selectedModel === 'auto' ? '1px solid var(--accent-gold, #e0ba75)' : '1px solid var(--hairline-2)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink, #fff)' }}>⚡ Auto-Route (Cognitive Director)</span>
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(224, 186, 117, 0.25)', color: 'var(--accent-gold)', fontWeight: 600 }}>Default</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--ink-3)', marginTop: '2px' }}>
+                Intelligently routes across Groq LPU, Gemini & OpenAI based on prompt complexity, depth & tools
+              </div>
+            </div>
+            {selectedModel === 'auto' && (
+              <span style={{ color: 'var(--accent-gold)', fontSize: '14px', fontWeight: 700 }}>✓</span>
+            )}
+          </div>
+
+          {/* Categorized Models */}
+          {[
+            { cat: 'fast', label: 'Ultra-Fast & Coding (Groq LPU)', color: '#4caf50' },
+            { cat: 'frontier', label: 'Deep Frontier Reasoning', color: '#29b6f6' },
+            { cat: 'local', label: 'Local & Private (Ollama)', color: '#ab47bc' }
+          ].map(group => {
+            const items = MODEL_OPTIONS.filter(m => m.category === group.cat);
+            return (
+              <div key={group.cat} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 4px' }}>
+                  {group.label}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '6px' }}>
+                  {items.map(m => {
+                    const isSelected = selectedModel === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => handleSelectModel(m.id)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: isSelected ? 'rgba(224, 186, 117, 0.15)' : 'var(--glass-1)',
+                          border: isSelected ? '1px solid var(--accent-gold, #e0ba75)' : '1px solid var(--hairline-2)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? 'var(--accent-gold)' : 'var(--ink, #fff)' }}>{m.name}</span>
+                          <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'var(--ink-3)' }}>{m.tag}</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--ink-3)', lineHeight: '1.3' }}>
+                          {m.goodAt}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* TIER 1.3: @-mention autocomplete dropdown */}
       {showMentions && (
         <div 
@@ -309,6 +472,35 @@ export const CommandZone: React.FC = () => {
       )}
       <div className="command">
         <span className="leader"></span>
+
+        {/* Model Switcher Pill */}
+        <button
+          className="model-pill-btn"
+          onClick={() => { setShowModelMenu(prev => !prev); setShowMentions(false); }}
+          title={`Active AI: ${selectedModel === 'auto' ? 'Auto (Dynamic Reasoning)' : selectedModel}. Click to switch model.`}
+          style={{
+            background: selectedModel === 'auto' ? 'var(--glass-2, rgba(255,255,255,0.06))' : 'rgba(224, 186, 117, 0.15)',
+            border: selectedModel === 'auto' ? '1px solid var(--hairline-2, rgba(255,255,255,0.12))' : '1px solid rgba(224, 186, 117, 0.35)',
+            color: selectedModel === 'auto' ? 'var(--ink-2, #ccc)' : 'var(--accent-gold, #e0ba75)',
+            borderRadius: '999px',
+            padding: '3px 10px',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <span>{getActiveModelLabel()}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
         <input 
           ref={inputRef}
           id="command-input"

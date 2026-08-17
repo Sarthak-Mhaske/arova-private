@@ -99,16 +99,22 @@ class IntentRuntime:
             turn_id = payload.get("turn_id")
         elif turn_id is None and hasattr(payload, 'data') and isinstance(payload.data, dict):
             turn_id = payload.data.get("turn_id")
-        source = getattr(payload, "source", "voice") if hasattr(payload, "source") else payload.get("source", "voice") if isinstance(payload, dict) else "voice"
-        vocalize = getattr(payload, "vocalize", True)
-        if isinstance(payload, dict):
-            vocalize = payload.get("vocalize", vocalize)
-        elif hasattr(payload, 'data') and isinstance(payload.data, dict):
-            vocalize = payload.data.get("vocalize", vocalize)
+        source = getattr(payload, "source", "text") if hasattr(payload, "source") else payload.get("source", "text") if isinstance(payload, dict) else "text"
+        
+        # Default vocalize: True ONLY if input source is voice/mic/stt, False for typed chat/UI
+        is_voice_source = source in ("voice", "wake_word", "stt", "mic")
+        default_vocalize = True if is_voice_source else False
+        
+        vocalize = getattr(payload, "vocalize", default_vocalize)
+        if isinstance(payload, dict) and "vocalize" in payload:
+            vocalize = bool(payload["vocalize"])
+        elif hasattr(payload, 'data') and isinstance(payload.data, dict) and "vocalize" in payload.data:
+            vocalize = bool(payload.data["vocalize"])
             
-        # Voice & Wake Word transcripts MUST always trigger TTS vocalization!
-        if source in ("voice", "wake_word", "stt"):
+        if is_voice_source:
             vocalize = True
+        elif source in ("text", "ui", "chat", "command_palette") and not (isinstance(payload, dict) and payload.get("vocalize") is True):
+            vocalize = False
 
         # Extract mentions — daemon parses @mentions and sends explicit list
         mentions = []

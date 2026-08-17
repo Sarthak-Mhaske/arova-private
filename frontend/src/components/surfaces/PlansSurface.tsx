@@ -1,77 +1,134 @@
-import React from 'react';
-import { useSurfaceState } from '../../state';
+import React, { useState, useEffect } from 'react';
+import { useSurfaceState, useAwarenessState } from '../../state';
+import { socket } from '../../runtime/socket';
+
+interface PlanStep {
+  id: string;
+  title: string;
+  detail: string;
+  completed: boolean;
+  action_type?: string;
+  last_result?: string;
+}
+
+interface Plan {
+  id: string;
+  title: string;
+  goal: string;
+  created_at: number;
+  status: string;
+  steps: PlanStep[];
+}
 
 export const PlansSurface: React.FC = () => {
   const { closeSurface } = useSurfaceState();
+  const { activeWorkspace } = useAwarenessState();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [activePlanId, setActivePlanId] = useState<string>('');
+  const [newGoalInput, setNewGoalInput] = useState<string>('');
+  const [executingStepId, setExecutingStepId] = useState<string | null>(null);
+  const [stepLogs, setStepLogs] = useState<Record<string, string>>({});
 
-  const MILESTONES = [
-    {
-      id: 'step-1',
-      number: '01',
-      title: 'Noise Shield & Telemetry Filtering',
-      status: 'Completed',
-      statusColor: 'var(--accent-sage, #a8c0a8)',
-      detail: 'Filter out SSO endpoints, cargo caches, temporary process workers, and noisy browser history.',
-      completed: true
-    },
-    {
-      id: 'step-2',
-      number: '02',
-      title: 'Context Recovery & Deduplication',
-      status: 'Completed',
-      statusColor: 'var(--accent-sage, #a8c0a8)',
-      detail: 'Canonicalize subdomains, group commit hashes, and collapse duplicate research tabs into 3-5 curated items.',
-      completed: true
-    },
-    {
-      id: 'step-3',
-      number: '03',
-      title: 'Autonomous Swarm & Plan Execution',
-      status: 'In Development',
-      statusColor: 'var(--accent-amber, #e0ba75)',
-      detail: 'Dynamic task DAG dispatching across specialized subagents with live verification gates and self-healing rollbacks.',
-      completed: false
-    },
-    {
-      id: 'step-4',
-      number: '04',
-      title: 'Multi-Modal Voice & Tool Synthesis',
-      status: 'Queued',
-      statusColor: 'var(--ink-3)',
-      detail: 'Real-time bidirectional audio stream integration with continuous visual screen grounding.',
-      completed: false
+  useEffect(() => {
+    // Request plans from backend
+    socket.sendEvent({ type: 'planner.get_plans' });
+
+    const handleMessage = (msg: any) => {
+      if (msg.type === 'planner.plans_sync') {
+        const syncedPlans = msg.plans || [];
+        setPlans(syncedPlans);
+        if (syncedPlans.length > 0 && !activePlanId) {
+          setActivePlanId(syncedPlans[0].id);
+        }
+      } else if (msg.type === 'planner.step_execution_started') {
+        setExecutingStepId(msg.step_id);
+      } else if (msg.type === 'planner.step_execution_completed') {
+        setExecutingStepId(null);
+        if (msg.output && msg.step_id) {
+          setStepLogs(prev => ({ ...prev, [msg.step_id]: msg.output }));
+        }
+      }
+    };
+
+    const cleanup = socket.onMessage(handleMessage);
+    return () => cleanup();
+  }, [activePlanId]);
+
+  const activePlan = plans.find(p => p.id === activePlanId) || plans[0];
+
+  const handleCreatePlan = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGoalInput.trim()) return;
+    socket.sendEvent({
+      type: 'planner.create_plan',
+      goal: newGoalInput.trim()
+    });
+    setNewGoalInput('');
+  };
+
+  const handleSyncWorkspaceGoal = () => {
+    const ws = activeWorkspace as any;
+    const nextAction = ws?.understanding?.momentum?.next_action || 'Complete active project features & verify build';
+    const title = ws?.title || 'Active Workspace';
+    socket.sendEvent({
+      type: 'planner.create_plan',
+      goal: nextAction,
+      title: `${title} — ${nextAction.slice(0, 35)}...`
+    });
+  };
+
+  const handleToggleStep = (planId: string, stepId: string) => {
+    socket.sendEvent({
+      type: 'planner.toggle_step',
+      plan_id: planId,
+      step_id: stepId
+    });
+  };
+
+  const handleExecuteStep = (planId: string, stepId: string) => {
+    setExecutingStepId(stepId);
+    socket.sendEvent({
+      type: 'planner.execute_step',
+      plan_id: planId,
+      step_id: stepId
+    });
+  };
+
+  const handleDeletePlan = (planId: string) => {
+    socket.sendEvent({
+      type: 'planner.delete_plan',
+      plan_id: planId
+    });
+    if (activePlanId === planId) {
+      const remaining = plans.filter(p => p.id !== planId);
+      setActivePlanId(remaining.length > 0 ? remaining[0].id : '');
     }
-  ];
+  };
+
+  const completedCount = activePlan?.steps?.filter(s => s.completed).length || 0;
+  const totalCount = activePlan?.steps?.length || 0;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="surface-content" style={{ padding: '32px 36px', height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', boxSizing: 'border-box' }}>
-      {/* Surface Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+    <div className="surface-content" style={{ padding: '28px 32px', height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', boxSizing: 'border-box' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span>Goal Tree & Execution Plans</span>
-            <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', background: 'rgba(224, 186, 117, 0.15)', color: 'var(--accent-amber, #e0ba75)', border: '1px solid rgba(224, 186, 117, 0.3)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Planner v1.0
+          <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--ink, #fff)', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>Milestone Execution Plans</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', background: 'rgba(224, 186, 117, 0.15)', color: 'var(--accent-gold, #e0ba75)' }}>
+              Interactive
             </span>
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginTop: '4px', lineHeight: '1.5' }}>
-            Hierarchical task decomposition, automated milestone validation, and dynamic execution graphs.
+          <div style={{ fontSize: '12.5px', color: 'var(--ink-3)', marginTop: '2px' }}>
+            Hierarchical goal decomposition with real-time environment action verification.
           </div>
         </div>
 
         <button 
           data-close
           onClick={() => closeSurface()}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--ink-3)',
-            cursor: 'pointer',
-            padding: '8px',
-            borderRadius: '8px',
-            display: 'grid',
-            placeItems: 'center'
-          }}
+          style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', padding: '6px', borderRadius: '6px' }}
         >
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -80,105 +137,201 @@ export const PlansSurface: React.FC = () => {
         </button>
       </div>
 
-      {/* Under Development Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(224, 186, 117, 0.1) 0%, rgba(26, 23, 20, 0.6) 100%)',
-        border: '1px solid rgba(224, 186, 117, 0.28)',
-        borderRadius: '14px',
-        padding: '16px 20px',
-        marginBottom: '24px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px'
-      }}>
-        <div style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '10px',
-          background: 'rgba(224, 186, 117, 0.18)',
-          border: '1px solid rgba(224, 186, 117, 0.35)',
-          display: 'grid',
-          placeItems: 'center',
-          color: 'var(--accent-amber, #e0ba75)',
-          flexShrink: 0
-        }}>
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M4 6h16M4 12h12M4 18h8"/>
-          </svg>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-amber, #e0ba75)', letterSpacing: '0.01em' }}>
-            Goal Execution Engine · In Active Development
-          </div>
-          <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginTop: '2px', lineHeight: '1.45' }}>
-            The automated goal planner decomposes user objectives into executable DAG dependency graphs with ambient milestone tracking. Full interactive planning will activate in the next release.
-          </div>
-        </div>
-      </div>
+      {/* Goal Creator Bar */}
+      <form onSubmit={handleCreatePlan} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        <input 
+          type="text"
+          placeholder="Enter a new project objective (e.g. 'Audit security headers & optimize build bundle')..."
+          value={newGoalInput}
+          onChange={(e) => setNewGoalInput(e.target.value)}
+          style={{
+            flex: 1,
+            background: 'var(--glass-1, rgba(255,255,255,0.04))',
+            border: '1px solid var(--hairline-2, rgba(255,255,255,0.1))',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            color: 'var(--ink, #fff)',
+            fontSize: '13px',
+            outline: 'none'
+          }}
+        />
+        <button 
+          type="submit"
+          style={{
+            background: 'var(--accent-gold, #e0ba75)',
+            color: '#1a1714',
+            fontWeight: 600,
+            fontSize: '12.5px',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '0 16px',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          + Create Plan
+        </button>
+        <button 
+          type="button"
+          onClick={handleSyncWorkspaceGoal}
+          title="Import active momentum goal from current workspace signals"
+          style={{
+            background: 'var(--glass-2, rgba(255,255,255,0.06))',
+            color: 'var(--ink-2, #ccc)',
+            border: '1px solid var(--hairline-2, rgba(255,255,255,0.12))',
+            borderRadius: '8px',
+            padding: '0 12px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          ⚡ Sync Active Context
+        </button>
+      </form>
 
-      {/* Active Goal Plan Preview */}
-      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '12px' }}>
-        Active Goal Execution DAG
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-        {MILESTONES.map((step) => (
-          <div
-            key={step.id}
-            style={{
-              padding: '18px 20px',
-              background: 'var(--glass-1)',
-              border: `1px solid ${step.completed ? 'rgba(168, 192, 168, 0.3)' : 'var(--hairline-2)'}`,
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '16px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: step.completed ? 'rgba(168, 192, 168, 0.15)' : 'var(--glass-2)',
-                border: `1px solid ${step.completed ? 'rgba(168, 192, 168, 0.3)' : 'var(--hairline-2)'}`,
-                display: 'grid',
-                placeItems: 'center',
+      {/* Plans Navigation Tabs if Multiple */}
+      {plans.length > 1 && (
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '14px' }}>
+          {plans.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setActivePlanId(p.id)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
                 fontSize: '12px',
-                fontWeight: 700,
-                color: step.completed ? 'var(--accent-sage, #a8c0a8)' : 'var(--ink-3)',
-                flexShrink: 0
-              }}>
-                {step.completed ? (
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                ) : step.number}
-              </div>
+                fontWeight: activePlan?.id === p.id ? 600 : 400,
+                background: activePlan?.id === p.id ? 'var(--glass-2, rgba(255,255,255,0.12))' : 'var(--glass-1, rgba(255,255,255,0.03))',
+                border: activePlan?.id === p.id ? '1px solid var(--accent-gold, #e0ba75)' : '1px solid var(--hairline-2)',
+                color: activePlan?.id === p.id ? 'var(--accent-gold, #e0ba75)' : 'var(--ink-3)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {p.title}
+            </button>
+          ))}
+        </div>
+      )}
 
+      {/* Active Plan Detail Card */}
+      {activePlan ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Card Header & Progress */}
+          <div style={{ background: 'var(--glass-1, rgba(255,255,255,0.03))', border: '1px solid var(--hairline-2, rgba(255,255,255,0.08))', borderRadius: '12px', padding: '16px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>{step.title}</div>
-                <div style={{ fontSize: '12.5px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: '1.4' }}>{step.detail}</div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink, #fff)' }}>{activePlan.title}</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Goal: {activePlan.goal}</div>
               </div>
+              <button 
+                onClick={() => handleDeletePlan(activePlan.id)}
+                title="Delete Plan"
+                style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: '12px' }}
+              >
+                Delete
+              </button>
             </div>
 
-            <div style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              padding: '4px 10px',
-              borderRadius: '6px',
-              background: 'var(--glass-2)',
-              border: '1px solid var(--hairline-2)',
-              color: step.statusColor,
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}>
-              {step.status}
+            {/* Progress Bar */}
+            <div style={{ marginTop: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--ink-3)', marginBottom: '6px' }}>
+                <span>{completedCount} of {totalCount} checkpoints completed</span>
+                <span style={{ fontWeight: 600, color: progressPercent === 100 ? '#4caf50' : 'var(--accent-gold)' }}>{progressPercent}%</span>
+              </div>
+              <div style={{ width: '100%', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ width: `${progressPercent}%`, height: '100%', background: progressPercent === 100 ? '#4caf50' : 'var(--accent-gold)', transition: 'width 0.3s ease' }} />
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+
+          {/* Steps List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {activePlan.steps?.map((step, idx) => {
+              const isExecuting = executingStepId === step.id;
+              const logResult = stepLogs[step.id] || step.last_result;
+
+              return (
+                <div
+                  key={step.id}
+                  style={{
+                    background: step.completed ? 'rgba(255,255,255,0.015)' : 'var(--glass-1, rgba(255,255,255,0.03))',
+                    border: step.completed ? '1px solid rgba(255,255,255,0.04)' : '1px solid var(--hairline-2, rgba(255,255,255,0.08))',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {/* Checkbox */}
+                      <input 
+                        type="checkbox"
+                        checked={step.completed}
+                        onChange={() => handleToggleStep(activePlan.id, step.id)}
+                        style={{ cursor: 'pointer', accentColor: 'var(--accent-gold, #e0ba75)', width: '15px', height: '15px' }}
+                      />
+                      <div>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: step.completed ? 'var(--ink-3)' : 'var(--ink, #fff)', textDecoration: step.completed ? 'line-through' : 'none' }}>
+                          {idx + 1}. {step.title}
+                        </span>
+                        {step.detail && (
+                          <div style={{ fontSize: '11.5px', color: 'var(--ink-3)', marginTop: '2px' }}>
+                            {step.detail}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action Execution Button */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {!step.completed && (
+                        <button
+                          onClick={() => handleExecuteStep(activePlan.id, step.id)}
+                          disabled={isExecuting}
+                          style={{
+                            background: isExecuting ? 'rgba(255,255,255,0.05)' : 'rgba(224, 186, 117, 0.12)',
+                            color: isExecuting ? 'var(--ink-3)' : 'var(--accent-gold, #e0ba75)',
+                            border: '1px solid rgba(224, 186, 117, 0.25)',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            cursor: isExecuting ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {isExecuting ? 'Running...' : '⚡ Execute'}
+                        </button>
+                      )}
+                      {step.completed && (
+                        <span style={{ fontSize: '11px', color: '#4caf50', fontWeight: 500 }}>Completed</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Real Live Step Execution Log if available */}
+                  {logResult && (
+                    <div style={{ marginTop: '4px', padding: '6px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', fontSize: '11px', color: 'var(--ink-2, #bbb)', fontFamily: 'var(--font-mono, monospace)' }}>
+                      <span style={{ color: 'var(--accent-gold)' }}>Output:</span> {logResult}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: '13px' }}>
+          No active goal plans. Type an objective above or click "Sync Active Context".
+        </div>
+      )}
     </div>
   );
 };
