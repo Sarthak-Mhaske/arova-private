@@ -106,7 +106,10 @@ $DesktopShortcut.IconLocation = "$AppDir\arova.ico"
 $DesktopShortcut.WorkingDirectory = "$AppDir"
 $DesktopShortcut.Save()
 
-Write-Host "`n✓ Arova installed successfully!" -ForegroundColor Green
+# Register Auto-Launch on Startup in Windows Registry Run Key
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Arova" -Value "`"$AppDir\arova.exe`"" -Force
+
+Write-Host "`n✓ Arova installed successfully with auto-launch on startup enabled!" -ForegroundColor Green
 Write-Host "✓ Launch via Start Menu, Desktop Shortcut, or '$AppDir\arova.exe'"
 '@
 

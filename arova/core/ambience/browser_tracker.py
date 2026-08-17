@@ -134,10 +134,14 @@ class BrowserTabCapture:
 
         # Windows
         appdata = os.environ.get("LOCALAPPDATA", "")
+        roaming = os.environ.get("APPDATA", "")
         if appdata:
-            search_paths.extend(glob.glob(os.path.join(appdata, "Google", "Chrome", "User Data", "Default", "History")))
-            search_paths.extend(glob.glob(os.path.join(appdata, "BraveSoftware", "Brave-Browser", "User Data", "Default", "History")))
-            search_paths.extend(glob.glob(os.path.join(appdata, "Microsoft", "Edge", "User Data", "Default", "History")))
+            search_paths.extend(glob.glob(os.path.join(appdata, "Google", "Chrome", "User Data", "*", "History")))
+            search_paths.extend(glob.glob(os.path.join(appdata, "BraveSoftware", "Brave-Browser", "User Data", "*", "History")))
+            search_paths.extend(glob.glob(os.path.join(appdata, "Microsoft", "Edge", "User Data", "*", "History")))
+            search_paths.extend(glob.glob(os.path.join(appdata, "Arc", "User Data", "*", "History")))
+        if roaming:
+            search_paths.extend(glob.glob(os.path.join(roaming, "Mozilla", "Firefox", "Profiles", "*", "places.sqlite")))
 
         for path in search_paths:
             if not os.path.exists(path):

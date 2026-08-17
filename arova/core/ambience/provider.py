@@ -93,20 +93,33 @@ class LiveOSAmbientProvider(AmbientProvider):
                         window_title = title_part.strip() or window_title
 
             elif sys.platform == "win32":
-                # Windows active window tracking via PowerShell / Win32
-                ps_cmd = "$w = (Get-Process | Where-Object {$_.MainWindowHandle -eq (Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();' -Name 'Win32' -Namespace 'Native' -PassThru)::GetForegroundWindow()}); if($w){$w.ProcessName + '|||' + $w.MainWindowTitle}"
-                proc = await asyncio.create_subprocess_shell(
-                    f"powershell -NoProfile -Command \"{ps_cmd}\"",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, _ = await proc.communicate()
-                if proc.returncode == 0 and stdout:
-                    out_str = stdout.decode('utf-8', errors='ignore').strip()
-                    if "|||" in out_str:
-                        app_part, title_part = out_str.split("|||", 1)
-                        active_app = app_part.strip() or active_app
-                        window_title = title_part.strip() or window_title
+                # Native Win32 active window & process tracking via ctypes (0ms overhead, no PowerShell spawn)
+                try:
+                    import ctypes
+                    user32 = ctypes.windll.user32
+                    hwnd = user32.GetForegroundWindow()
+                    if hwnd:
+                        length = user32.GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buff = ctypes.create_unicode_buffer(length + 1)
+                            user32.GetWindowTextW(hwnd, buff, length + 1)
+                            if buff.value:
+                                window_title = buff.value
+
+                        pid = ctypes.c_ulong()
+                        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        if pid.value:
+                            import psutil
+                            try:
+                                proc_info = psutil.Process(pid.value)
+                                pname = proc_info.name()
+                                if pname.lower().endswith(".exe"):
+                                    pname = pname[:-4]
+                                active_app = pname or active_app
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.debug(f"Win32 ctypes active window check error: {e}")
 
             elif self._has_hyprctl:
                 proc = await asyncio.create_subprocess_exec(
@@ -139,10 +152,25 @@ class LiveOSAmbientProvider(AmbientProvider):
                         else:
                             active_app = window_title.split()[0]
         except Exception as e:
-            logger.debug(f"LiveOSAmbientProvider window check error: {e}")
+            logger.debug(f"LiveOSAmbientProvider active window check error: {e}")
 
+        # Check idle time
         try:
-            if self._has_xprintidle:
+            if sys.platform == "win32":
+                # Native Win32 GetLastInputInfo idle detection
+                try:
+                    import ctypes
+                    class LASTINPUTINFO(ctypes.Structure):
+                        _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+                    lii = LASTINPUTINFO()
+                    lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+                    if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                        millis = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
+                        idle_time_seconds = max(0.0, float(millis) / 1000.0)
+                        is_idle = idle_time_seconds > 300.0
+                except Exception as e:
+                    logger.debug(f"Win32 idle check error: {e}")
+            elif self._has_xprintidle:
                 proc_idle = await asyncio.create_subprocess_exec(
                     "xprintidle",
                     stdout=asyncio.subprocess.PIPE,

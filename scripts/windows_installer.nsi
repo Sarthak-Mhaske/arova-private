@@ -38,6 +38,9 @@ Section "Install"
     CreateShortCut "$SMPROGRAMS\Arova\Uninstall Arova.lnk" "$INSTDIR\uninstall.exe"
     CreateShortCut "$DESKTOP\Arova.lnk" "$INSTDIR\arova.exe" "" "$INSTDIR\arova.ico"
     
+    ; Register Auto-Launch on Startup (HKCU Run Key)
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Arova" "$\"$INSTDIR\arova.exe$\""
+    
     ; Register Uninstaller in Windows Add/Remove Programs
     WriteUninstaller "$INSTDIR\uninstall.exe"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Arova" "DisplayName" "Arova"
@@ -52,6 +55,9 @@ SectionEnd
 Section "Uninstall"
     ; Stop existing running processes
     nsExec::Exec 'taskkill /F /IM arova.exe /IM arovad.exe /T'
+
+    ; Remove Auto-Launch on Startup
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Arova"
 
     RMDir /r "$INSTDIR"
     Delete "$SMPROGRAMS\Arova\Arova.lnk"
