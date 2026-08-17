@@ -120,7 +120,9 @@ export const EmergentSurface: React.FC = () => {
             {activeSurface === 'workspace' && <WorkspaceSurface />}
             {activeSurface === 'command_palette' && <CommandPaletteSurface />}
             {activeSurface === 'session_timeline' && <SessionTimelineSurface />}
-            {activeSurface === 'developer_mode' && <DeveloperModeSurface />}
+            {(activeSurface === 'developer_mode' || activeSurface === 'diagnostics' || activeSurface === 'runtime') && <DeveloperModeSurface />}
+            {activeSurface === 'agents' && <ThreadsSurface />}
+            {activeSurface === 'plans' && <WorkspaceSurface />}
 
             {(activeSurface === 'settings' || activeSurface === 'system') && <SettingsLayout />}
           </MDiv>

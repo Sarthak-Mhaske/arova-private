@@ -119,38 +119,43 @@ const GROUPS: RailGroupData[] = [
     ]
   },
   {
-    id: 'system',
-    title: 'System',
+    id: 'runtime',
+    title: 'Runtime',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
       </svg>
     ),
     items: [
-      { 
-        id: 'settings', 
-        label: 'Control Center', 
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <line x1="4" y1="21" x2="4" y2="14"/>
-            <line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/>
-            <line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
-        ) 
-      },
       { 
         id: 'developer_mode', 
         label: 'Diagnostics', 
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        ) 
+      },
+      { 
+        id: 'agents', 
+        label: 'Agents', 
+        liveColor: 'sage',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <circle cx="12" cy="6" r="2.5"/>
+            <circle cx="6" cy="16" r="2.5"/>
+            <circle cx="18" cy="16" r="2.5"/>
+            <path d="M12 8.5 8 13.5M12 8.5l4 5M8 16h8"/>
+          </svg>
+        ) 
+      },
+      { 
+        id: 'plans', 
+        label: 'Plans', 
+        liveColor: 'gold',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M4 6h16M4 12h12M4 18h8"/>
           </svg>
         ) 
       }
@@ -205,6 +210,9 @@ const AccordionGroup: React.FC<{
     if (i.id === 'memory') {
       return activeSurface === 'memory' && activeTab !== 'journal';
     }
+    if (i.id === 'developer_mode') {
+      return activeSurface === 'developer_mode' || activeSurface === 'diagnostics' || activeSurface === 'runtime';
+    }
     return i.id === activeSurface;
   });
 
@@ -214,7 +222,10 @@ const AccordionGroup: React.FC<{
         className={`rail-glyph ${isGroupActive ? 'active' : ''}`} 
         onClick={(e) => {
           e.stopPropagation();
-          openSurface(group.id);
+          if (group.id === 'cognition') openSurface('threads');
+          else if (group.id === 'environment') openSurface('workspace');
+          else if (group.id === 'runtime') openSurface('developer_mode');
+          else openSurface(group.id);
           onToggle();
         }}
         onMouseEnter={() => {
@@ -245,6 +256,8 @@ const AccordionGroup: React.FC<{
                   ? (activeSurface === 'journal' || (activeSurface === 'memory' && activeTab === 'journal'))
                   : item.id === 'memory'
                   ? (activeSurface === 'memory' && activeTab !== 'journal')
+                  : item.id === 'developer_mode'
+                  ? (activeSurface === 'developer_mode' || activeSurface === 'diagnostics' || activeSurface === 'runtime')
                   : (activeSurface === item.id);
 
                 return (
@@ -308,6 +321,20 @@ export const SpatialRail: React.FC = () => {
             onToggle={() => setExpandedGroupId(expandedGroupId === group.id ? null : group.id)}
           />
         ))}
+
+        <div className="rail-divider"></div>
+
+        <RailGlyph
+          surface="settings"
+          label="Settings"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          }
+          isActive={activeSurface === 'settings' || activeSurface === 'system'}
+        />
       </nav>
     </>
   );

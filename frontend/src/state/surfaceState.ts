@@ -4,10 +4,10 @@ export type SurfaceType =
   | 'presence' | 'work'
   | 'cognition' | 'threads' | 'memory' | 'timeline'
   | 'environment' | 'workspace' | 'awareness'
+  | 'runtime' | 'diagnostics' | 'developer_mode' | 'agents' | 'plans'
   | 'system' | 'settings' 
   | 'command_palette'
   | 'session_timeline'
-  | 'developer_mode'
   | 'journal'
   | null;
 
