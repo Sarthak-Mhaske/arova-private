@@ -40,17 +40,34 @@ function App() {
     // Initialize persistent runtime bridge
     socket.connect();
 
-    // Global external link interceptor (Opens links in default OS browser instead of Tauri webview)
-    const handleGlobalLinkClick = (e: MouseEvent) => {
+    // Global external link interceptor (Opens links in default OS browser cleanly without polluting chat)
+    const handleGlobalLinkClick = async (e: MouseEvent) => {
       const anchor = (e.target as HTMLElement)?.closest('a');
       if (anchor && anchor.href && (anchor.href.startsWith('http://') || anchor.href.startsWith('https://'))) {
         e.preventDefault();
         const targetUrl = anchor.href;
+
+        // 1. Try Tauri native opener plugin
+        try {
+          const { openUrl } = await import('@tauri-apps/plugin-opener');
+          await openUrl(targetUrl);
+          return;
+        } catch {
+          // not running in Tauri or plugin unavailable
+        }
+
+        // 2. Tell backend daemon to open via OS default browser
         socket.sendEvent({
-          type: 'user.message',
-          text: `open ${targetUrl}`,
-          vocalize: false
+          type: 'client.open_url',
+          url: targetUrl
         });
+
+        // 3. Web fallback
+        try {
+          window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        } catch {
+          // ignore
+        }
       }
     };
     document.addEventListener('click', handleGlobalLinkClick, true);

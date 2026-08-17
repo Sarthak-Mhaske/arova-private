@@ -296,6 +296,15 @@ class ArovaDaemon:
                     "action": "",
                     "node_state": "completed"
                 })
+        elif payload.get("type") == "client.open_url":
+            target_url = payload.get("url")
+            if target_url:
+                logging.info(f"Main: Opening external URL via system browser: {target_url}")
+                try:
+                    import webbrowser
+                    webbrowser.open(target_url)
+                except Exception as e:
+                    logging.error(f"Failed to open browser URL {target_url}: {e}")
         elif payload.get("type") == "runtime.ping":
             self.ws_manager.broadcast({"v": 1, "type": "runtime.pong", "timestamp": int(time.time() * 1000)})
         elif payload.get("type") == "session.sync_request":
