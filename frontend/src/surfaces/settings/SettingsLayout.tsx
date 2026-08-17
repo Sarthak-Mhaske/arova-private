@@ -167,23 +167,6 @@ export const SettingsLayout: React.FC = () => {
     setTimeout(() => setSaveStatus(null), 2500);
   };
 
-  const handleTogglePrivacy = (key: string, val: boolean) => {
-    const updated = {
-      ...config,
-      privacy: {
-        ...config.privacy,
-        [key]: val
-      }
-    };
-    setConfig(updated);
-    socket.sendEvent({
-      type: 'config.update_request',
-      config: updated
-    });
-    setSaveStatus('Privacy settings updated.');
-    setTimeout(() => setSaveStatus(null), 2500);
-  };
-
   const handleExportMemories = () => {
     const handleMemResponse = (e: any) => {
       const ev = e.detail;
@@ -310,7 +293,8 @@ export const SettingsLayout: React.FC = () => {
       <div className="tuning" style={{ paddingBottom: '40px' }}>
         {saveStatus && (
           <div style={{ padding: '10px 16px', background: 'rgba(76, 175, 80, 0.15)', border: '1px solid rgba(76, 175, 80, 0.3)', borderRadius: '10px', fontSize: '13px', color: '#4caf50', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>✓</span> {saveStatus}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>{saveStatus}</span>
           </div>
         )}
 
@@ -341,16 +325,20 @@ export const SettingsLayout: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', borderTop: '1px solid var(--hairline-2)', paddingTop: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ color: isDaemonConnected ? '#4caf50' : '#ff9800' }}>{isDaemonConnected ? '✓' : '•'}</span> Presence Active
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isDaemonConnected ? '#4caf50' : '#ff9800', boxShadow: isDaemonConnected ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Presence Active</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ color: isDatabaseOk ? '#4caf50' : '#ff9800' }}>{isDatabaseOk ? '✓' : '•'}</span> Memory Storage Active
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isDatabaseOk ? '#4caf50' : '#ff9800', boxShadow: isDatabaseOk ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Memory Storage Active</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ color: isWorkspaceReady ? '#4caf50' : '#ff9800' }}>{isWorkspaceReady ? '✓' : '•'}</span> Environment Active
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isWorkspaceReady ? '#4caf50' : '#ff9800', boxShadow: isWorkspaceReady ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Environment Active</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ color: isDaemonConnected ? '#4caf50' : '#ff9800' }}>{isDaemonConnected ? '✓' : '•'}</span> Cognitive Threads Active
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isDaemonConnected ? '#4caf50' : '#ff9800', boxShadow: isDaemonConnected ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Cognitive Threads Active</span>
             </div>
           </div>
         </div>
@@ -647,48 +635,50 @@ export const SettingsLayout: React.FC = () => {
           <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>System Diagnostics &amp; Health</div>
           <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '16px' }}>Instant diagnostic status for local daemon and cognitive substrates.</div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontFamily: 'monospace', fontSize: '13px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px' }}>
             <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: '#4caf50', fontWeight: 'bold' }}>✓</span> UI Engine Active
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4caf50', boxShadow: '0 0 6px rgba(76,175,80,0.5)' }} />
+              <span>UI Engine Active</span>
             </div>
             <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: diag?.health?.daemon_connected || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
-                {diag?.health?.daemon_connected || diag ? '✓' : '✗'}
-              </span> Daemon Connected
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: (diag?.health?.daemon_connected || diag) ? '#4caf50' : '#d68b8b', boxShadow: (diag?.health?.daemon_connected || diag) ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Daemon Connected</span>
             </div>
             <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: diag?.health?.database_ok || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
-                {diag?.health?.database_ok || diag ? '✓' : '✗'}
-              </span> SQLite Database OK
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: (diag?.health?.database_ok || diag) ? '#4caf50' : '#d68b8b', boxShadow: (diag?.health?.database_ok || diag) ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>SQLite Database OK</span>
             </div>
             <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: diag?.health?.memory_loaded || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
-                {diag?.health?.memory_loaded || diag ? '✓' : '✗'}
-              </span> Memory Engine Ready
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: (diag?.health?.memory_loaded || diag) ? '#4caf50' : '#d68b8b', boxShadow: (diag?.health?.memory_loaded || diag) ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Memory Engine Ready</span>
             </div>
             <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: diag?.health?.workspace_engine_ready || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
-                {diag?.health?.workspace_engine_ready || diag ? '✓' : '✗'}
-              </span> Workspace Observer
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: (diag?.health?.workspace_engine_ready || diag) ? '#4caf50' : '#d68b8b', boxShadow: (diag?.health?.workspace_engine_ready || diag) ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Workspace Observer</span>
             </div>
             <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: diag?.health?.wake_word_ready || diag ? '#4caf50' : '#d68b8b', fontWeight: 'bold' }}>
-                {diag?.health?.wake_word_ready || diag ? '✓' : '✗'}
-              </span> Wake Word Engine
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: (diag?.health?.wake_word_ready || diag) ? '#4caf50' : '#d68b8b', boxShadow: (diag?.health?.wake_word_ready || diag) ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
+              <span>Wake Word Engine</span>
             </div>
           </div>
         </div>
 
-        {/* System Startup & Privacy Permissions */}
+        {/* System Startup & Global Summon */}
         <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px', marginBottom: '16px' }}>
-          <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>System Startup &amp; Privacy Permissions</div>
-          <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '18px' }}>Manage operating system startup behavior and ambient telemetry collection preferences.</div>
+          <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>System Startup &amp; Global Summon</div>
+          <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '18px' }}>Configure operating system background startup and global shortcut invocation.</div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>🚀 Launch Arova on System Startup</div>
-                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Automatically start the background cognition engine when you log in.</div>
+            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-gold)' }}>
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                  <line x1="12" y1="2" x2="12" y2="12"></line>
+                </svg>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>Launch Arova on System Startup</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Automatically start the background cognition engine when you log in.</div>
+                </div>
               </div>
               <input 
                 type="checkbox" 
@@ -697,35 +687,33 @@ export const SettingsLayout: React.FC = () => {
               />
             </label>
 
-            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>📁 Workspace &amp; IDE Tracking</div>
-                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Discovers active projects in VS Code, Cursor, and Terminal working directories.</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-sage)' }}>
+                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+                  <line x1="6" y1="8" x2="6" y2="8"></line>
+                  <line x1="10" y1="8" x2="10" y2="8"></line>
+                  <line x1="14" y1="8" x2="14" y2="8"></line>
+                  <line x1="18" y1="8" x2="18" y2="8"></line>
+                  <line x1="6" y1="12" x2="18" y2="12"></line>
+                </svg>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>Global Window Summon</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Summon or minimize Arova from any desktop workspace or application.</div>
+                </div>
               </div>
-              <input 
-                type="checkbox" 
-                checked={config.privacy.workspace_awareness !== false} 
-                onChange={e => handleTogglePrivacy('workspace_awareness', e.target.checked)} 
-              />
-            </label>
-
-            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>🌐 Selective Research Browser Tab Capture</div>
-                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Captures relevant documentation while strictly blocking authentication, passwords, and banking.</div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <kbd style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--hairline-2)', fontSize: '12px', fontFamily: 'monospace', color: 'var(--ink)' }}>Alt + Space</kbd>
+                <span style={{ color: 'var(--ink-3)', fontSize: '12px', alignSelf: 'center' }}>or</span>
+                <kbd style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--hairline-2)', fontSize: '12px', fontFamily: 'monospace', color: 'var(--ink)' }}>Ctrl + Shift + Space</kbd>
               </div>
-              <input 
-                type="checkbox" 
-                checked={config.privacy.browser_capture !== false} 
-                onChange={e => handleTogglePrivacy('browser_capture', e.target.checked)} 
-              />
-            </label>
+            </div>
           </div>
         </div>
 
         {/* About & Diagnostics Export */}
         <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px' }}>
-          <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>About Arova &amp; Snapshot Export</div>
+          <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>About Arova &amp; Diagnostics</div>
           <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '16px' }}>System build parameters and diagnostic bundle generator.</div>
           
           <div style={{ fontSize: '13px', color: 'var(--ink-2)', lineHeight: '1.8', marginBottom: '16px', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '10px', fontFamily: 'monospace', border: '1px solid var(--hairline-2)' }}>
@@ -738,12 +726,17 @@ export const SettingsLayout: React.FC = () => {
           <div style={{ display: 'flex', gap: '12px' }}>
             <button 
               className="tune-btn"
-              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--hairline-2)', padding: '10px 20px', fontWeight: 600 }}
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--hairline-2)', padding: '10px 20px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
               onClick={() => {
                 socket.sendEvent({ type: 'debug.export_bundle', req_id: Date.now().toString() });
                 alert('Exported comprehensive debug bundle to ~/.arova/arova-debug.zip');
               }}
             >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
               Export Debug Bundle (.zip)
             </button>
           </div>
