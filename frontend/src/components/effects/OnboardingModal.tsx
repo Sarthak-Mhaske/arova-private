@@ -314,11 +314,6 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
                     <div style={{ fontSize: '12px', color: 'var(--ink-3, #b8b0a2)', lineHeight: '1.5' }}>All telemetry and cognitive memory stay encrypted on your local filesystem.</div>
                   </div>
                 </div>
-
-                <div style={{ padding: '10px 14px', background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.25)', borderRadius: '10px', fontSize: '12px', color: 'var(--ink-2, #ded6ca)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-amber, #d97706)' }} />
-                  Global Summon Shortcut: <strong style={{ color: 'var(--ink, #fff)' }}>Ctrl + Space</strong> (or <strong style={{ color: 'var(--ink, #fff)' }}>⌘ + Space</strong> on macOS)
-                </div>
               </motion.div>
             )}
 
