@@ -144,11 +144,11 @@ class TTSRuntime:
                 self._playback_queue.put((order_index, None))
             return None
             
-        from arova.core.tts import synthesize_with_edge, synthesize_with_piper, detect_language_from_text
+        from arova.core.tts import synthesize_with_edge, synthesize_with_piper, synthesize_with_system, detect_language_from_text
         
         lang = detect_language_from_text(spoken_text)
         tts_cfg = self._config.get("tts", {})
-        engine_order = tts_cfg.get("engine_order", ["edge", "piper"])
+        engine_order = tts_cfg.get("engine_order", ["edge", "piper", "system"])
         
         result = None
         for engine in engine_order:
@@ -158,6 +158,8 @@ class TTSRuntime:
                 result = synthesize_with_edge(spoken_text, self._config, lang)
             elif engine == "piper":
                 result = synthesize_with_piper(spoken_text, self._config, lang)
+            elif engine == "system":
+                result = synthesize_with_system(spoken_text, self._config, lang)
             if result and result.get("ok"):
                 break
         

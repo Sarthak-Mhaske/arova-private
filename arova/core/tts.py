@@ -122,6 +122,7 @@ async def _edge_tts_async(text: str, voice: str, output_path: str):
     await communicate.save(output_path)
 
 def synthesize_with_edge(text: str, config: dict[str, Any], language: str | None = None, output_path: str | None = None) -> dict[str, Any]:
+    tts_cfg = config.get("tts", {}) if isinstance(config, dict) else {}
     # Auto-detect language if not explicitly provided or if default english was passed for Devanagari text
     if not language or language == "english":
         detected = detect_language_from_text(text)
@@ -346,3 +347,38 @@ def speak_text(text: str, config: dict[str, Any], audio_manager: Any = None, lan
             "audio_path": audio_path,
             "error": "Playback failed."
         }
+
+def synthesize_with_system(text: str, config: dict[str, Any], language: str | None = None, output_path: str | None = None) -> dict[str, Any]:
+    """Native OS fallback TTS (Windows PowerShell SAPI5, macOS 'say', Linux 'espeak')."""
+    import sys
+    if not output_path:
+        fd, output_path = tempfile.mkstemp(suffix=".wav", prefix="arova_system_")
+        os.close(fd)
+
+    if sys.platform == "win32":
+        ps_script = f"""
+        Add-Type -AssemblyName System.Speech;
+        $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer;
+        $synth.SetOutputToWaveFile('{output_path}');
+        $synth.Speak('{text.replace("'", "''")}');
+        $synth.Dispose();
+        """
+        try:
+            res = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script], capture_output=True, timeout=10.0)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return {"ok": True, "engine": "system", "audio_path": output_path, "error": None}
+            return {"ok": False, "engine": "system", "audio_path": None, "error": res.stderr.decode(errors="replace")}
+        except Exception as e:
+            return {"ok": False, "engine": "system", "audio_path": None, "error": str(e)}
+
+    elif sys.platform == "darwin":
+        try:
+            res = subprocess.run(["say", "-o", output_path, "--data-format=LEI16@16000", text], capture_output=True, timeout=10.0)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return {"ok": True, "engine": "system", "audio_path": output_path, "error": None}
+            return {"ok": False, "engine": "system", "audio_path": None, "error": res.stderr.decode(errors="replace")}
+        except Exception as e:
+            return {"ok": False, "engine": "system", "audio_path": None, "error": str(e)}
+
+    return {"ok": False, "engine": "system", "audio_path": None, "error": "System TTS not supported on this platform"}
+

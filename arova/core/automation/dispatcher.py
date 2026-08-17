@@ -26,23 +26,42 @@ class CommandBackend(ActionBackend):
             return BackendObservation(f"Simulated execution of: {command}", True)
             
         import asyncio
+        import sys
+        import os
+
         try:
-            # We use asyncio.create_subprocess_shell
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            # Expand tilde ~ to user home directory
+            user_home = os.path.expanduser("~")
+            if "~" in command:
+                if sys.platform == "win32":
+                    command = command.replace("~/", f"{user_home}\\").replace("~\\", f"{user_home}\\").replace("~", user_home)
+                else:
+                    command = command.replace("~", user_home)
+
+            if sys.platform == "win32":
+                # On Windows, run in PowerShell for POSIX command compatibility (mkdir, ls, rm, etc.)
+                exec_cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", command]
+                process = await asyncio.create_subprocess_exec(
+                    *exec_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+            else:
+                process = await asyncio.create_subprocess_shell(
+                    command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
             stdout, stderr = await process.communicate()
             
             output = ""
             if stdout:
-                output += stdout.decode()
+                output += stdout.decode(errors="replace")
             if stderr:
-                output += "\nSTDERR:\n" + stderr.decode()
+                output += "\nSTDERR:\n" + stderr.decode(errors="replace")
                 
             success = process.returncode == 0
-            return BackendObservation(output.strip(), success, error=stderr.decode() if not success else None)
+            return BackendObservation(output.strip(), success, error=stderr.decode(errors="replace") if not success else None)
         except Exception as e:
             return BackendObservation("", False, str(e))
 

@@ -327,7 +327,7 @@ class VoiceConversationLoop:
         old = self._state
         self._state = new_state
         if old != new_state:
-            logging.info(f"VoiceLoop: {old.name} → {new_state.name}")
+            logging.info(f"VoiceLoop: {old.name} -> {new_state.name}")
             self._event_bus.emit("state", "STATE_CHANGED", {"state": new_state.name.lower()})
 
     def _reset_turn_state(self):
@@ -390,6 +390,10 @@ class VoiceConversationLoop:
     def _load_model(self):
         with self._model_lock:
             if self._stt_model is not None:
+                self._model_loading = False
+                return
+            if WhisperModel is None:
+                logging.info("VoiceLoop: Local faster-whisper not installed; using cloud Whisper STT fallback.")
                 self._model_loading = False
                 return
             try:

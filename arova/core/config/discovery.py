@@ -1,10 +1,28 @@
 import os
-import aiohttp
+import time
+import json
 import logging
-from typing import Dict, Any, List
+import asyncio
+import urllib.request
+import urllib.error
+from typing import Dict, Any, List, Tuple
 from arova.core.config.manager import get_config_manager
 
 logger = logging.getLogger(__name__)
+
+def _http_get_sync(url: str, headers: Dict[str, str] = None, timeout: float = 5.0) -> Tuple[int, str]:
+    """Pure standard-library HTTP GET helper without external dependencies."""
+    req_headers = {"User-Agent": "Arova/0.1.0"}
+    if headers:
+        req_headers.update(headers)
+    req = urllib.request.Request(url, headers=req_headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.status, response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        return 0, str(e)
 
 class ProviderDiscovery:
     """
@@ -55,12 +73,13 @@ class ProviderDiscovery:
         # 3. Check Ollama (Requires network ping)
         ollama_running = False
         ollama_host = saved_providers.get("ollama", {}).get("host", "http://localhost:11434")
+        if not ollama_host:
+            ollama_host = "http://localhost:11434"
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{ollama_host}/api/tags", timeout=aiohttp.ClientTimeout(total=1.0)) as resp:
-                    if resp.status == 200:
-                        ollama_running = True
+            status, _ = await asyncio.to_thread(_http_get_sync, f"{ollama_host}/api/tags", timeout=1.5)
+            if status == 200:
+                ollama_running = True
         except Exception:
             pass
             
@@ -96,87 +115,85 @@ class ProviderDiscovery:
         """
         Validate a provider connection before allowing the user to save it.
         """
-        import time
         t0 = time.time()
         api_key = api_key.strip()
         
         try:
-            async with aiohttp.ClientSession() as session:
-                if provider_id == "gemini":
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-                    async with session.get(url, timeout=5.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "1M", "vision": True, "streaming": True}
-                        elif resp.status in (400, 401, 403):
-                            return {"success": False, "error": "Invalid API Key"}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-
-                elif provider_id == "anthropic":
-                    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
-                    async with session.get("https://api.anthropic.com/v1/models", headers=headers, timeout=5.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "200k", "vision": True, "streaming": True}
-                        elif resp.status in (401, 403):
-                            return {"success": False, "error": "Invalid API Key"}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-
-                elif provider_id == "openrouter":
-                    headers = {"Authorization": f"Bearer {api_key}"}
-                    async with session.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=5.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "128k", "vision": True, "streaming": True}
-                        elif resp.status == 401:
-                            return {"success": False, "error": "Invalid API Key"}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-
-                elif provider_id == "groq":
-                    headers = {"Authorization": f"Bearer {api_key}"}
-                    async with session.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "128k", "vision": False, "streaming": True}
-                        elif resp.status == 401:
-                            return {"success": False, "error": "Invalid API Key"}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-                            
-                elif provider_id == "openai":
-                    headers = {"Authorization": f"Bearer {api_key}"}
-                    async with session.get("https://api.openai.com/v1/models", headers=headers, timeout=5.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "128k", "vision": True, "streaming": True}
-                        elif resp.status == 401:
-                            return {"success": False, "error": "Invalid API Key"}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-                            
-                elif provider_id == "ollama":
-                    target_host = host if host else "http://localhost:11434"
-                    async with session.get(f"{target_host}/api/tags", timeout=3.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "32k", "vision": False, "streaming": True}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-
-                elif provider_id == "lmstudio":
-                    target_host = host if host else "http://localhost:1234"
-                    async with session.get(f"{target_host}/v1/models", timeout=3.0) as resp:
-                        latency = int((time.time() - t0) * 1000)
-                        if resp.status == 200:
-                            return {"success": True, "latency_ms": latency, "context_limit": "32k", "vision": False, "streaming": True}
-                        else:
-                            return {"success": False, "error": f"HTTP {resp.status}"}
-                            
+            if provider_id == "gemini":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+                status, _ = await asyncio.to_thread(_http_get_sync, url, timeout=5.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "1M", "vision": True, "streaming": True}
+                elif status in (400, 401, 403):
+                    return {"success": False, "error": "Invalid API Key"}
                 else:
-                    return {"success": False, "error": "Unknown provider"}
+                    return {"success": False, "error": f"HTTP {status}"}
+
+            elif provider_id == "anthropic":
+                headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+                status, _ = await asyncio.to_thread(_http_get_sync, "https://api.anthropic.com/v1/models", headers=headers, timeout=5.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "200k", "vision": True, "streaming": True}
+                elif status in (401, 403):
+                    return {"success": False, "error": "Invalid API Key"}
+                else:
+                    return {"success": False, "error": f"HTTP {status}"}
+
+            elif provider_id == "openrouter":
+                headers = {"Authorization": f"Bearer {api_key}"}
+                status, _ = await asyncio.to_thread(_http_get_sync, "https://openrouter.ai/api/v1/models", headers=headers, timeout=5.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "128k", "vision": True, "streaming": True}
+                elif status == 401:
+                    return {"success": False, "error": "Invalid API Key"}
+                else:
+                    return {"success": False, "error": f"HTTP {status}"}
+
+            elif provider_id == "groq":
+                headers = {"Authorization": f"Bearer {api_key}"}
+                status, _ = await asyncio.to_thread(_http_get_sync, "https://api.groq.com/openai/v1/models", headers=headers, timeout=5.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "128k", "vision": False, "streaming": True}
+                elif status == 401:
+                    return {"success": False, "error": "Invalid API Key"}
+                else:
+                    return {"success": False, "error": f"HTTP {status}"}
+                        
+            elif provider_id == "openai":
+                headers = {"Authorization": f"Bearer {api_key}"}
+                status, _ = await asyncio.to_thread(_http_get_sync, "https://api.openai.com/v1/models", headers=headers, timeout=5.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "128k", "vision": True, "streaming": True}
+                elif status == 401:
+                    return {"success": False, "error": "Invalid API Key"}
+                else:
+                    return {"success": False, "error": f"HTTP {status}"}
+                        
+            elif provider_id == "ollama":
+                target_host = host if host else "http://localhost:11434"
+                status, _ = await asyncio.to_thread(_http_get_sync, f"{target_host}/api/tags", timeout=3.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "32k", "vision": False, "streaming": True}
+                else:
+                    return {"success": False, "error": f"Ollama unreachable (HTTP {status})"}
+
+            elif provider_id == "lmstudio":
+                target_host = host if host else "http://localhost:1234"
+                status, _ = await asyncio.to_thread(_http_get_sync, f"{target_host}/v1/models", timeout=3.0)
+                latency = int((time.time() - t0) * 1000)
+                if status == 200:
+                    return {"success": True, "latency_ms": latency, "context_limit": "32k", "vision": False, "streaming": True}
+                else:
+                    return {"success": False, "error": f"LM Studio unreachable (HTTP {status})"}
+                        
+            else:
+                return {"success": False, "error": "Unknown provider"}
         except Exception as e:
             err_msg = str(e) or type(e).__name__
             return {"success": False, "error": f"Unreachable: {err_msg}"}
