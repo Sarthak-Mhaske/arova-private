@@ -19,14 +19,28 @@ type MainTabType = 'vault' | 'timeline' | 'journal';
 type VaultSubTabType = 'memories' | 'inbox' | 'pinned' | 'policy';
 
 export const MemorySurface: React.FC = () => {
-  const { closeSurface } = useSurfaceState();
+  const { closeSurface, activeSurface, activeTab, setActiveTab } = useSurfaceState();
   const { memories, pendingMemories, setPendingMemories, setMemories } = useCognitionState();
   const [isLoading, setIsLoading] = useState(true);
   const [isError] = useState(false);
-  const [mainTab, setMainTab] = useState<MainTabType>('vault');
+  const [mainTab, setMainTab] = useState<MainTabType>(() => {
+    if (activeTab === 'journal' || activeSurface === 'journal') return 'journal';
+    if (activeTab === 'timeline' || activeSurface === 'timeline') return 'timeline';
+    return 'vault';
+  });
   const [vaultTab, setVaultTab] = useState<VaultSubTabType>('memories');
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
   const [selectedPolicy, setSelectedPolicy] = useState<string>('review_queue');
+
+  useEffect(() => {
+    if (activeTab === 'journal' || activeSurface === 'journal') {
+      setMainTab('journal');
+    } else if (activeTab === 'timeline' || activeSurface === 'timeline') {
+      setMainTab('timeline');
+    } else if (activeTab === 'vault') {
+      setMainTab('vault');
+    }
+  }, [activeTab, activeSurface]);
 
   useEffect(() => {
     socket.sendEvent({ type: 'memory.query_request', req_id: 'mem_init' });
@@ -106,7 +120,10 @@ export const MemorySurface: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px 16px', borderBottom: '1px solid var(--hairline-2)', background: 'rgba(0,0,0,0.15)' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button 
-            onClick={() => setMainTab('vault')}
+            onClick={() => {
+              setMainTab('vault');
+              setActiveTab('vault');
+            }}
             style={{
               padding: '10px 18px',
               border: 'none',
@@ -135,7 +152,10 @@ export const MemorySurface: React.FC = () => {
           </button>
 
           <button 
-            onClick={() => setMainTab('timeline')}
+            onClick={() => {
+              setMainTab('timeline');
+              setActiveTab('timeline');
+            }}
             style={{
               padding: '10px 18px',
               border: 'none',
@@ -160,7 +180,10 @@ export const MemorySurface: React.FC = () => {
           </button>
 
           <button 
-            onClick={() => setMainTab('journal')}
+            onClick={() => {
+              setMainTab('journal');
+              setActiveTab('journal');
+            }}
             style={{
               padding: '10px 18px',
               border: 'none',

@@ -41,4 +41,9 @@ body {
   height: 0;
 }
 
+select, option {
+  background-color: #141210;
+  color: var(--color-ink, #f5eedb);
+}
+
 /* Reduced motion handled specifically in components */

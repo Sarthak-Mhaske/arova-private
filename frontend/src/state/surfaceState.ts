@@ -4,7 +4,7 @@ export type SurfaceType =
   | 'presence' | 'work'
   | 'cognition' | 'threads' | 'memory' | 'timeline'
   | 'environment' | 'workspace' | 'awareness'
-  | 'settings' 
+  | 'system' | 'settings' 
   | 'command_palette'
   | 'session_timeline'
   | 'developer_mode'
@@ -13,12 +13,16 @@ export type SurfaceType =
 
 interface SurfaceState {
   activeSurface: SurfaceType;
-  openSurface: (surface: SurfaceType) => void;
+  activeTab: string | null;
+  openSurface: (surface: SurfaceType, tab?: string | null) => void;
   closeSurface: () => void;
+  setActiveTab: (tab: string | null) => void;
 }
 
 export const useSurfaceState = create<SurfaceState>((set) => ({
   activeSurface: null,
-  openSurface: (activeSurface) => set({ activeSurface }),
-  closeSurface: () => set({ activeSurface: null }),
+  activeTab: null,
+  openSurface: (activeSurface, activeTab = null) => set({ activeSurface, activeTab: activeTab ?? null }),
+  closeSurface: () => set({ activeSurface: null, activeTab: null }),
+  setActiveTab: (activeTab) => set({ activeTab }),
 }));

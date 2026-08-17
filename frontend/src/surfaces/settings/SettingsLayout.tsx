@@ -88,6 +88,35 @@ const SettingsStyles = () => (
       background: var(--accent-gold);
       box-shadow: 0 0 6px rgba(235, 175, 75, 0.4);
     }
+    .tune-select {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-color: #141210 !important;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23d4a878' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+      background-repeat: no-repeat !important;
+      background-position: right 18px center !important;
+      background-size: 16px !important;
+      border: 1px solid var(--hairline-2) !important;
+      color: #f5eedb !important;
+      padding: 14px 44px 14px 18px !important;
+      border-radius: 10px !important;
+      font-size: 14px !important;
+      font-family: inherit !important;
+      outline: none !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+    }
+    .tune-select:focus {
+      border-color: var(--accent-amber) !important;
+      box-shadow: 0 0 0 2px rgba(212, 168, 120, 0.2) !important;
+    }
+    .tune-select option {
+      background-color: #1a1714 !important;
+      color: #f5eedb !important;
+      padding: 12px !important;
+    }
     .settings-tab-btn {
       padding: 10px 18px;
       border: none;
@@ -413,18 +442,17 @@ export const SettingsLayout: React.FC = () => {
               <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '16px' }}>Arova will use this provider as the default for all AI interactions</div>
               <select 
                 className="tune-select"
-                style={{ width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--hairline-2)', borderRadius: '10px', padding: '14px 18px', color: 'var(--ink)' }}
                 value={config.preferred_provider || 'groq'} 
                 onChange={(e) => {
                   const val = e.target.value;
                   saveConfig({ ...config, preferred_provider: val });
                 }}
               >
-                <option value="groq">Groq (Llama 3.3 70B - Fast Cloud)</option>
-                <option value="gemini">Google AI (Gemini 2.5 Pro)</option>
-                <option value="openai">OpenAI (GPT-4o / GPT-5)</option>
-                <option value="anthropic">Anthropic (Claude 3.7 Sonnet)</option>
-                <option value="ollama">Ollama (Local Offline)</option>
+                <option value="groq" style={{ background: '#1a1714', color: '#f5eedb' }}>Groq (Llama 3.3 70B - Fast Cloud)</option>
+                <option value="gemini" style={{ background: '#1a1714', color: '#f5eedb' }}>Google AI (Gemini 2.5 Pro)</option>
+                <option value="openai" style={{ background: '#1a1714', color: '#f5eedb' }}>OpenAI (GPT-4o / GPT-5)</option>
+                <option value="anthropic" style={{ background: '#1a1714', color: '#f5eedb' }}>Anthropic (Claude 3.7 Sonnet)</option>
+                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local Offline)</option>
               </select>
             </div>
 

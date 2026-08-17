@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 const MDiv: any = motion.div;
 import { useSurfaceState } from '../../state';
 import { MemorySurface } from './MemorySurface';
-import { TimelineSurface } from './TimelineSurface';
 import { WorkspaceSurface } from './WorkspaceSurface';
 import { ThreadsSurface } from './ThreadsSurface';
 import { CognitionSurface } from './CognitionSurface';
@@ -11,7 +10,6 @@ import { AwarenessSurface } from './AwarenessSurface';
 import { CommandPaletteSurface } from './CommandPaletteSurface';
 import { SessionTimelineSurface } from './SessionTimelineSurface';
 import { DeveloperModeSurface } from './DeveloperModeSurface';
-import { JournalSurface } from './JournalSurface';
 import { SettingsLayout } from '../../surfaces/settings/SettingsLayout';
 import { sheetEnter, scrimEnter, easeSpring, easeSoft } from '../../motion';
 import { WorkHubSurface } from './WorkHubSurface';
@@ -99,22 +97,13 @@ export const EmergentSurface: React.FC = () => {
             animate="animate"
             exit="exit"
             transition={{ ...easeSpring }}
-            style={activeSurface === 'memory' ? {
+            style={(activeSurface === 'memory' || activeSurface === 'journal' || activeSurface === 'timeline') ? {
               pointerEvents: 'auto',
               width: 'min(1400px, 94vw)',
               height: 'calc(100vh - 80px)',
               maxHeight: 'calc(100vh - 80px)',
               padding: 0,
               overflow: 'hidden'
-            } : activeSurface === 'journal' ? {
-              pointerEvents: 'auto',
-              width: 'min(1160px, 94vw)',
-              height: 'min(820px, calc(100vh - 80px))',
-              maxHeight: '840px',
-              padding: '28px 34px',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column'
             } : { 
               pointerEvents: 'auto', 
               maxHeight: 'calc(100vh - 120px)' 
@@ -123,17 +112,17 @@ export const EmergentSurface: React.FC = () => {
             {activeSurface === 'work' && <WorkHubSurface onContinue={() => closeSurface()} />}
             {activeSurface === 'presence' && <WorkHubSurface onContinue={() => closeSurface()} />}
             {activeSurface === 'cognition' && <CognitionSurface />}
-            {activeSurface === 'timeline' && <TimelineSurface />}
             {activeSurface === 'threads' && <ThreadsSurface />}
             {activeSurface === 'memory' && <MemorySurface />}
+            {activeSurface === 'journal' && <MemorySurface />}
+            {activeSurface === 'timeline' && <MemorySurface />}
             {activeSurface === 'awareness' && <AwarenessSurface />}
             {activeSurface === 'workspace' && <WorkspaceSurface />}
             {activeSurface === 'command_palette' && <CommandPaletteSurface />}
             {activeSurface === 'session_timeline' && <SessionTimelineSurface />}
             {activeSurface === 'developer_mode' && <DeveloperModeSurface />}
-            {activeSurface === 'journal' && <JournalSurface />}
 
-            {activeSurface === 'settings' && <SettingsLayout />}
+            {(activeSurface === 'settings' || activeSurface === 'system') && <SettingsLayout />}
           </MDiv>
         </div>
       )}

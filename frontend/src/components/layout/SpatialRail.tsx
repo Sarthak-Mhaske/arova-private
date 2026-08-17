@@ -26,6 +26,7 @@ interface RailItem {
   label: string;
   icon: React.ReactNode;
   liveColor?: 'violet' | 'gold' | 'sage' | 'ice-blue';
+  targetTab?: string;
 }
 
 interface RailGroupData {
@@ -56,19 +57,10 @@ const GROUPS: RailGroupData[] = [
         ) 
       },
       { 
-        id: 'timeline', 
-        label: 'Timeline', 
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-        ) 
-      },
-      { 
         id: 'memory', 
         label: 'Memory Vault', 
         liveColor: 'violet', 
+        targetTab: 'vault',
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <circle cx="12" cy="12" r="3"/>
@@ -84,6 +76,7 @@ const GROUPS: RailGroupData[] = [
         id: 'journal', 
         label: 'Journal', 
         liveColor: 'gold', 
+        targetTab: 'journal',
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
@@ -124,6 +117,44 @@ const GROUPS: RailGroupData[] = [
         ) 
       }
     ]
+  },
+  {
+    id: 'system',
+    title: 'System',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    ),
+    items: [
+      { 
+        id: 'settings', 
+        label: 'Control Center', 
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <line x1="4" y1="21" x2="4" y2="14"/>
+            <line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/>
+            <line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/>
+            <line x1="9" y1="8" x2="15" y2="8"/>
+            <line x1="17" y1="16" x2="23" y2="16"/>
+          </svg>
+        ) 
+      },
+      { 
+        id: 'developer_mode', 
+        label: 'Diagnostics', 
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        ) 
+      }
+    ]
   }
 ];
 
@@ -133,13 +164,20 @@ const RailGlyph: React.FC<{
   icon: React.ReactNode; 
   isActive?: boolean; 
   isChild?: boolean; 
-  liveColor?: 'violet' | 'gold' | 'sage' | 'ice-blue' 
-}> = ({ surface, label, icon, isActive, isChild, liveColor }) => {
+  liveColor?: 'violet' | 'gold' | 'sage' | 'ice-blue';
+  targetTab?: string;
+}> = ({ surface, label, icon, isActive, isChild, liveColor, targetTab }) => {
   const { openSurface } = useSurfaceState();
   return (
     <button 
       className={`rail-glyph ${isActive ? 'active' : ''} ${isChild ? 'child-glyph' : ''}`} 
-      onClick={() => openSurface(surface)}
+      onClick={() => {
+        if (surface === 'journal' || targetTab === 'journal') {
+          openSurface('memory', 'journal');
+        } else {
+          openSurface(surface, targetTab);
+        }
+      }}
       style={{ width: '100%' }}
     >
       <div className="glyph-mark">
@@ -158,8 +196,17 @@ const AccordionGroup: React.FC<{
   isExpanded: boolean; 
   onToggle: () => void; 
 }> = ({ group, isExpanded, onToggle }) => {
-  const { activeSurface, openSurface } = useSurfaceState();
-  const isGroupActive = activeSurface === group.id || group.items.some(i => i.id === activeSurface);
+  const { activeSurface, activeTab, openSurface } = useSurfaceState();
+  
+  const isGroupActive = activeSurface === group.id || group.items.some(i => {
+    if (i.id === 'journal') {
+      return activeSurface === 'journal' || (activeSurface === 'memory' && activeTab === 'journal');
+    }
+    if (i.id === 'memory') {
+      return activeSurface === 'memory' && activeTab !== 'journal';
+    }
+    return i.id === activeSurface;
+  });
 
   return (
     <div className="rail-group" style={{ width: '100%' }}>
@@ -193,17 +240,26 @@ const AccordionGroup: React.FC<{
             style={{ overflow: 'hidden' }}
           >
             <div className="rail-group-items" style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px' }}>
-              {group.items.map(item => (
-                <RailGlyph
-                  key={item.id}
-                  surface={item.id}
-                  label={item.label}
-                  icon={item.icon}
-                  liveColor={item.liveColor}
-                  isActive={activeSurface === item.id}
-                  isChild={true}
-                />
-              ))}
+              {group.items.map(item => {
+                const isActive = item.id === 'journal' 
+                  ? (activeSurface === 'journal' || (activeSurface === 'memory' && activeTab === 'journal'))
+                  : item.id === 'memory'
+                  ? (activeSurface === 'memory' && activeTab !== 'journal')
+                  : (activeSurface === item.id);
+
+                return (
+                  <RailGlyph
+                    key={item.id}
+                    surface={item.id}
+                    targetTab={item.targetTab}
+                    label={item.label}
+                    icon={item.icon}
+                    liveColor={item.liveColor}
+                    isActive={isActive}
+                    isChild={true}
+                  />
+                );
+              })}
             </div>
           </motion.div>
         )}
@@ -252,20 +308,6 @@ export const SpatialRail: React.FC = () => {
             onToggle={() => setExpandedGroupId(expandedGroupId === group.id ? null : group.id)}
           />
         ))}
-
-        <div className="rail-divider"></div>
-
-        <RailGlyph
-          surface="settings"
-          label="Settings"
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          }
-          isActive={activeSurface === 'settings'}
-        />
       </nav>
     </>
   );
