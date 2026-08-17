@@ -580,7 +580,7 @@ export const CommandZone: React.FC = () => {
             </svg>
           </button>
 
-          {/* Model Selector Popover - Clean Minimal (No Emojis, Connected Models Only) */}
+          {/* Model Selector Popover - Shifted to the right away from chat bar */}
           {showModelMenu && (
             <div 
               ref={modelMenuRef}
@@ -588,8 +588,9 @@ export const CommandZone: React.FC = () => {
               style={{
                 position: 'absolute',
                 bottom: '44px',
-                right: '0',
-                width: '320px',
+                left: '0',
+                right: 'auto',
+                width: '300px',
                 maxHeight: '440px',
                 background: 'rgba(22, 19, 16, 0.96)',
                 border: '1px solid var(--hairline-2, rgba(255,255,255,0.12))',
