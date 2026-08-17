@@ -4,6 +4,7 @@ set -e
 # ==============================================================================
 # Arova macOS Standalone Release Packaging Script
 # Builds universal daemon (arovad), compiles Tauri .app, and generates .dmg bundle
+# with strict macOS security hardening, ad-hoc code signing, and full permissions.
 # ==============================================================================
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,7 +39,7 @@ npm run tauri build || npm run tauri build -- --no-bundle
 
 # 4. Assemble Arova.app Bundle
 echo ""
-echo "▶ [4/4] Assembling Arova.app bundle..."
+echo "▶ [4/4] Assembling and hardening Arova.app bundle..."
 RELEASE_DIR="$REPO_ROOT/release-macos"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
@@ -66,57 +67,74 @@ else
         cp -f "$REPO_ROOT/frontend/src-tauri/icons/icon.icns" "$RELEASE_DIR/Arova.app/Contents/Resources/icon.icns"
     fi
 
-    cat << 'EOF' > "$RELEASE_DIR/Arova.app/Contents/Info.plist"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>arova</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.arova.desktop</string>
-    <key>CFBundleName</key>
-    <string>Arova</string>
-    <key>CFBundleDisplayName</key>
-    <string>Arova</string>
-    <key>CFBundleIconFile</key>
-    <string>icon</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>10.15</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Arova requires microphone access for voice queries, wake word detection, and ambient audio interaction.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Arova uses speech recognition to convert voice commands into cognitive actions.</string>
-</dict>
-</plist>
-EOF
+    if [ -f "$REPO_ROOT/frontend/src-tauri/Info.plist" ]; then
+        cp -f "$REPO_ROOT/frontend/src-tauri/Info.plist" "$RELEASE_DIR/Arova.app/Contents/Info.plist"
+    fi
 fi
 
 # Inject backend daemon into Arova.app
 mkdir -p "$RELEASE_DIR/Arova.app/Contents/Resources/arovad"
 if [ -d "$REPO_ROOT/dist/arovad" ]; then
+    echo "Injecting compiled arovad daemon into Arova.app/Contents/Resources/arovad..."
     cp -rf "$REPO_ROOT/dist/arovad/"* "$RELEASE_DIR/Arova.app/Contents/Resources/arovad/"
-    chmod +x "$RELEASE_DIR/Arova.app/Contents/Resources/arovad/arovad" || true
+fi
+
+# Ensure executable permissions across all binaries and dylibs
+echo "Setting executable permissions on all binaries and dynamic libraries..."
+chmod -R 755 "$RELEASE_DIR/Arova.app"
+find "$RELEASE_DIR/Arova.app/Contents/MacOS" -type f -exec chmod +x {} +
+find "$RELEASE_DIR/Arova.app/Contents/Resources/arovad" -type f -perm +111 -exec chmod +x {} + 2>/dev/null || true
+if [ -f "$RELEASE_DIR/Arova.app/Contents/Resources/arovad/arovad" ]; then
+    chmod +x "$RELEASE_DIR/Arova.app/Contents/Resources/arovad/arovad"
+fi
+
+# Strip quarantine extended attributes
+echo "Clearing quarantine extended attributes..."
+xattr -cr "$RELEASE_DIR/Arova.app" 2>/dev/null || true
+
+# Apply deep ad-hoc code signature (required for ARM64 M1/M2/M3/M4 & Intel macOS security)
+ENTITLEMENTS="$REPO_ROOT/frontend/src-tauri/Entitlements.plist"
+if command -v codesign &>/dev/null; then
+    echo "Applying deep ad-hoc code signature..."
+    if [ -f "$ENTITLEMENTS" ]; then
+        find "$RELEASE_DIR/Arova.app" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign - {} + 2>/dev/null || true
+        codesign --force --deep --options runtime --entitlements "$ENTITLEMENTS" --sign - "$RELEASE_DIR/Arova.app" 2>/dev/null || codesign --force --deep --sign - "$RELEASE_DIR/Arova.app"
+    else
+        codesign --force --deep --sign - "$RELEASE_DIR/Arova.app"
+    fi
+    echo "✓ Ad-hoc code signature applied."
 fi
 
 # Create Zip Archive
+echo "Creating standalone ZIP archive..."
 cd "$RELEASE_DIR"
 zip -r -q "$REPO_ROOT/Arova-macOS.zip" "Arova.app"
 echo "✓ Standalone Zip archive created: $REPO_ROOT/Arova-macOS.zip"
 
-# Generate Drag-to-Applications Disk Image (DMG) containing full Arova.app + Applications symlink
+# Generate Drag-to-Applications Disk Image (DMG) containing full Arova.app + Applications symlink + Quickstart
 echo "Creating complete Drag-to-Applications Disk Image (DMG)..."
 DMG_STAGING="$REPO_ROOT/dmg_staging"
 rm -rf "$DMG_STAGING" "$REPO_ROOT/Arova-macOS.dmg"
 mkdir -p "$DMG_STAGING"
 cp -rf "$RELEASE_DIR/Arova.app" "$DMG_STAGING/"
 ln -s /Applications "$DMG_STAGING/Applications"
+
+cat << 'EOF' > "$DMG_STAGING/README_macOS.txt"
+========================================================
+  Arova for macOS — Installation & Quickstart
+========================================================
+
+1. Drag Arova.app into the Applications folder shortcut.
+2. Launch Arova from Applications.
+
+* macOS Security Note:
+If macOS displays "Arova is an app downloaded from the Internet",
+simply Right-Click (or Control-Click) Arova.app in Applications
+and click "Open", then confirm by clicking "Open" in the dialog.
+
+Enjoy using Arova!
+========================================================
+EOF
 
 if command -v hdiutil &>/dev/null; then
     hdiutil create -volname "Arova" -srcfolder "$DMG_STAGING" -ov -format UDZO "$REPO_ROOT/Arova-macOS.dmg"

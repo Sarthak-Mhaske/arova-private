@@ -2,9 +2,35 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleName</key>
+    <string>Arova</string>
+    <key>CFBundleDisplayName</key>
+    <string>Arova</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.arova.desktop</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Arova requires microphone access for voice queries, wake word detection, and ambient audio interaction.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Arova uses speech recognition to convert voice commands into cognitive actions.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Arova requires permission to automate and interact with editors, browsers, and terminal applications on your Mac.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Arova requires access to your Desktop folder to index and restore active project files.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Arova requires access to your Documents folder to index and restore active workspace files.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Arova requires access to your Downloads folder to locate downloaded reference materials.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Arova requires accessibility access to detect active windows, support global shortcuts, and focus restored applications.</string>
 </dict>
 </plist>

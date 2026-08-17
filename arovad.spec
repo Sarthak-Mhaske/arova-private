@@ -8,17 +8,16 @@ hiddenimports = [
     'arova.core.ambience', 'arova.core.automation', 'arova.core.platform', 
     'arova.daemon', 'arova.core.cognition.workspace_manager', 
     'arova.core.projection.projector', 'numpy', 'scipy', 'sklearn', 'websockets',
-    'edge_tts', 'sounddevice', '_cffi_backend'
+    'edge_tts', 'sounddevice', '_cffi_backend', 'psutil', 'PIL', 'yaml', 'pydantic',
+    'requests', 'urllib3'
 ]
-tmp_ret = collect_all('openwakeword')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('arova')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-try:
-    tmp_ret = collect_all('edge_tts')
-    datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-except Exception:
-    pass
+
+for pkg in ['arova', 'openwakeword', 'sounddevice', 'edge_tts', 'psutil', 'PIL', 'websockets', 'pydantic', 'requests']:
+    try:
+        tmp_ret = collect_all(pkg)
+        datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+    except Exception:
+        pass
 
 
 a = Analysis(
