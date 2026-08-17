@@ -826,32 +826,51 @@ class WorkspaceManager:
 
                 # Layer 2: Canonical cross-domain and title deduplication
                 title_key = final_title.strip().lower()
-                if not any(b["url"] == clean_url or b["title"].strip().lower() == title_key for b in categorized_browsers):
-                    browser_app = v.get("app") or "Browser"
-                    
-                    # Layer 3: Cognitive relevance scoring
-                    score = 0
-                    proj_tokens = [t.lower() for t in ws.title.split() if len(t) > 2]
-                    url_and_title = f"{clean_url} {final_title}".lower()
-                    if any(tok in url_and_title for tok in proj_tokens):
-                        score += 50
-                    if any(dev in url_and_title for dev in ["github.com", "gitlab.com", "docs", "api", "tutorial", "architecture"]):
-                        score += 30
-                    if v.get("last_seen"):
-                        # Bonus for recency
-                        score += min(20, max(0, int((v["last_seen"] - (time.time() - 3600)) / 180)))
+                if any(
+                    b["url"] == clean_url or 
+                    b["title"].strip().lower() == title_key or
+                    (host and b.get("domain") == host and (title_key in b["title"].strip().lower() or b["title"].strip().lower() in title_key))
+                    for b in categorized_browsers
+                ):
+                    continue
 
-                    categorized_browsers.append({
-                        "id": clean_url,
-                        "url": clean_url,
-                        "title": final_title,
-                        "domain": host,
-                        "app": browser_app,
-                        "score": score,
-                        "action_label": f"Open tab: {final_title}"
-                    })
+                browser_app = v.get("app") or "Browser"
+                
+                # Layer 3: Cognitive relevance scoring
+                score = 0
+                proj_tokens = [t.lower() for t in ws.title.split() if len(t) > 2]
+                url_and_title = f"{clean_url} {final_title}".lower()
+                if any(tok in url_and_title for tok in proj_tokens):
+                    score += 50
+                if any(dev in url_and_title for dev in ["github.com", "gitlab.com", "docs", "api", "tutorial", "architecture"]):
+                    score += 30
+                if v.get("last_seen"):
+                    # Bonus for recency
+                    score += min(20, max(0, int((v["last_seen"] - (time.time() - 3600)) / 180)))
+
+                categorized_browsers.append({
+                    "id": clean_url,
+                    "url": clean_url,
+                    "title": final_title,
+                    "domain": host,
+                    "app": browser_app,
+                    "score": score,
+                    "action_label": f"Open tab: {final_title}"
+                })
             elif r_cat == "editor" or r_type in ["vscode", "editor", "file"] or (identity.startswith("/") and not identity.startswith("http")):
                 clean_path = identity.replace("file://", "").strip()
+                path_lower = clean_path.lower()
+                
+                # Layer 1: Strict noise filtering for package caches, cargo registries, and IDE internals
+                noisy_editor_patterns = [
+                    "/.cargo", "/index.crates.io", "/.rustup", "/.gemini", "/.npm", "/.nvm",
+                    "/.pyenv", "/.vscode", "/.cursor", "/.antigravity", "/node_modules",
+                    "/site-packages", "/__pycache__", "/venv", "/.venv", "/target/", "/dist/", "/build/",
+                    "\\appdata\\", "\\.cargo\\", "\\index.crates.io\\", "\\node_modules\\"
+                ]
+                if any(np in path_lower for np in noisy_editor_patterns):
+                    continue
+
                 parts = clean_path.split("/")
                 f_name = v.get("file_name") or parts[-1]
                 

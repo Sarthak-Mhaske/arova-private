@@ -389,7 +389,7 @@ export const CommandZone: React.FC = () => {
           style={{ cursor: 'pointer' }}
           onClick={() => {
             import('../../state').then(({ useSurfaceState }) => {
-              useSurfaceState.getState().openSurface('journal');
+              useSurfaceState.getState().openSurface('memory', 'journal');
             });
           }}
         >

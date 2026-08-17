@@ -55,14 +55,42 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
   const { editors, terminals, browsers, apps } = useMemo(() => {
     if (!workspace) return { editors: [], terminals: [], browsers: [], apps: [] };
 
-    // 1. If backend already sent structured categorized_items, use them directly
+    const isNoisePath = (p: string) => {
+      const pLow = (p || '').toLowerCase();
+      return [
+        '/.cargo', '/index.crates.io', '/.rustup', '/.gemini', '/.npm', '/.nvm',
+        '/.pyenv', '/.vscode', '/.cursor', '/.antigravity', '/node_modules',
+        '/site-packages', '/__pycache__', '/venv', '/.venv', '/target/', '/dist/', '/build/',
+        '\\appdata\\', '\\.cargo\\', '\\index.crates.io\\', '\\node_modules\\'
+      ].some(k => pLow.includes(k));
+    };
+
+    // 1. If backend already sent structured categorized_items, clean and use them
     const backendCategories = workspace?.categorized_items;
     if (backendCategories && (backendCategories.editors || backendCategories.terminals || backendCategories.browsers || backendCategories.apps)) {
+      const rawEditors = ((backendCategories.editors || []) as EditorItem[]).filter(e => !isNoisePath(e.path) && !isNoisePath(e.name));
+      const rawBrowsers: BrowserItem[] = [];
+      const seenTitles = new Set<string>();
+
+      ((backendCategories.browsers || []) as BrowserItem[]).forEach(b => {
+        const tKey = (b.title || '').toLowerCase().trim();
+        const bDomain = (b.domain || '').toLowerCase().trim();
+        const alreadyPresent = rawBrowsers.some(rb => 
+          rb.url === b.url || 
+          rb.title.toLowerCase().trim() === tKey ||
+          (bDomain && rb.domain.toLowerCase().trim() === bDomain && (rb.title.toLowerCase().includes(tKey) || tKey.includes(rb.title.toLowerCase())))
+        );
+        if (!alreadyPresent && !seenTitles.has(tKey)) {
+          seenTitles.add(tKey);
+          rawBrowsers.push(b);
+        }
+      });
+
       return {
-        editors: (backendCategories.editors || []) as EditorItem[],
-        terminals: (backendCategories.terminals || []) as TerminalItem[],
-        browsers: (backendCategories.browsers || []) as BrowserItem[],
-        apps: (backendCategories.apps || []) as AppItem[]
+        editors: rawEditors.slice(0, 4),
+        terminals: ((backendCategories.terminals || []) as TerminalItem[]).slice(0, 2),
+        browsers: rawBrowsers.slice(0, 5),
+        apps: ((backendCategories.apps || []) as AppItem[]).slice(0, 3)
       };
     }
 
@@ -112,7 +140,7 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
           "google.com/sorry", "google.com/search", "/accounts/setosid", "/servicelogin"
         ].some(skip => uLower.includes(skip));
 
-        if (!isJunk && !parsedBrowsers.some(b => b.url === cleanUrl)) {
+        if (!isJunk) {
           let host = cleanUrl;
           try {
             host = new URL(cleanUrl).hostname;
@@ -125,16 +153,24 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
               bTitle = bTitle.slice(0, -suffix.length).trim();
             }
           }
-          if (!["new tab", "brave", "google chrome", "firefox", "home"].includes(bTitle.toLowerCase())) {
-            const bApp = meta?.app || 'Browser';
-            parsedBrowsers.push({
-              id: cleanUrl,
-              url: cleanUrl,
-              title: bTitle,
-              domain: host,
-              app: bApp,
-              action_label: `Open tab: ${bTitle}`
-            });
+          const bTitleLow = bTitle.toLowerCase().trim();
+          if (!["new tab", "brave", "google chrome", "firefox", "home"].includes(bTitleLow)) {
+            const alreadyExists = parsedBrowsers.some(b => 
+              b.url === cleanUrl || 
+              b.title.toLowerCase().trim() === bTitleLow ||
+              (host && b.domain === host && (bTitleLow.includes(b.title.toLowerCase()) || b.title.toLowerCase().includes(bTitleLow)))
+            );
+            if (!alreadyExists) {
+              const bApp = meta?.app || 'Browser';
+              parsedBrowsers.push({
+                id: cleanUrl,
+                url: cleanUrl,
+                title: bTitle,
+                domain: host,
+                app: bApp,
+                action_label: `Open tab: ${bTitle}`
+              });
+            }
           }
         }
       } else if (rCat === 'terminal' || rType === 'terminal' || identity.startsWith('terminal://')) {
@@ -155,8 +191,12 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
         }
       } else if (rCat === 'editor' || rType === 'vscode' || rType === 'editor' || rType === 'file' || (identity.startsWith('/') && !identity.startsWith('http'))) {
         const cleanPath = identity.replace(/^file:\/\//, '').trim();
+        if (isNoisePath(cleanPath)) return;
+
         const parts = cleanPath.split('/');
         let rawName = meta?.file_name || parts[parts.length - 1] || cleanPath;
+        if (isNoisePath(rawName)) return;
+
         const wsTitle = workspace?.title || '';
 
         // Clean up any raw window titles
@@ -229,10 +269,10 @@ export const ContinueCard: React.FC<ContinueCardProps> = ({ workspace }) => {
     }
 
     return {
-      editors: finalEditors,
-      terminals: parsedTerminals,
-      browsers: parsedBrowsers,
-      apps: parsedApps
+      editors: finalEditors.slice(0, 4),
+      terminals: parsedTerminals.slice(0, 2),
+      browsers: parsedBrowsers.slice(0, 5),
+      apps: parsedApps.slice(0, 3)
     };
   }, [workspace]);
 
