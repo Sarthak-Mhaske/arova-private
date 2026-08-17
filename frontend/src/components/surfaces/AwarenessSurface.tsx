@@ -1,21 +1,19 @@
 import React, { useEffect } from 'react';
-import { SurfaceHeader, SurfaceSection, InfoRow, EmptyState } from '../ui/CoherenceComponents';
-import { useAwarenessState, useEnvironmentState } from '../../state';
+import { SurfaceHeader, SurfaceSection, EmptyState } from '../ui/CoherenceComponents';
+import { useAwarenessState } from '../../state';
 import { socket } from '../../runtime/socket';
 
 export const AwarenessSurface: React.FC = () => {
-  const { policy, hidden, visible, activeWorkspace } = useAwarenessState();
-  const { roomState, contextState } = useEnvironmentState();
+  const { policy, hidden } = useAwarenessState();
 
   useEffect(() => {
-    socket.sendEvent({ type: 'workspace.get_request' });
     socket.sendEvent({ type: 'awareness.get_request' });
   }, []);
 
   if (!policy) {
     return (
       <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <SurfaceHeader title="Ambient Awareness &amp; Privacy" sub="Live Observability &amp; Telemetry Contract" />
+        <SurfaceHeader title="Ambient Awareness &amp; Privacy" sub="Telemetry Channels &amp; Security Boundaries" />
         <EmptyState title="Syncing Policy..." description="Retrieving awareness configuration from the daemon." />
       </div>
     );
@@ -99,13 +97,6 @@ export const AwarenessSurface: React.FC = () => {
     },
   ];
 
-  const rawConfidence = activeWorkspace?.confidence_score ?? activeWorkspace?.understanding?.confidence?.score;
-  const confidence = rawConfidence !== undefined && rawConfidence !== null 
-    ? `${Math.round(Number(rawConfidence) * (Number(rawConfidence) <= 1 ? 100 : 1))}%` 
-    : '--';
-  const focusedWindow = (Array.isArray(roomState?.workspace) && roomState.workspace[0]) || activeWorkspace?.title || roomState?.mode || 'No Active Window';
-  const currentAttention = contextState?.current_intent || roomState?.attention || (activeWorkspace?.title ? 'Workspace Flow' : 'Tracking Activity');
-
   const defaultHiddenItems = [
     'Password Managers (1Password, Bitwarden, KeePass, LastPass)',
     'Banking, Financial & Crypto Portals',
@@ -118,44 +109,7 @@ export const AwarenessSurface: React.FC = () => {
 
   return (
     <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column', gap: '28px', overflowY: 'auto' }}>
-      <SurfaceHeader title="Ambient Awareness &amp; Privacy" sub="Live Observability · Telemetry Controls · Security Boundaries" />
-
-      {/* Live Dynamic Telemetry Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focused Window / Context</div>
-          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{focusedWindow}</div>
-        </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Cognitive Trajectory</div>
-          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-violet)' }}>{currentAttention}</div>
-        </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Synthesis Confidence</div>
-          <div style={{ fontSize: '16px', fontWeight: 700, color: confidence !== '--' ? 'var(--accent-gold)' : 'var(--ink-3)' }}>{confidence}</div>
-        </div>
-      </div>
-
-      {/* Viewfinder: Currently Visible */}
-      <SurfaceSection>
-        <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-sage)', boxShadow: '0 0 6px var(--accent-sage)' }}></div>
-          Currently Visible in Memory Substrate
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--glass-1)', padding: '16px', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
-          {visible && Array.isArray(visible) && visible.length > 0 ? (
-            visible.map((item, i) => (
-              <div key={i} style={{ borderBottom: i < visible.length - 1 ? '1px solid var(--hairline-2)' : 'none', paddingBottom: i < visible.length - 1 ? '12px' : 0, marginBottom: i < visible.length - 1 ? '12px' : 0 }}>
-                <div style={{ fontSize: '11px', color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', fontWeight: 600 }}>{item?.provider || 'Active Window'}</div>
-                <InfoRow label="Source" value={item?.source || ''} />
-                <InfoRow label="Activity" value={item?.activity || ''} />
-              </div>
-            ))
-          ) : (
-            <div style={{ fontSize: '13px', color: 'var(--ink-3)', fontStyle: 'italic' }}>Observing room quietly. No intrusive data buffered.</div>
-          )}
-        </div>
-      </SurfaceSection>
+      <SurfaceHeader title="Ambient Awareness &amp; Privacy" sub="Telemetry Channels &amp; Strict Security Boundaries" />
 
       {/* Telemetry & Awareness Capabilities */}
       <SurfaceSection>
