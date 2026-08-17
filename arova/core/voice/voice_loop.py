@@ -139,24 +139,21 @@ class VoiceConversationLoop:
             # Subscribe to mic audio
             self._subscribe_mic()
 
-            # Preload whisper model in background if not loaded
-            self._preload_model_async()
-
         # Notify UI
         self._broadcast_mic_state(True)
 
     def stop_listening(self):
-        """Called when user clicks the mic button (OFF) — manual stop."""
+        """Called when user clicks the mic button (OFF) - manual stop."""
         with self._lock:
             if self._state == LoopState.IDLE:
                 return
 
             if self._state in (LoopState.LISTENING, LoopState.RECORDING):
                 if self._buf_len >= self.MIN_AUDIO_BYTES_FOR_STT and self._state == LoopState.RECORDING:
-                    logging.info("VoiceLoop: Manual stop with audio — transcribing immediately.")
+                    logging.info("VoiceLoop: Manual stop with audio - transcribing immediately.")
                     self._begin_transcription()
                 else:
-                    logging.info("VoiceLoop: Manual stop with no/insufficient audio — cancelling.")
+                    logging.info("VoiceLoop: Manual stop with no/insufficient audio - cancelling.")
                     self._cancel_turn()
             elif self._state in (LoopState.TRANSCRIBING, LoopState.RESPONDING):
                 logging.info(f"VoiceLoop: Manual stop in {self._state.name}, letting current processing finish.")

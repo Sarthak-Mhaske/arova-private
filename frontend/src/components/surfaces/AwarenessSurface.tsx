@@ -99,8 +99,10 @@ export const AwarenessSurface: React.FC = () => {
     },
   ];
 
-  const rawConfidence = activeWorkspace?.confidence_score || activeWorkspace?.understanding?.confidence?.score;
-  const confidence = rawConfidence ? `${rawConfidence}%` : (activeWorkspace ? '92%' : '--');
+  const rawConfidence = activeWorkspace?.confidence_score ?? activeWorkspace?.understanding?.confidence?.score;
+  const confidence = rawConfidence !== undefined && rawConfidence !== null 
+    ? `${Math.round(Number(rawConfidence) * (Number(rawConfidence) <= 1 ? 100 : 1))}%` 
+    : '--';
   const focusedWindow = (Array.isArray(roomState?.workspace) && roomState.workspace[0]) || activeWorkspace?.title || roomState?.mode || 'No Active Window';
   const currentAttention = contextState?.current_intent || roomState?.attention || (activeWorkspace?.title ? 'Workspace Flow' : 'Tracking Activity');
 
@@ -118,40 +120,19 @@ export const AwarenessSurface: React.FC = () => {
     <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column', gap: '28px', overflowY: 'auto' }}>
       <SurfaceHeader title="Ambient Awareness &amp; Privacy" sub="Live Observability · Telemetry Controls · Security Boundaries" />
 
-      {/* Live Runtime Status Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focused Window</div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{focusedWindow}</div>
+      {/* Live Dynamic Telemetry Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focused Window / Context</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{focusedWindow}</div>
         </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Attention</div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-violet)' }}>{currentAttention}</div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Cognitive Trajectory</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-violet)' }}>{currentAttention}</div>
         </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confidence</div>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--accent-gold)' }}>{confidence}</div>
-        </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Window Observer</div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-sage)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-sage)', boxShadow: '0 0 6px var(--accent-sage)' }} />
-            Healthy
-          </div>
-        </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capture Engine</div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-sage)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-sage)', boxShadow: '0 0 6px var(--accent-sage)' }} />
-            Running
-          </div>
-        </div>
-        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Privacy Boundary</div>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            Enforced
-          </div>
+        <div style={{ background: 'var(--glass-2)', border: '1px solid var(--glass-edge)', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Synthesis Confidence</div>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: confidence !== '--' ? 'var(--accent-gold)' : 'var(--ink-3)' }}>{confidence}</div>
         </div>
       </div>
 

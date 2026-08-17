@@ -270,9 +270,6 @@ export const SettingsLayout: React.FC = () => {
     return key ? 'connected' : 'missing_key';
   };
 
-  const isDaemonConnected = diag?.health?.daemon_connected ?? true;
-  const isDatabaseOk = diag?.health?.database_ok ?? true;
-  const isWorkspaceReady = diag?.health?.workspace_engine_ready ?? true;
   const memoryCount = diag?.cognition?.memory_nodes ?? 0;
 
   return (
@@ -298,101 +295,21 @@ export const SettingsLayout: React.FC = () => {
           </div>
         )}
 
-        {/* Real System Resource & Telemetry Status Card */}
-        <div className="tune" style={{ border: '1px solid var(--hairline-2)', background: 'var(--glass-1)', borderRadius: '14px', padding: '20px 24px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="lbl" style={{ color: 'var(--ink)', fontSize: '16px', fontWeight: 600 }}>System Resource &amp; Inference Status</div>
-            <div style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: isDaemonConnected ? 'rgba(76, 175, 80, 0.15)' : 'rgba(255, 152, 0, 0.15)', color: isDaemonConnected ? '#4caf50' : '#ff9800', fontWeight: 600 }}>
-              {isDaemonConnected ? 'Daemon Online' : 'Connecting...'}
-            </div>
-          </div>
-          <div className="desc" style={{ marginTop: '4px', fontSize: '13px', color: 'var(--ink-3)' }}>Arova's ambient intelligence runs locally. Cloud inference is only invoked for deep cognition tasks.</div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginTop: '16px', marginBottom: '18px' }}>
-            <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Memories Persisted</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ink)', marginTop: '2px' }}>{memoryCount}</div>
-            </div>
-            <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Active Threads</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ink)', marginTop: '2px' }}>{diag?.cognition?.active_threads || 1}</div>
-            </div>
-            <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--hairline-2)', borderRadius: '10px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Routing Policy</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ink)', marginTop: '2px', textTransform: 'capitalize' }}>{config.presence_style || 'Hybrid'}</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', borderTop: '1px solid var(--hairline-2)', paddingTop: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isDaemonConnected ? '#4caf50' : '#ff9800', boxShadow: isDaemonConnected ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
-              <span>Presence Active</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isDatabaseOk ? '#4caf50' : '#ff9800', boxShadow: isDatabaseOk ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
-              <span>Memory Storage Active</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isWorkspaceReady ? '#4caf50' : '#ff9800', boxShadow: isWorkspaceReady ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
-              <span>Environment Active</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink)' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isDaemonConnected ? '#4caf50' : '#ff9800', boxShadow: isDaemonConnected ? '0 0 6px rgba(76,175,80,0.5)' : 'none' }} />
-              <span>Cognitive Threads Active</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Presence Settings */}
-        <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px', marginBottom: '16px' }}>
-          <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>Presence &amp; Cognition</div>
-          <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '16px' }}>How Arova interacts and maintains cognitive context across your active workspaces.</div>
-          <select 
-            className="tune-select"
-            style={{ width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--hairline-2)', borderRadius: '10px', padding: '14px 18px' }}
-            value={config.presence_style} 
-            onChange={(e) => saveConfig({...config, presence_style: e.target.value})}
-          >
-            <option value="instant">Instant Presence (Cloud Accelerated)</option>
-            <option value="hybrid">Hybrid Presence (Cloud + Local Edge)</option>
-            <option value="local">Local Presence (Offline Only)</option>
-          </select>
-        </div>
-
-        {/* Workspace Awareness */}
-        <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>Workspace Awareness</div>
-            <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>Allow Arova to infer context from your active applications. Runs purely on your local machine.</div>
-          </div>
-          <label className="tune-toggle">
-            <input 
-              type="checkbox" 
-              checked={config.privacy.workspace_awareness} 
-              onChange={(e) => saveConfig({...config, privacy: {...config.privacy, workspace_awareness: e.target.checked}})}
-            />
-          </label>
-        </div>
-
-        {/* Memory Management */}
-        <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px', marginBottom: '28px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        {/* Memory Vault & Continuity Actions */}
+        <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>Memory &amp; Persistence</div>
-              <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>Manage your long-term episodic persistence and active cognitive threads.</div>
+              <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>Memory Vault &amp; Continuity</div>
+              <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>Inspect stored episodic memories, export diagnostic archives, or reset cognitive threads.</div>
             </div>
-            <label className="tune-toggle">
-              <input 
-                type="checkbox" 
-                checked={config.privacy.memory_enabled} 
-                onChange={(e) => saveConfig({...config, privacy: {...config.privacy, memory_enabled: e.target.checked}})}
-              />
-            </label>
+            <div style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--ink-2)', border: '1px solid var(--hairline-2)' }}>
+              {memoryCount} Memories Stored
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', paddingTop: '12px', borderTop: '1px solid var(--hairline-2)' }}>
-            <button className="tune-btn primary" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--hairline-2)', padding: '8px 18px' }} onClick={() => openSurface('memory')}>View Memories</button>
-            <button className="tune-btn" style={{ background: 'transparent', border: '1px solid var(--hairline-2)', padding: '8px 18px' }} onClick={handleExportMemories}>Export Memories</button>
-            <button className="tune-btn" style={{ background: 'transparent', border: '1px solid rgba(214, 139, 139, 0.3)', color: '#d68b8b', padding: '8px 18px' }} onClick={handleClearThreads}>Clear Continuity Threads</button>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', paddingTop: '14px', borderTop: '1px solid var(--hairline-2)' }}>
+            <button className="tune-btn primary" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--hairline-2)', padding: '8px 18px', cursor: 'pointer' }} onClick={() => openSurface('memory')}>View Memory Vault</button>
+            <button className="tune-btn" style={{ background: 'transparent', border: '1px solid var(--hairline-2)', padding: '8px 18px', cursor: 'pointer' }} onClick={handleExportMemories}>Export Memory Archive</button>
+            <button className="tune-btn" style={{ background: 'transparent', border: '1px solid rgba(214, 139, 139, 0.3)', color: '#d68b8b', padding: '8px 18px', cursor: 'pointer' }} onClick={handleClearThreads}>Clear Active Threads</button>
           </div>
         </div>
 
@@ -421,18 +338,18 @@ export const SettingsLayout: React.FC = () => {
             <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '16px' }}>Arova will use this provider as the default for all AI interactions</div>
             <select 
               className="tune-select"
-              style={{ width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--hairline-2)', borderRadius: '10px', padding: '14px 18px' }}
-              value={config.preferred_provider || 'gemini'} 
+              style={{ width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--hairline-2)', borderRadius: '10px', padding: '14px 18px', color: 'var(--ink)' }}
+              value={config.preferred_provider || 'groq'} 
               onChange={(e) => {
                 const val = e.target.value;
                 saveConfig({ ...config, preferred_provider: val });
               }}
             >
+              <option value="groq">Groq (Llama 3.3 70B - Fast Cloud)</option>
               <option value="gemini">Google AI (Gemini 2.5 Pro)</option>
-              <option value="openai">OpenAI (GPT-5)</option>
-              <option value="anthropic">Anthropic (Claude Sonnet 4)</option>
-              <option value="groq">Groq (Llama 3.3 Fast Cloud)</option>
-              <option value="ollama">Ollama (Local / Offline)</option>
+              <option value="openai">OpenAI (GPT-4o / GPT-5)</option>
+              <option value="anthropic">Anthropic (Claude 3.7 Sonnet)</option>
+              <option value="ollama">Ollama (Local Offline)</option>
             </select>
           </div>
 
