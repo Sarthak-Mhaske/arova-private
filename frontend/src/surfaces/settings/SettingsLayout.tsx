@@ -136,12 +136,14 @@ export const SettingsLayout: React.FC = () => {
   const { closeSurface, openSurface } = useSurfaceState();
   const [config, setConfig] = useState({
     presence_style: 'hybrid',
-    privacy: { workspace_awareness: true, memory_enabled: true, crash_recovery: true },
+    privacy: { workspace_awareness: true, memory_enabled: true, crash_recovery: true, browser_capture: true },
     runtime: { continuity_decay: 'standard', snapshot_retention: '30d' },
     preferred_provider: 'gemini',
     allow_fallback: true
   });
   
+  const [autostartEnabled, setAutostartEnabled] = useState(true);
+
   const [providers, setProviders] = useState({
     groq: { api_keys: [''] },
     openai: { api_keys: [''] },
@@ -154,6 +156,33 @@ export const SettingsLayout: React.FC = () => {
 
   const [testResult, setTestResult] = useState<{ req_id: string; success: boolean; latency_ms?: number; error?: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
+  const handleToggleAutostart = (enabled: boolean) => {
+    setAutostartEnabled(enabled);
+    socket.sendEvent({
+      type: 'config.set_autostart',
+      enabled
+    });
+    setSaveStatus(`Auto-launch on startup ${enabled ? 'enabled' : 'disabled'}.`);
+    setTimeout(() => setSaveStatus(null), 2500);
+  };
+
+  const handleTogglePrivacy = (key: string, val: boolean) => {
+    const updated = {
+      ...config,
+      privacy: {
+        ...config.privacy,
+        [key]: val
+      }
+    };
+    setConfig(updated);
+    socket.sendEvent({
+      type: 'config.update_request',
+      config: updated
+    });
+    setSaveStatus('Privacy settings updated.');
+    setTimeout(() => setSaveStatus(null), 2500);
+  };
 
   const handleExportMemories = () => {
     const handleMemResponse = (e: any) => {
@@ -192,6 +221,7 @@ export const SettingsLayout: React.FC = () => {
       const ev = event.detail; // FIX #2: event.detail IS the event object directly
       if (ev.type === 'config.sync') {
         if (ev.config) setConfig((prev: any) => ({ ...prev, ...ev.config }));
+        if (ev.autostart_enabled !== undefined) setAutostartEnabled(ev.autostart_enabled);
         if (ev.providers) {
           setProviders((prev: any) => ({ ...prev, ...ev.providers }));
           setDraftKeys(d => ({
@@ -202,6 +232,8 @@ export const SettingsLayout: React.FC = () => {
             ollamaHost: ev.providers?.ollama?.host || d.ollamaHost || 'http://localhost:11434',
           }));
         }
+      } else if (ev.type === 'config.autostart_status') {
+        if (ev.enabled !== undefined) setAutostartEnabled(ev.enabled);
       } else if (ev.type === 'provider.test_result') {
         const flat = { req_id: ev.req_id, ...ev.result };
         setTestResult(flat);
@@ -211,6 +243,7 @@ export const SettingsLayout: React.FC = () => {
     };
     window.addEventListener('arova-event', handleEvent);
     socket.sendEvent({ type: 'config.get_request' });
+    socket.sendEvent({ type: 'config.get_autostart' });
     socket.sendEvent({ type: 'diagnostics.poll' });
     return () => {
       clearInterval(pollInterval);
@@ -635,6 +668,50 @@ export const SettingsLayout: React.FC = () => {
                 {diag?.health?.wake_word_ready || diag ? '✓' : '✗'}
               </span> Wake Word Engine
             </div>
+          </div>
+        </div>
+
+        {/* System Startup & Privacy Permissions */}
+        <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px 24px', marginBottom: '16px' }}>
+          <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink)', marginBottom: '4px' }}>System Startup &amp; Privacy Permissions</div>
+          <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '18px' }}>Manage operating system startup behavior and ambient telemetry collection preferences.</div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>🚀 Launch Arova on System Startup</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Automatically start the background cognition engine when you log in.</div>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={autostartEnabled} 
+                onChange={e => handleToggleAutostart(e.target.checked)} 
+              />
+            </label>
+
+            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>📁 Workspace &amp; IDE Tracking</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Discovers active projects in VS Code, Cursor, and Terminal working directories.</div>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={config.privacy.workspace_awareness !== false} 
+                onChange={e => handleTogglePrivacy('workspace_awareness', e.target.checked)} 
+              />
+            </label>
+
+            <label className="tune-toggle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', border: '1px solid var(--hairline-2)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>🌐 Selective Research Browser Tab Capture</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px' }}>Captures relevant documentation while strictly blocking authentication, passwords, and banking.</div>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={config.privacy.browser_capture !== false} 
+                onChange={e => handleTogglePrivacy('browser_capture', e.target.checked)} 
+              />
+            </label>
           </div>
         </div>
 

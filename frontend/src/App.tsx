@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Room } from './components/layout/Room';
 import { Environment } from './components/layout/Environment';
 import { SpatialRail } from './components/layout/SpatialRail';
@@ -13,6 +13,7 @@ import { CursorBleed } from './components/effects/CursorBleed';
 import { MemoryConsentPopup } from './components/effects/MemoryConsentPopup';
 import { PersonalMemoryPolicyDialog } from './components/effects/PersonalMemoryPolicyDialog';
 import { StartupOverlay } from './components/effects/StartupOverlay';
+import { OnboardingModal } from './components/effects/OnboardingModal';
 import { useCognitionState, useEnvironmentState, usePresenceState, useSurfaceState } from './state';
 import { fetchStreamItems, fetchAwareness } from './ipc';
 import { socket } from './runtime/socket';
@@ -25,6 +26,9 @@ function App() {
   const { setItems } = useCognitionState();
   const { setFragments } = useEnvironmentState();
   const { atmosphere, mode } = usePresenceState();
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    return localStorage.getItem('arova_onboarding_completed') !== 'true';
+  });
 
   useEffect(() => {
     // ONLY load placeholder content if explicit demo mode is on
@@ -240,6 +244,9 @@ function App() {
       </Environment>
       <MemoryConsentPopup />
       <PersonalMemoryPolicyDialog />
+      {showOnboarding && (
+        <OnboardingModal onComplete={() => setShowOnboarding(false)} />
+      )}
     </>
   );
 }

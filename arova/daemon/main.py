@@ -55,6 +55,95 @@ def _setup_daemon_logging():
 
     sys.excepthook = _uncaught_exception_handler
 
+def set_system_autostart(enabled: bool) -> bool:
+    import sys, os
+    try:
+        if sys.platform == "win32":
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            if enabled:
+                local_app_data = os.environ.get("LOCALAPPDATA", "")
+                exe_path = os.path.join(local_app_data, "Arova", "arova.exe")
+                if not os.path.exists(exe_path):
+                    exe_path = os.path.abspath(sys.argv[0])
+                winreg.SetValueEx(key, "Arova", 0, winreg.REG_SZ, f'"{exe_path}"')
+            else:
+                try:
+                    winreg.DeleteValue(key, "Arova")
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+            return True
+        elif sys.platform == "darwin":
+            plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+            plist_path = os.path.join(plist_dir, "com.arova.desktop.plist")
+            if enabled:
+                os.makedirs(plist_dir, exist_ok=True)
+                plist_content = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.arova.desktop</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Arova.app/Contents/MacOS/Arova</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"""
+                with open(plist_path, "w", encoding="utf-8") as f:
+                    f.write(plist_content)
+            else:
+                if os.path.exists(plist_path):
+                    os.remove(plist_path)
+            return True
+        else:
+            autostart_dir = os.path.expanduser("~/.config/autostart")
+            desktop_path = os.path.join(autostart_dir, "arova.desktop")
+            if enabled:
+                os.makedirs(autostart_dir, exist_ok=True)
+                desk_content = """[Desktop Entry]
+Name=Arova
+Comment=Persistent working memory for knowledge work
+Exec=arova
+Terminal=false
+Type=Application
+Categories=Utility;Productivity;
+StartupNotify=true
+"""
+                with open(desktop_path, "w", encoding="utf-8") as f:
+                    f.write(desk_content)
+            else:
+                if os.path.exists(desktop_path):
+                    os.remove(desktop_path)
+            return True
+    except Exception as e:
+        logging.error(f"set_system_autostart error: {e}")
+        return False
+
+def is_system_autostart_enabled() -> bool:
+    import sys, os
+    try:
+        if sys.platform == "win32":
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
+                val, _ = winreg.QueryValueEx(key, "Arova")
+                winreg.CloseKey(key)
+                return bool(val)
+            except FileNotFoundError:
+                return False
+        elif sys.platform == "darwin":
+            return os.path.exists(os.path.expanduser("~/Library/LaunchAgents/com.arova.desktop.plist"))
+        else:
+            return os.path.exists(os.path.expanduser("~/.config/autostart/arova.desktop"))
+    except Exception:
+        return False
+
 _setup_daemon_logging()
 
 
@@ -256,7 +345,21 @@ class ArovaDaemon:
             self.ws_manager.broadcast({
                 "type": "config.sync",
                 "config": manager.load_config(),
-                "providers": manager.load_providers()
+                "providers": manager.load_providers(),
+                "autostart_enabled": is_system_autostart_enabled()
+            })
+        elif payload.get("type") == "config.get_autostart":
+            self.ws_manager.broadcast({
+                "type": "config.autostart_status",
+                "enabled": is_system_autostart_enabled()
+            })
+        elif payload.get("type") == "config.set_autostart":
+            enabled = bool(payload.get("enabled", True))
+            success = set_system_autostart(enabled)
+            self.ws_manager.broadcast({
+                "type": "config.autostart_status",
+                "enabled": is_system_autostart_enabled() if success else not enabled,
+                "success": success
             })
         elif payload.get("type") in ["workspace.get_request", "workspace.sync_request"]:
             if hasattr(self.runtime, 'workspace_manager'):
