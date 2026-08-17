@@ -366,6 +366,26 @@ class ArovaDaemon:
                 "providers": manager.load_providers(),
                 "autostart_enabled": is_system_autostart_enabled()
             })
+        elif payload.get("type") == "onboarding.accepted":
+            consent_record = payload.get("consent", {})
+            try:
+                import json
+                from pathlib import Path
+                consent_dir = Path.home() / ".config" / "arova"
+                consent_dir.mkdir(parents=True, exist_ok=True)
+                consent_path = consent_dir / "consent.json"
+                with open(consent_path, "w", encoding="utf-8") as f:
+                    json.dump(consent_record, f, indent=2)
+                
+                cache_dir = Path.home() / ".cache" / "arova"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                with open(cache_dir / "onboarding_agreement.json", "w", encoding="utf-8") as f:
+                    json.dump(consent_record, f, indent=2)
+                
+                logging.info(f"Main: Onboarding agreement and consent record saved to {consent_path}")
+                self.ws_manager.broadcast({"type": "onboarding.consent_persisted", "status": "ok"})
+            except Exception as e:
+                logging.error(f"Failed to persist onboarding consent: {e}")
         elif payload.get("type") == "config.get_autostart":
             self.ws_manager.broadcast({
                 "type": "config.autostart_status",

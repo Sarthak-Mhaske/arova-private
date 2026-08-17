@@ -27,7 +27,7 @@ function App() {
   const { setFragments } = useEnvironmentState();
   const { atmosphere, mode } = usePresenceState();
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
-    return localStorage.getItem('arova_onboarding_completed') !== 'true';
+    return localStorage.getItem('arova_onboarding_completed') !== 'true' || localStorage.getItem('arova_terms_agreed') !== 'true';
   });
 
   useEffect(() => {

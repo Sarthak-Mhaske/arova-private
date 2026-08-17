@@ -218,13 +218,33 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
       });
     }
 
+    const consentRecord = {
+      version: '1.0.0',
+      agreed_at: new Date().toISOString(),
+      timestamp: Math.floor(Date.now() / 1000),
+      terms_accepted: true,
+      privacy_policy_accepted: true,
+      permissions: {
+        workspace_tracking: permissions.workspace_tracking,
+        browser_capture: permissions.browser_capture,
+        voice_audio: permissions.voice_audio,
+        desktop_automation: permissions.desktop_automation
+      },
+      provider,
+      autostart,
+      theme,
+      system_signature: 'arova-local-consent-v1'
+    };
+
+    // Save consent agreement copy to system daemon & cache
     socket.sendEvent({
-      type: 'config.set_autostart',
-      enabled: autostart
+      type: 'onboarding.accepted',
+      consent: consentRecord
     });
 
     localStorage.setItem('arova_onboarding_completed', 'true');
     localStorage.setItem('arova_terms_agreed', 'true');
+    localStorage.setItem('arova_onboarding_agreement', JSON.stringify(consentRecord));
     localStorage.setItem('arova_autostart', autostart ? 'true' : 'false');
 
     onComplete();
