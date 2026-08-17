@@ -283,19 +283,11 @@ export const CommandZone: React.FC = () => {
     }
   };
 
-  const pillInfo = React.useMemo(() => {
-    if (selectedModel === 'auto') return { icon: '⚡', label: 'AUTO' };
-    if (selectedModel.includes('qwen')) return { icon: '🚀', label: 'QWEN' };
-    if (selectedModel.includes('gpt-5')) return { icon: '🧠', label: 'SOL' };
-    if (selectedModel.includes('o3')) return { icon: '🧠', label: 'O3' };
-    if (selectedModel.includes('claude-sonnet')) return { icon: '🧠', label: 'SONNET' };
-    if (selectedModel.includes('claude-fable')) return { icon: '🧠', label: 'FABLE' };
-    if (selectedModel.includes('gemini-3.1')) return { icon: '🧠', label: 'GEMINI' };
-    if (selectedModel.includes('gemini-3.7')) return { icon: '⚡', label: 'FLASH' };
-    if (selectedModel.includes('llama')) return { icon: '🚀', label: 'LLAMA' };
-    if (selectedModel.includes('deepseek')) return { icon: '🚀', label: 'R1' };
-    if (selectedModel.includes('oss')) return { icon: '🔒', label: 'OSS' };
-    return { icon: '⚡', label: selectedModel.slice(0, 4).toUpperCase() };
+  const modelDisplayLabel = React.useMemo(() => {
+    if (selectedModel === 'auto') return 'Auto (Dynamic)';
+    const found = MODEL_OPTIONS.find(m => m.id === selectedModel);
+    if (!found) return selectedModel;
+    return found.name;
   }, [selectedModel]);
 
   const activeAction = useCognitionState(s => s.activeAction);
@@ -364,7 +356,7 @@ export const CommandZone: React.FC = () => {
         </div>
       )}
 
-      {/* Row containing the Chat Bar and the Vertical Model Switcher on the RIGHT */}
+      {/* Row containing the Chat Bar and the Wide & Small Model Pill on the RIGHT */}
       <div 
         className="command-row"
         style={{
@@ -372,7 +364,7 @@ export const CommandZone: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           gap: '8px',
-          width: 'min(700px, calc(100% - 40px))',
+          width: 'min(720px, calc(100% - 40px))',
           margin: '0 auto',
           position: 'relative'
         }}
@@ -434,55 +426,54 @@ export const CommandZone: React.FC = () => {
           </div>
         </div>
 
-        {/* Vertical Model Selector Button (Outside & to the RIGHT of chat bar) */}
+        {/* Wide & Small Pill Button (Outside & to the RIGHT of chat bar - Zero Emojis) */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
-            className="model-switcher-vertical-btn"
+            className="model-switcher-pill-btn"
             onClick={() => { setShowModelMenu(prev => !prev); setShowMentions(false); }}
-            title={`Active AI Model: ${selectedModel === 'auto' ? 'Auto Dynamic Routing' : selectedModel}. Click to change.`}
+            title={`Active Model: ${selectedModel === 'auto' ? 'Auto Dynamic Routing' : selectedModel}. Click to change.`}
             style={{
-              height: '46px',
-              width: '44px',
-              borderRadius: '15px',
-              background: selectedModel === 'auto' ? 'var(--glass-3, rgba(45, 38, 30, 0.8))' : 'rgba(224, 186, 117, 0.16)',
-              border: selectedModel === 'auto' ? '1px solid var(--glass-edge, rgba(255, 235, 200, 0.12))' : '1px solid rgba(224, 186, 117, 0.45)',
+              height: '34px',
+              padding: '0 13px',
+              borderRadius: '999px',
+              background: selectedModel === 'auto' ? 'var(--glass-3, rgba(45, 38, 30, 0.8))' : 'rgba(224, 186, 117, 0.15)',
+              border: selectedModel === 'auto' ? '1px solid var(--glass-edge, rgba(255, 235, 200, 0.12))' : '1px solid rgba(224, 186, 117, 0.4)',
               backdropFilter: 'blur(40px) saturate(180%)',
               WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-              boxShadow: 'var(--shadow-md, 0 4px 16px rgba(0,0,0,0.3))',
+              boxShadow: 'var(--shadow-md, 0 4px 16px rgba(0,0,0,0.25))',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '2px',
+              gap: '6px',
               cursor: 'pointer',
-              padding: '4px 2px',
               transition: 'all 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
               color: selectedModel === 'auto' ? 'var(--ink-2, #ccc)' : 'var(--accent-gold, #e0ba75)'
             }}
           >
-            <span style={{ fontSize: '13px', lineHeight: 1 }}>{pillInfo.icon}</span>
             <span style={{
-              fontSize: '8.5px',
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-              color: selectedModel === 'auto' ? 'var(--ink-2, #ccc)' : 'var(--accent-gold, #e0ba75)',
-              lineHeight: 1,
-              textTransform: 'uppercase'
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
+              whiteSpace: 'nowrap',
+              color: selectedModel === 'auto' ? 'var(--ink-2, #ccc)' : 'var(--accent-gold, #e0ba75)'
             }}>
-              {pillInfo.label}
+              {modelDisplayLabel}
             </span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
           </button>
 
-          {/* Model Selector Popover - Aligned to the RIGHT */}
+          {/* Model Selector Popover - Clean Minimal (No Emojis) */}
           {showModelMenu && (
             <div 
               ref={modelMenuRef}
               style={{
                 position: 'absolute',
-                bottom: '56px',
+                bottom: '44px',
                 right: '0',
                 width: '320px',
-                maxHeight: '460px',
+                maxHeight: '440px',
                 background: 'rgba(22, 19, 16, 0.96)',
                 border: '1px solid var(--hairline-2, rgba(255,255,255,0.12))',
                 borderRadius: '16px',
@@ -505,9 +496,12 @@ export const CommandZone: React.FC = () => {
                 </div>
                 <button 
                   onClick={() => setShowModelMenu(false)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', padding: '2px 4px', fontSize: '12px' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
                 >
-                  ✕
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
                 </button>
               </div>
 
@@ -528,7 +522,7 @@ export const CommandZone: React.FC = () => {
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink, #fff)' }}>⚡ Auto-Route (Cognitive)</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink, #fff)' }}>Auto-Route (Cognitive Routing)</span>
                     <span style={{ fontSize: '9.5px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(224, 186, 117, 0.25)', color: 'var(--accent-gold)', fontWeight: 600 }}>Default</span>
                   </div>
                   <div style={{ fontSize: '10.5px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: 1.3 }}>
@@ -536,11 +530,13 @@ export const CommandZone: React.FC = () => {
                   </div>
                 </div>
                 {selectedModel === 'auto' && (
-                  <span style={{ color: 'var(--accent-gold)', fontSize: '13px', fontWeight: 700 }}>✓</span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-gold, #e0ba75)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 )}
               </div>
 
-              {/* Categorized Models - Vertical single column list */}
+              {/* Categorized Models - Clean Typography */}
               {[
                 { cat: 'fast', label: 'Ultra-Fast & Coding (Groq LPU)', color: '#4caf50' },
                 { cat: 'frontier', label: 'Deep Frontier Reasoning', color: '#29b6f6' },

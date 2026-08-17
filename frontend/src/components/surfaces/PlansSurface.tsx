@@ -186,7 +186,7 @@ export const PlansSurface: React.FC = () => {
             whiteSpace: 'nowrap'
           }}
         >
-          ⚡ Sync Active Context
+          Sync Active Context
         </button>
       </form>
 
@@ -307,7 +307,7 @@ export const PlansSurface: React.FC = () => {
                             gap: '4px'
                           }}
                         >
-                          {isExecuting ? 'Running...' : '⚡ Execute'}
+                          {isExecuting ? 'Running...' : 'Execute'}
                         </button>
                       )}
                       {step.completed && (
