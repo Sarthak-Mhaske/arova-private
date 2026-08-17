@@ -58,17 +58,19 @@ class ProviderManager:
             self._providers["openai"] = OpenAIProvider(api_key=oai_keys[0])
             logger.info("ProviderManager: Registered OpenAI provider.")
 
-        # 3. Ollama
-        ollama_host = providers_cfg.get("ollama", {}).get("host", "http://localhost:11434")
-        from arova.core.providers.implementations.ollama_provider import OllamaProvider
-        self._providers["ollama"] = OllamaProvider(host=ollama_host)
-        logger.info(f"ProviderManager: Registered Ollama at {ollama_host}.")
+        # 3. Ollama (Only register if host is explicitly configured and not empty)
+        ollama_host = providers_cfg.get("ollama", {}).get("host", "").strip()
+        if ollama_host:
+            from arova.core.providers.implementations.ollama_provider import OllamaProvider
+            self._providers["ollama"] = OllamaProvider(host=ollama_host)
+            logger.info(f"ProviderManager: Registered Ollama at {ollama_host}.")
 
-        # 3b. LM Studio
-        lmstudio_host = providers_cfg.get("lmstudio", {}).get("host", "http://localhost:1234")
-        from arova.core.providers.implementations.lmstudio_provider import LMStudioProvider
-        self._providers["lmstudio"] = LMStudioProvider(host=lmstudio_host)
-        logger.info(f"ProviderManager: Registered LM Studio at {lmstudio_host}.")
+        # 3b. LM Studio (Only register if host is explicitly configured and not empty)
+        lmstudio_host = providers_cfg.get("lmstudio", {}).get("host", "").strip()
+        if lmstudio_host:
+            from arova.core.providers.implementations.lmstudio_provider import LMStudioProvider
+            self._providers["lmstudio"] = LMStudioProvider(host=lmstudio_host)
+            logger.info(f"ProviderManager: Registered LM Studio at {lmstudio_host}.")
 
         # 4. Anthropic
         ant_keys = providers_cfg.get("anthropic", {}).get("api_keys", [])

@@ -162,10 +162,10 @@ export const SettingsLayout: React.FC = () => {
   const [providers, setProviders] = useState({
     groq: { api_keys: [''] },
     openai: { api_keys: [''] },
-    ollama: { host: 'http://localhost:11434' }
+    ollama: { host: '' }
   });
 
-  const [draftKeys, setDraftKeys] = useState({ groq: '', openai: '', gemini: '', anthropic: '', ollamaHost: 'http://localhost:11434' });
+  const [draftKeys, setDraftKeys] = useState({ groq: '', openai: '', gemini: '', anthropic: '', ollamaHost: '' });
   const [diag, setDiag] = useState<any>(null);
 
   const [testResult, setTestResult] = useState<{ req_id: string; success: boolean; latency_ms?: number; error?: string } | null>(null);
@@ -231,7 +231,7 @@ export const SettingsLayout: React.FC = () => {
             anthropic: ev.providers?.anthropic?.api_keys?.[0] || d.anthropic || '',
             openai: ev.providers?.openai?.api_keys?.[0] || d.openai || '',
             groq: ev.providers?.groq?.api_keys?.[0] || d.groq || '',
-            ollamaHost: ev.providers?.ollama?.host || d.ollamaHost || 'http://localhost:11434',
+            ollamaHost: ev.providers?.ollama?.host || d.ollamaHost || '',
           }));
         }
       } else if (ev.type === 'config.autostart_status') {
@@ -257,11 +257,12 @@ export const SettingsLayout: React.FC = () => {
 
   const saveAndTestModel = (providerId: string) => {
     let newProviders = { ...providers };
-    const key = (draftKeys as any)[providerId] || '';
+    const rawKey = (draftKeys as any)[providerId] || '';
+    const cleanKey = rawKey.trim().replace(/^['"]|['"]$/g, '');
     if (providerId === 'ollama') {
-      newProviders = { ...providers, ollama: { host: draftKeys.ollamaHost } };
+      newProviders = { ...providers, ollama: { host: (draftKeys.ollamaHost || '').trim() } };
     } else {
-      (newProviders as any)[providerId] = { api_keys: [key] };
+      (newProviders as any)[providerId] = { api_keys: [cleanKey] };
     }
     setProviders(newProviders);
     socket.sendEvent({ type: 'config.update_request', providers: newProviders });
@@ -272,8 +273,9 @@ export const SettingsLayout: React.FC = () => {
       socket.sendEvent({
         type: 'provider.test',
         provider: providerId,
-        api_key: key,
-        host: providerId === 'ollama' ? draftKeys.ollamaHost : undefined
+        api_key: cleanKey,
+        host: providerId === 'ollama' ? draftKeys.ollamaHost.trim() : undefined,
+        req_id: providerId
       });
     }, 400);
   };
@@ -282,7 +284,10 @@ export const SettingsLayout: React.FC = () => {
     if (testResult && testResult.req_id === id) {
       return testResult.success ? 'connected' : 'error';
     }
-    if (id === 'ollama') return 'connected';
+    if (id === 'ollama') {
+      const host = (draftKeys as any).ollamaHost || (providers as any).ollama?.host;
+      return host ? 'connected' : 'missing_key';
+    }
     const key = (draftKeys as any)[id] || (providers as any)[id]?.api_keys?.[0];
     return key ? 'connected' : 'missing_key';
   };
@@ -493,7 +498,7 @@ export const SettingsLayout: React.FC = () => {
                 { id: 'gemini', name: 'Google AI (Gemini 3.1 Pro & 3.7 Flash)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
                 { id: 'anthropic', name: 'Anthropic (Claude Sonnet 5 & Fable 5)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
                 { id: 'openai', name: 'OpenAI (GPT-5.6 Sol & o3)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
-                { id: 'ollama', name: 'Ollama (Local GPT OSS & Qwen 3)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434', directUrl: 'https://ollama.com/download' }
+                { id: 'ollama', name: 'Ollama (Local GPT OSS & Qwen 3)', icon: 'ollama', isLocal: true, placeholder: 'http://127.0.0.1:11434 (optional)', directUrl: 'https://ollama.com/download' }
               ].map(p => {
                 const status = getModelStatus(p.id);
                 const isConnected = status === 'connected';

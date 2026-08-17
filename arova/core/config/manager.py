@@ -24,8 +24,10 @@ DEFAULT_CONFIG = {
 DEFAULT_PROVIDERS = {
     "groq": {"api_keys": []},
     "openai": {"api_keys": []},
+    "gemini": {"api_keys": []},
     "anthropic": {"api_keys": []},
-    "ollama": {"host": "http://localhost:11434"}
+    "openrouter": {"api_keys": []},
+    "ollama": {"host": ""}
 }
 
 class OSConfigManager:

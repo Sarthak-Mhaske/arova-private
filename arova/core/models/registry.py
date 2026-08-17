@@ -611,32 +611,33 @@ class ModelRegistry:
                 except Exception as e:
                     logger.warning("Anthropic live discovery failed: %s", e)
 
-            # 5. Discover Ollama (Local)
-            ollama_host = saved_providers.get("ollama", {}).get("host", "http://localhost:11434")
-            try:
-                async with session.get(f"{ollama_host}/api/tags", timeout=3.0) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        models = data.get("models", [])
-                        if models:
-                            live_list = []
-                            for m in models:
-                                m_name = m.get("name", "")
-                                if not m_name or denylist_pattern.search(m_name):
-                                    continue
-                                live_list.append(ModelCandidate(
-                                    id=m_name, provider="ollama",
-                                    context_window=65536 if "oss" in m_name or "r1" in m_name else 32768,
-                                    supports_tools=False, supports_images="vision" in m_name or "llava" in m_name,
-                                    supports_reasoning="qwen" in m_name or "r1" in m_name or "deepseek" in m_name or "oss" in m_name,
-                                    supports_json=True, latency_ms=1200, cost_per_1k_tokens=0.0,
-                                    selection_reason=["Discovered via local Ollama tags"]
-                                ))
-                            if live_list:
-                                self._candidates["ollama"] = live_list
-                                updated_any = True
-            except Exception as e:
-                logger.debug("Ollama live discovery unreachable: %s", e)
+            # 5. Discover Ollama (Local - only if host is configured)
+            ollama_host = saved_providers.get("ollama", {}).get("host", "").strip()
+            if ollama_host:
+                try:
+                    async with session.get(f"{ollama_host}/api/tags", timeout=2.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            models = data.get("models", [])
+                            if models:
+                                live_list = []
+                                for m in models:
+                                    m_name = m.get("name", "")
+                                    if not m_name or denylist_pattern.search(m_name):
+                                        continue
+                                    live_list.append(ModelCandidate(
+                                        id=m_name, provider="ollama",
+                                        context_window=65536 if "oss" in m_name or "r1" in m_name else 32768,
+                                        supports_tools=False, supports_images="vision" in m_name or "llava" in m_name,
+                                        supports_reasoning="qwen" in m_name or "r1" in m_name or "deepseek" in m_name or "oss" in m_name,
+                                        supports_json=True, latency_ms=1200, cost_per_1k_tokens=0.0,
+                                        selection_reason=["Discovered via local Ollama tags"]
+                                    ))
+                                if live_list:
+                                    self._candidates["ollama"] = live_list
+                                    updated_any = True
+                except Exception as e:
+                    logger.debug("Ollama live discovery unreachable: %s", e)
 
         if updated_any or force_refresh:
             self._save_to_cache()

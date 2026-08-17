@@ -126,7 +126,7 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
 
   const [provider, setProvider] = useState<'groq' | 'openai' | 'gemini' | 'anthropic' | 'ollama'>('groq');
   const [apiKey, setApiKey] = useState('');
-  const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
+  const [ollamaHost, setOllamaHost] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState<string | null>(null);
 
@@ -155,12 +155,14 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
     const handleTestResult = (e: any) => {
       const ev = e.detail;
       if (ev && ev.type === 'provider.test_result') {
-        if (ev.success) {
+        const isSuccess = Boolean(ev.success || ev.result?.success);
+        if (isSuccess) {
           setTestStatus('success');
           setTestError(null);
         } else {
           setTestStatus('error');
-          setTestError(ev.error || 'Connection failed.');
+          const errMsg = ev.error || ev.result?.error || 'Connection failed. Please check your API key.';
+          setTestError(errMsg);
         }
       }
     };
@@ -169,29 +171,49 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
   }, []);
 
   const handleTestConnection = () => {
-    if (!apiKey && provider !== 'ollama') {
+    const cleanKey = apiKey.trim().replace(/^['"]|['"]$/g, '');
+    if (provider === 'ollama') {
+      if (!ollamaHost.trim()) {
+        setTestStatus('error');
+        setTestError('Please enter your Ollama endpoint (e.g. http://127.0.0.1:11434).');
+        return;
+      }
+    } else if (!cleanKey) {
       setTestStatus('error');
       setTestError('Please enter an API key.');
       return;
     }
     setTestStatus('testing');
     setTestError(null);
+
+    // Timeout safety: reset status if daemon or network stalls
+    setTimeout(() => {
+      setTestStatus(prev => {
+        if (prev === 'testing') {
+          setTestError('Connection timed out. Please check network connectivity.');
+          return 'error';
+        }
+        return prev;
+      });
+    }, 12000);
+
     socket.sendEvent({
       type: 'provider.test',
       provider,
-      api_key: apiKey,
-      host: ollamaHost,
-      req_id: `onboarding_${provider}`
+      api_key: cleanKey,
+      host: ollamaHost.trim(),
+      req_id: `onboarding_${provider}_${Date.now()}`
     });
   };
 
   const handleFinish = () => {
-    if (apiKey || provider === 'ollama') {
+    const cleanKey = apiKey.trim().replace(/^['"]|['"]$/g, '');
+    if (cleanKey || provider === 'ollama') {
       const providersPayload: any = {};
       if (provider === 'ollama') {
-        providersPayload.ollama = { host: ollamaHost };
+        providersPayload.ollama = { host: ollamaHost.trim() };
       } else {
-        providersPayload[provider] = { api_keys: [apiKey] };
+        providersPayload[provider] = { api_keys: [cleanKey] };
       }
       socket.sendEvent({
         type: 'config.update_request',
@@ -603,7 +625,7 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
                     type="text"
                     value={ollamaHost}
                     onChange={e => setOllamaHost(e.target.value)}
-                    placeholder="http://localhost:11434"
+                    placeholder="http://127.0.0.1:11434 (leave empty if not using local Ollama)"
                     style={{
                       width: '100%',
                       padding: '12px 16px',

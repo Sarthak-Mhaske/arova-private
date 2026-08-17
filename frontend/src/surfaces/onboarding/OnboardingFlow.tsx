@@ -5,7 +5,7 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   const [step, setStep] = useState(1);
   const [intelligenceSource, setIntelligenceSource] = useState('groq');
   const [apiKey, setApiKey] = useState('');
-  const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
+  const [ollamaHost, setOllamaHost] = useState('');
   const [testResult, setTestResult] = useState<{ success: boolean; latency_ms?: number; error?: string } | null>(null);
   const [testing, setTesting] = useState(false);
 
@@ -13,10 +13,9 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     const handleEvent = (event: Event) => {
       const ev = (event as CustomEvent).detail;
       if (!ev) return;
-      // Mirror SettingsLayout: event.detail IS the daemon payload
       if (ev.type === 'provider.test_result') {
         setTesting(false);
-        setTestResult(ev.result ?? null);
+        setTestResult(ev.result || { success: Boolean(ev.success), error: ev.error });
       }
     };
 
@@ -25,13 +24,14 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   }, []);
 
   const testConnection = () => {
+    const cleanKey = apiKey.trim().replace(/^['"]|['"]$/g, '');
     setTesting(true);
     setTestResult(null);
     socket.sendEvent({ 
       type: 'provider.test', 
       provider: intelligenceSource, 
-      api_key: apiKey,
-      host: ollamaHost,
+      api_key: cleanKey,
+      host: ollamaHost.trim(),
       req_id: Date.now().toString()
     });
   };

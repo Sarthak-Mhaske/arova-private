@@ -1063,7 +1063,10 @@ class ArovaDaemon:
         self.ws_manager.broadcast({
             "type": "provider.test_result",
             "req_id": req_id,
-            "result": result
+            "provider": provider_id,
+            "success": result.get("success", False),
+            "result": result,
+            "error": result.get("error")
         })
 
     def _cleanup_orphaned_daemon_processes(self, port: int = 8765):
