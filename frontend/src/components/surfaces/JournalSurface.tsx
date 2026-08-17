@@ -70,7 +70,7 @@ const CATEGORIES: {
   }
 ];
 
-export const JournalSurface: React.FC = () => {
+export const JournalSurface: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
     try {
       const stored = localStorage.getItem('arova_dev_journal');
@@ -169,12 +169,9 @@ export const JournalSurface: React.FC = () => {
   };
 
   const exportMarkdown = () => {
-    if (entries.length === 0) return;
-    const md = entries.map(e => {
-      const cat = CATEGORIES.find(c => c.id === e.category)?.label || e.category;
-      return `### [${cat}] — ${new Date(e.timestamp).toLocaleDateString()} ${e.dateStr}\n\n${e.content}\n\n---\n`;
-    }).join('\n');
-
+    const md = `# Arova Developer Journal\nExported: ${new Date().toLocaleString()}\n\n` +
+      entries.map(e => `## [${e.category.toUpperCase()}] - ${new Date(e.timestamp).toLocaleDateString()} ${e.dateStr}\n\n${e.content}\n`).join('\n---\n\n');
+    
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -203,10 +200,12 @@ export const JournalSurface: React.FC = () => {
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif"
     }}>
       {/* Top Surface Header */}
-      <SurfaceHead 
-        title="Developer Journal & Log" 
-        sub={`${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })} · Serene workspace reflections & persistent architectural memory`} 
-      />
+      {!embedded && (
+        <SurfaceHead 
+          title="Developer Journal & Log" 
+          sub={`${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })} · Serene workspace reflections & persistent architectural memory`} 
+        />
+      )}
 
       {/* Arova Ambient Insights Bar */}
       {insights.length > 0 && (

@@ -15,7 +15,7 @@ interface TimelineEvent {
   timestamp: number;
 }
 
-export const TimelineSurface: React.FC = () => {
+export const TimelineSurface: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
   const { openSurface } = useSurfaceState();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [timeInsights, setTimeInsights] = useState<any>(null);
@@ -88,34 +88,36 @@ export const TimelineSurface: React.FC = () => {
   const filteredEvents = events.filter(e => importantOnly ? e.importance >= 0.5 : true);
 
   return (
-    <div className="surface-content" style={{ padding: '42px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <SurfaceHeader 
-          title="Cognitive Timeline" 
-          sub="Transparent view of Arova's internal cognition, time insights, and state transitions" 
-        />
-        <button
-          onClick={() => openSurface('session_timeline')}
-          style={{
-            background: 'linear-gradient(135deg, rgba(168, 129, 255, 0.2) 0%, rgba(126, 82, 245, 0.2) 100%)',
-            border: '1px solid rgba(168, 129, 255, 0.4)',
-            color: '#c4a6ff',
-            padding: '8px 16px',
-            borderRadius: '20px',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span>View Canonical Activity Stream</span>
-          <span>→</span>
-        </button>
-      </div>
+    <div className="surface-content" style={{ padding: embedded ? '16px 28px 40px' : '42px', height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      {!embedded && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <SurfaceHeader 
+            title="Cognitive Timeline" 
+            sub="Transparent view of Arova's internal cognition, time insights, and state transitions" 
+          />
+          <button
+            onClick={() => openSurface('session_timeline')}
+            style={{
+              background: 'linear-gradient(135deg, rgba(168, 129, 255, 0.2) 0%, rgba(126, 82, 245, 0.2) 100%)',
+              border: '1px solid rgba(168, 129, 255, 0.4)',
+              color: '#c4a6ff',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>View Canonical Activity Stream</span>
+            <span>→</span>
+          </button>
+        </div>
+      )}
 
       {/* Transparent Time Insights Banner */}
       {timeInsights && (
