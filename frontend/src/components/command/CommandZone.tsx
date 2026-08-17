@@ -364,7 +364,7 @@ export const CommandZone: React.FC = () => {
         </div>
       )}
 
-      {/* Row containing the Vertical Model Switcher next to the Chat Bar */}
+      {/* Row containing the Chat Bar and the Vertical Model Switcher on the RIGHT */}
       <div 
         className="command-row"
         style={{
@@ -377,7 +377,64 @@ export const CommandZone: React.FC = () => {
           position: 'relative'
         }}
       >
-        {/* Vertical Model Selector Button (Outside & next to chat bar) */}
+        {/* Main Command Bar */}
+        <div className="command" style={{ flex: 1, width: 'auto' }}>
+          <span className="leader"></span>
+          <input 
+            ref={inputRef}
+            id="command-input"
+            type="text" 
+            placeholder="Ask Arova about your work, decisions, or understanding..."  
+            value={val}
+            onChange={handleChange}
+            onKeyDown={handleInputKeyDown}
+            autoComplete="off"
+          />
+          <div className="actions">
+            <button 
+              className={`cmd-btn ${isSpeaking ? 'active speaker-speaking' : vocalize ? 'active' : ''}`} 
+              title={isSpeaking ? 'Arova is speaking — click to stop speech instantly' : vocalize ? 'Speaker: ON (Arova will speak)' : 'Speaker: MUTED (Chat responses are quiet)'}
+              onClick={handleToggleSpeaker}
+            >
+              {vocalize || isSpeaking ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>
+                </svg>
+              )}
+            </button>
+            <button 
+              className={`cmd-btn ${micActive ? 'active mic-on' : ''}`} 
+              title={micActive ? 'Microphone: ON (Listening for voice/wake word)' : 'Microphone: MUTED'}
+              onClick={handleToggleMic}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>
+              </svg>
+            </button>
+            <button 
+              className="cmd-btn" 
+              title="New Chat (Save Current Thread)"
+              onClick={clearChat}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button className="cmd-btn send" title="Send" onClick={submit}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Vertical Model Selector Button (Outside & to the RIGHT of chat bar) */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
             className="model-switcher-vertical-btn"
@@ -416,14 +473,14 @@ export const CommandZone: React.FC = () => {
             </span>
           </button>
 
-          {/* Model Selector Popover - Vertically organized & narrower */}
+          {/* Model Selector Popover - Aligned to the RIGHT */}
           {showModelMenu && (
             <div 
               ref={modelMenuRef}
               style={{
                 position: 'absolute',
                 bottom: '56px',
-                left: '0',
+                right: '0',
                 width: '320px',
                 maxHeight: '460px',
                 background: 'rgba(22, 19, 16, 0.96)',
@@ -530,63 +587,6 @@ export const CommandZone: React.FC = () => {
               })}
             </div>
           )}
-        </div>
-
-        {/* Main Command Bar */}
-        <div className="command" style={{ flex: 1, width: 'auto' }}>
-          <span className="leader"></span>
-          <input 
-            ref={inputRef}
-            id="command-input"
-            type="text" 
-            placeholder="Ask Arova about your work, decisions, or understanding..."  
-            value={val}
-            onChange={handleChange}
-            onKeyDown={handleInputKeyDown}
-            autoComplete="off"
-          />
-          <div className="actions">
-            <button 
-              className={`cmd-btn ${isSpeaking ? 'active speaker-speaking' : vocalize ? 'active' : ''}`} 
-              title={isSpeaking ? 'Arova is speaking — click to stop speech instantly' : vocalize ? 'Speaker: ON (Arova will speak)' : 'Speaker: MUTED (Chat responses are quiet)'}
-              onClick={handleToggleSpeaker}
-            >
-              {vocalize || isSpeaking ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                  <line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>
-                </svg>
-              )}
-            </button>
-            <button 
-              className={`cmd-btn ${micActive ? 'active mic-on' : ''}`} 
-              title={micActive ? 'Microphone: ON (Listening for voice/wake word)' : 'Microphone: MUTED'}
-              onClick={handleToggleMic}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>
-              </svg>
-            </button>
-            <button 
-              className="cmd-btn" 
-              title="New Chat (Save Current Thread)"
-              onClick={clearChat}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </button>
-            <button className="cmd-btn send" title="Send" onClick={submit}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
       <div className="command-hint" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
