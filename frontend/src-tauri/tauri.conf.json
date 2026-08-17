@@ -45,10 +45,7 @@
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.15",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "Arova requires microphone access for voice queries, wake word detection, and ambient audio interaction.",
-        "NSSpeechRecognitionUsageDescription": "Arova uses speech recognition to convert voice commands into cognitive actions."
-      }
+      "infoPlist": "Info.plist"
     },
     "windows": {
       "nsis": {
