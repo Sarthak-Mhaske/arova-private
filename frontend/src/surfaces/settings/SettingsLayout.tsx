@@ -480,11 +480,11 @@ export const SettingsLayout: React.FC = () => {
           {/* AI Providers Cards List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
             {[
-              { id: 'gemini', name: 'Google AI', icon: 'google', placeholder: 'AIzaSy...' },
-              { id: 'openai', name: 'OpenAI', icon: 'openai', placeholder: 'sk-...' },
-              { id: 'anthropic', name: 'Anthropic', icon: 'anthropic', placeholder: 'sk-ant-...' },
-              { id: 'groq', name: 'Groq', icon: 'groq', placeholder: 'gsk_...' },
-              { id: 'ollama', name: 'Ollama (Local)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434' }
+              { id: 'gemini', name: 'Google AI', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
+              { id: 'openai', name: 'OpenAI', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
+              { id: 'anthropic', name: 'Anthropic', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
+              { id: 'groq', name: 'Groq', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
+              { id: 'ollama', name: 'Ollama (Local)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434', directUrl: 'https://ollama.com/download' }
             ].map(p => {
               const status = getModelStatus(p.id);
               const isConnected = status === 'connected';
@@ -587,26 +587,34 @@ export const SettingsLayout: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Expandable Key/URL Config Input */}
+                  {/* Expandable Key/URL Config Input with Direct Console Link */}
                   {isExpanded && (
                     <div style={{ padding: '16px 24px', borderTop: '1px solid var(--hairline-2)', background: 'rgba(0,0,0,0.2)' }}>
-                      <div style={{ marginBottom: '12px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--ink-3)', display: 'block', marginBottom: '6px', fontWeight: 500 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--ink-3)', fontWeight: 500 }}>
                           {p.isLocal ? 'Ollama Host Endpoint' : `${p.name} Secret API Key`}
                         </label>
-                        <input 
-                          className="tune-input"
-                          type={p.isLocal ? 'text' : 'password'} 
-                          value={p.isLocal ? draftKeys.ollamaHost : (draftKeys as any)[p.id] || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (p.isLocal) setDraftKeys(d => ({ ...d, ollamaHost: val }));
-                            else setDraftKeys(d => ({ ...d, [p.id]: val }));
-                          }}
-                          placeholder={p.placeholder} 
-                        />
+                        <a
+                          href={p.directUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: '12px', color: 'var(--accent-amber)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}
+                        >
+                          Get {p.name} Key ↗
+                        </a>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                      <input 
+                        className="tune-input"
+                        type={p.isLocal ? 'text' : 'password'} 
+                        value={p.isLocal ? draftKeys.ollamaHost : (draftKeys as any)[p.id] || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (p.isLocal) setDraftKeys(d => ({ ...d, ollamaHost: val }));
+                          else setDraftKeys(d => ({ ...d, [p.id]: val }));
+                        }}
+                        placeholder={p.placeholder} 
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
                         <button className="tune-btn primary" onClick={() => saveAndTestModel(p.id)}>
                           Save &amp; Test Connection
                         </button>
