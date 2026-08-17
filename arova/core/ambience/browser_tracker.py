@@ -15,20 +15,27 @@ class BrowserTabCapture:
     Scans Chrome, Brave, Chromium, Firefox, and Edge session & history databases
     to extract authentic visited URLs and page titles.
     """
-    # Dangerous / Sensitive categories that should NEVER be captured or restored
+    # Dangerous / Sensitive categories and noise that should NEVER be captured or restored
     CRITICAL_PRIVACY_PATTERNS = [
         # 1. Banking, Payments, and Crypto/Trading
         "bank", "paypal.com", "stripe.com", "razorpay.com", "chase.com", "wellsfargo.com",
         "zerodha.com", "groww.in", "hdfcbank.com", "icicibank.com", "sbi.co.in", "checkout", "billing", "payment",
-        # 2. Authentication, Credential Resets & Secrets
-        "password", "reset_password", "two-factor", "2fa", "accounts.google.com/signin",
-        "/setosid", "/servicelogin", "token=", "session_token=",
+        # 2. Authentication, Credential Resets, Identity Providers & SSO
+        "password", "reset_password", "two-factor", "2fa", "accounts.google.com", "login.microsoftonline.com",
+        "login.live.com", "auth0.com", "okta.com", "idp.", "/oauth2/", "/setosid", "/servicelogin",
+        "token=", "session_token=", "signin", "signup", "saml", "login.windows.net", "appleid.apple.com",
         # 3. Sensitive Personal (Health, Tax, Legal, Govt IDs)
         "tax", "irs.gov", "incometax", "aadhaar", "passport", "health", "medical",
-        # 4. Search Engine Noise & Captchas
+        # 4. Search Engine Noise, Captchas, and Bot Protection
         "google.com/search", "google.com/sorry", "bing.com/search", "duckduckgo.com/?q=", "recaptcha", "cloudflare.com",
-        # 5. Social Media Entertainment & Distractions
-        "instagram.com", "tiktok.com", "facebook.com", "twitter.com", "x.com", "pinterest.com"
+        # 5. Social Media Entertainment & Ephemeral Distractions
+        "instagram.com", "tiktok.com", "facebook.com", "twitter.com", "x.com", "pinterest.com",
+        "web.whatsapp.com", "messenger.com", "chat.google.com",
+        # 6. Transient HTTP Error Pages & Not Found
+        "page not found", "404 not found", "500 internal server error", "access denied", "bad gateway",
+        "site can't be reached", "error 404", "403 forbidden", "github.com/404",
+        # 7. Internal Arova and Local Dev Bridges
+        "localhost:8765", "127.0.0.1:8765", "localhost:5173", "127.0.0.1:5173", "localhost:1420", "127.0.0.1:1420"
     ]
 
     @classmethod
@@ -41,7 +48,11 @@ class BrowserTabCapture:
             return True
 
         # Pure raw IPs without port/app
-        if url_lower.rstrip('/') in ["http://127.0.0.1", "http://localhost"]:
+        if url_lower.rstrip('/') in ["http://127.0.0.1", "http://localhost", "https://localhost"]:
+            return True
+
+        # Generic blank or browser default titles
+        if title_lower in ["new tab", "home", "untitled", "about:blank", "loading...", "page not found"]:
             return True
 
         return False
@@ -49,58 +60,63 @@ class BrowserTabCapture:
     @staticmethod
     def _clean_url(url: str, title: str = "") -> tuple:
         """
-        Strips tracking bloat and normalizes communication/collaboration web apps
-        to privacy-safe, clean top-level URLs without deep message IDs or sensitive tokens.
+        Strips tracking bloat, canonicalizes subdomains, cleans badge notifications,
+        and groups commit/hash URLs into the parent repository context.
         Returns (clean_url, optional_sanitized_title).
         """
         import urllib.parse
+        import re
         try:
+            # Clean notification badges like '(3) ', '(12) ', '[5] ' from title
+            clean_title = re.sub(r'^\s*[\(\[]\d+[\)\]]\s*', '', title).strip() if title else ""
+            
+            # Clean browser name suffixes from title
+            for suffix in [" - Google Chrome", " - Brave", " - Mozilla Firefox", " - Microsoft Edge", " - Chromium", " - Arc"]:
+                if clean_title.endswith(suffix):
+                    clean_title = clean_title[:-len(suffix)].strip()
+
             parsed = urllib.parse.urlparse(url)
             netloc = parsed.netloc.lower()
-            path = parsed.path.lower()
+            path = parsed.path.rstrip('/')
 
-            # 1. Communication & Collaboration Apps (Sanitize to clean top-level web app)
-            if "mail.google.com" in netloc:
-                return "https://mail.google.com/mail/u/0/", "Gmail"
-            if "web.whatsapp.com" in netloc:
-                return "https://web.whatsapp.com/", "WhatsApp Web"
-            if "outlook.live.com" in netloc or "outlook.office.com" in netloc or "outlook.office365.com" in netloc:
-                return "https://outlook.live.com/mail/", "Outlook"
-            if "web.telegram.org" in netloc:
-                return "https://web.telegram.org/", "Telegram Web"
-            if "meet.google.com" in netloc:
-                clean_path = parsed.path.split('?')[0]
-                return f"https://meet.google.com{clean_path}", "Google Meet"
-            if "zoom.us" in netloc and "/j/" in path:
-                return f"https://zoom.us{parsed.path.split('?')[0]}", "Zoom Meeting"
-            if "app.slack.com" in netloc:
-                return f"https://app.slack.com{parsed.path.split('?')[0]}", "Slack"
-            if "discord.com" in netloc:
-                return "https://discord.com/app", "Discord"
-            if "teams.microsoft.com" in netloc or "teams.live.com" in netloc:
-                return "https://teams.microsoft.com/", "Microsoft Teams"
+            # Canonicalize Padlet domains (padlet.app -> padlet.com)
+            if netloc == "padlet.app":
+                netloc = "padlet.com"
+
+            # 1. Canonicalize GitHub commit/pull hash pages to main repo or clean PR/Issue title
+            if "github.com" in netloc:
+                parts = [p for p in path.split('/') if p]
+                if len(parts) >= 4 and parts[2] in ["commit", "commits"]:
+                    # Group commit pages under the repository
+                    repo_url = f"https://github.com/{parts[0]}/{parts[1]}"
+                    return repo_url, f"{parts[0]}/{parts[1]} · GitHub"
+                elif len(parts) >= 4 and parts[2] in ["pull", "issues"]:
+                    clean_path = f"/{parts[0]}/{parts[1]}/{parts[2]}/{parts[3]}"
+                    return f"https://github.com{clean_path}", clean_title or f"GitHub #{parts[3]}"
 
             # 2. General URLs: strip tracking query parameters
             qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=False)
             filtered_qs = {
                 k: v for k, v in qs.items() 
-                if not any(k.startswith(p) or k == p for p in ["gs_lcrp", "google_abuse", "sei", "sourceid", "oq", "sclient", "utm_source", "utm_medium", "utm_campaign", "pli", "authuser", "ref", "fbclid"])
+                if not any(k.startswith(p) or k == p for p in [
+                    "gs_lcrp", "google_abuse", "sei", "sourceid", "oq", "sclient", 
+                    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+                    "pli", "authuser", "ref", "fbclid", "gclid", "v", "_ga"
+                ])
             }
             new_query = urllib.parse.urlencode(filtered_qs, doseq=True)
-            clean = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
-            return clean.rstrip('?'), None
+            clean = urllib.parse.urlunparse((parsed.scheme or "https", netloc, path, parsed.params, new_query, ""))
+            return clean.rstrip('?'), (clean_title if clean_title != title else None)
         except Exception:
             return url, None
 
     @staticmethod
     def _categorize_url(url: str, title: str) -> str:
         text = f"{url} {title}".lower()
-        if any(k in text for k in ["mail.google.com", "web.whatsapp.com", "meet.google.com", "slack.com", "discord.com", "teams.microsoft.com", "zoom.us", "telegram.org", "outlook.live.com"]):
-            return "communication"
-        if any(k in text for k in ["youtube.com/watch", "youtu.be", "tutorial", "learn", "course", "docs", "documentation", "arxiv", "paper", "medium.com", "dev.to", "wikipedia"]):
-            return "study"
         if any(k in text for k in ["github.com", "gitlab.com", "localhost", "stack overflow", "stackoverflow.com", "api", "dashboard", "jira", "confluence", "linear.app", "notion.so"]):
             return "development"
+        if any(k in text for k in ["youtube.com/watch", "youtu.be", "tutorial", "learn", "course", "docs", "documentation", "arxiv", "paper", "medium.com", "dev.to", "wikipedia", "arena.ai", "padlet"]):
+            return "research"
         return "general"
 
     @staticmethod
@@ -111,6 +127,7 @@ class BrowserTabCapture:
         """
         urls: List[Dict[str, str]] = []
         seen_urls = set()
+        seen_titles = set()
         now = time.time()
 
         # Chrome/Brave epoch: microseconds since Jan 1, 1601 UTC
@@ -182,8 +199,11 @@ class BrowserTabCapture:
                     # Check noise & privacy filter on sanitized URL
                     if BrowserTabCapture._is_noise_url(clean_url, final_title):
                         continue
-                    if clean_url not in seen_urls:
+
+                    title_key = final_title.strip().lower()
+                    if clean_url not in seen_urls and title_key not in seen_titles:
                         seen_urls.add(clean_url)
+                        seen_titles.add(title_key)
                         cat = BrowserTabCapture._categorize_url(clean_url, final_title)
                         urls.append({
                             "url": clean_url,

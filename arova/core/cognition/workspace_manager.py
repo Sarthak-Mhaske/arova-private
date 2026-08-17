@@ -480,6 +480,19 @@ class WorkspaceManager:
         # 5. Generic desktop application
         parts = [p.strip() for p in win_clean.split(" - ") if p.strip()]
         app_name = parts[0] if parts else win_clean
+        
+        # Filter out ephemeral OS system windows & background shell widgets
+        ephemeral_system_windows = [
+            "settings", "search", "task manager", "taskmgr", "calculator", "calc",
+            "volume control", "sound settings", "system settings", "control panel",
+            "snipping tool", "snip & sketch", "notification center", "quick settings",
+            "start menu", "taskbar", "shell experience host", "lockapp", "searchapp",
+            "cortana", "copilot", "arova", "arovad", "frontend", "tauri", "npm", "cargo",
+            "program manager", "desktop", "xprintidle", "root"
+        ]
+        if any(e == win_lower or win_lower.startswith(e) or f" {e} " in f" {win_lower} " for e in ephemeral_system_windows):
+            return None
+
         if any(w in win_lower for w in ["arova", "arovad", "frontend", "tauri"]):
             return None
         return {
@@ -791,17 +804,15 @@ class WorkspaceManager:
                         "action_label": f"Restore terminal session ({disp_cwd})"
                     })
             elif r_cat == "browser" or r_type in ["browser", "url"] or identity.startswith("http"):
-                clean_url = identity.replace("url://", "").strip()
-                u_lower = clean_url.lower()
+                clean_raw_url = identity.replace("url://", "").strip()
+                from arova.core.ambience.browser_tracker import BrowserTabCapture
                 
-                # Filter out junk URLs, internal daemons, and noise
-                junk_signatures = [
-                    "newtab", "about:blank", "chrome://", "brave://", "edge://", "firefox://",
-                    "localhost:8765", "127.0.0.1:8765", "localhost:5173", "127.0.0.1:5173",
-                    "/accounts/setosid", "/servicelogin", "google.com/sorry", "google.com/search",
-                    "facebook.com", "instagram.com", "tiktok.com", "twitter.com", "x.com"
-                ]
-                if any(sig in u_lower for sig in junk_signatures):
+                raw_title = v.get("summary") or v.get("title") or clean_raw_url
+                clean_url, custom_title = BrowserTabCapture._clean_url(clean_raw_url, raw_title)
+                final_title = custom_title or raw_title
+                
+                # Layer 1: Strict noise, auth, and error page filtering
+                if BrowserTabCapture._is_noise_url(clean_url, final_title):
                     continue
 
                 host = clean_url
@@ -812,27 +823,32 @@ class WorkspaceManager:
                         host = parsed_u.netloc
                 except Exception:
                     pass
-                
-                raw_title = v.get("summary") or v.get("title") or host
-                # Clean browser name suffixes from title
-                b_title = raw_title
-                for suffix in [" - Google Chrome", " - Brave", " - Mozilla Firefox", " - Microsoft Edge", " - Chromium"]:
-                    if b_title.endswith(suffix):
-                        b_title = b_title[:-len(suffix)].strip()
-                
-                # Skip tabs with generic or empty titles
-                if b_title.lower() in ("new tab", "brave", "google chrome", "firefox", "home"):
-                    continue
 
-                browser_app = v.get("app") or "Browser"
-                if not any(b["url"] == clean_url or b["title"] == b_title for b in categorized_browsers):
+                # Layer 2: Canonical cross-domain and title deduplication
+                title_key = final_title.strip().lower()
+                if not any(b["url"] == clean_url or b["title"].strip().lower() == title_key for b in categorized_browsers):
+                    browser_app = v.get("app") or "Browser"
+                    
+                    # Layer 3: Cognitive relevance scoring
+                    score = 0
+                    proj_tokens = [t.lower() for t in ws.title.split() if len(t) > 2]
+                    url_and_title = f"{clean_url} {final_title}".lower()
+                    if any(tok in url_and_title for tok in proj_tokens):
+                        score += 50
+                    if any(dev in url_and_title for dev in ["github.com", "gitlab.com", "docs", "api", "tutorial", "architecture"]):
+                        score += 30
+                    if v.get("last_seen"):
+                        # Bonus for recency
+                        score += min(20, max(0, int((v["last_seen"] - (time.time() - 3600)) / 180)))
+
                     categorized_browsers.append({
                         "id": clean_url,
                         "url": clean_url,
-                        "title": b_title,
+                        "title": final_title,
                         "domain": host,
                         "app": browser_app,
-                        "action_label": f"Open tab: {b_title}"
+                        "score": score,
+                        "action_label": f"Open tab: {final_title}"
                     })
             elif r_cat == "editor" or r_type in ["vscode", "editor", "file"] or (identity.startswith("/") and not identity.startswith("http")):
                 clean_path = identity.replace("file://", "").strip()
@@ -875,20 +891,41 @@ class WorkspaceManager:
                     })
             elif r_cat == "app" or r_type == "window":
                 app_name = v.get("app") or identity
-                if not any(w in str(app_name).lower() for w in ["arova", "arovad", "frontend", "tauri"]):
-                    if not any(a["name"] == app_name for a in categorized_apps):
-                        categorized_apps.append({
-                            "id": identity,
-                            "name": app_name,
-                            "window_title": v.get("title") or identity,
-                            "app": app_name,
-                            "action_label": f"Launch {app_name}"
-                        })
+                app_name_lower = str(app_name).lower()
+                
+                # Layer 1: Filter out OS shell utilities and background widgets
+                ephemeral_apps = [
+                    "settings", "search", "task manager", "taskmgr", "calculator", "calc",
+                    "volume control", "sound settings", "system settings", "control panel",
+                    "snipping tool", "snip & sketch", "notification center", "quick settings",
+                    "start menu", "taskbar", "shell experience host", "lockapp", "searchapp",
+                    "cortana", "copilot", "arova", "arovad", "frontend", "tauri", "npm", "cargo"
+                ]
+                if any(e == app_name_lower or app_name_lower.startswith(e) for e in ephemeral_apps):
+                    continue
 
+                if not any(a["name"] == app_name for a in categorized_apps):
+                    categorized_apps.append({
+                        "id": identity,
+                        "name": app_name,
+                        "window_title": v.get("title") or identity,
+                        "app": app_name,
+                        "action_label": f"Launch {app_name}"
+                    })
+
+        # Layer 4: Working set synthesis & curation
         # Deduplicate bare project folder when specific files in the project are present
         has_specific_files = any(e.get("name") and "." in e.get("name") for e in categorized_editors)
         if has_specific_files:
             categorized_editors = [e for e in categorized_editors if "." in e.get("name") or (e.get("path") != active_path and e.get("name") != os.path.basename(active_path))]
+
+        # Sort browser tabs by cognitive relevance score and limit to top 4-5 high-signal items
+        categorized_browsers.sort(key=lambda x: x.get("score", 0), reverse=True)
+        categorized_browsers = categorized_browsers[:5]
+
+        # Limit editors to top 4 and apps to top 3
+        categorized_editors = categorized_editors[:4]
+        categorized_apps = categorized_apps[:3]
 
         return {
             "workspace_id": ws.workspace_id,
@@ -919,10 +956,10 @@ class WorkspaceManager:
             "options": {
                 "restore_vscode": True,
                 "restore_terminal": True,
-                "restore_chrome": False,
+                "restore_chrome": len(categorized_browsers) > 0,
                 "restore_editors": True,
-                "restore_browsers": False,
-                "restore_documentation": False
+                "restore_browsers": len(categorized_browsers) > 0,
+                "restore_documentation": len(categorized_browsers) > 0
             }
         }
 

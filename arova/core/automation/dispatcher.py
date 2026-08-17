@@ -363,7 +363,23 @@ class MediaBackend(ActionBackend):
             
         import sys
         if sys.platform == "win32":
-            command = "echo 'Media control requires additional libraries on Windows'"
+            if simulation_mode:
+                return BackendObservation(f"Simulated media command: {cmd_type}", True)
+            try:
+                import ctypes
+                vk_map = {
+                    "play_pause": 0xB3,
+                    "next_track": 0xB0,
+                    "previous_track": 0xB1,
+                    "stop": 0xB2
+                }
+                vk = vk_map.get(cmd_type, 0xB3)
+                ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+                ctypes.windll.user32.keybd_event(vk, 0, 2, 0)  # KEYEVENTF_KEYUP
+                return BackendObservation(f"Executed media command '{cmd_type}' on Windows", True)
+            except Exception as e:
+                return BackendObservation("", False, f"Win32 media key simulation failed: {e}")
+
         elif sys.platform == "darwin":
             mac_cmd = {
                 "play_pause": "playpause",
@@ -371,7 +387,7 @@ class MediaBackend(ActionBackend):
                 "previous_track": "previous track",
                 "stop": "stop"
             }.get(cmd_type, "playpause")
-            command = f"osascript -e 'tell application \"Music\" to {mac_cmd}' || osascript -e 'tell application \"Spotify\" to {mac_cmd}'"
+            command = f"osascript -e 'tell application \"Music\" to {mac_cmd}' 2>/dev/null || osascript -e 'tell application \"Spotify\" to {mac_cmd}' 2>/dev/null"
         else:
             playerctl_map = {
                 "play_pause": "play-pause",
@@ -427,9 +443,28 @@ class VolumeBackend(ActionBackend):
         if level is None:
             return BackendObservation("", False, "No volume level provided")
             
-        import sys
+        import sys, asyncio
         if sys.platform == "win32":
-            command = "echo 'Volume control requires nircmd or PowerShell script on Windows'"
+            if simulation_mode:
+                return BackendObservation(f"Simulated volume set to: {level}%", True)
+            try:
+                # Windows volume adjustment via PowerShell SendKeys
+                ps_script = f'''
+                $wsh = New-Object -ComObject WScript.Shell
+                1..50 | ForEach-Object {{ $wsh.SendKeys([char]174) }}
+                $target = [Math]::Round({level} / 2)
+                1..$target | ForEach-Object {{ $wsh.SendKeys([char]175) }}
+                '''
+                proc = await asyncio.create_subprocess_shell(
+                    f'powershell -NoProfile -Command "{ps_script}"',
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await proc.communicate()
+                return BackendObservation(f"Volume set to {level}% on Windows", True)
+            except Exception as e:
+                return BackendObservation("", False, str(e))
+
         elif sys.platform == "darwin":
             # macOS uses a 0-100 scale for output volume
             command = f"osascript -e 'set volume output volume {level}'"
@@ -441,7 +476,6 @@ class VolumeBackend(ActionBackend):
             logger.info(f"SIMULATION: Would execute volume command: {command}")
             return BackendObservation(f"Simulated volume set to: {level}%", True)
             
-        import asyncio
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -456,14 +490,33 @@ class VolumeBackend(ActionBackend):
 
 class ScreenshotBackend(ActionBackend):
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
-        import time, os
+        import time, os, sys, asyncio
         filename = f"screenshot_{int(time.time())}.png"
         filepath = os.path.expanduser(f"~/Pictures/{filename}")
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         
-        import sys
+        if simulation_mode:
+            return BackendObservation(f"Simulated screenshot saved to {filepath}", True)
+
         if sys.platform == "win32":
-            command = "echo 'Screenshot requires powershell or Snipping Tool'"
+            try:
+                from PIL import ImageGrab
+                img = ImageGrab.grab()
+                img.save(filepath, "PNG")
+                
+                clip_proc = await asyncio.create_subprocess_shell(
+                    f"powershell -NoProfile -Command \"Set-Clipboard -Path '{filepath}'\"",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await clip_proc.communicate()
+                return BackendObservation(f"Screenshot saved to {filepath} (copied to clipboard)", True)
+            except Exception:
+                ps_cmd = f"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{{PRTSC}}')"
+                proc = await asyncio.create_subprocess_shell(f'powershell -NoProfile -Command "{ps_cmd}"')
+                await proc.communicate()
+                return BackendObservation("Screenshot taken via Windows PrintScreen", True)
+
         elif sys.platform == "darwin":
             command = f"screencapture -x '{filepath}'"
         else:
@@ -489,11 +542,6 @@ class ScreenshotBackend(ActionBackend):
             else:
                 command = f"{tool} '{filepath}'"
         
-        if simulation_mode:
-            logger.info(f"SIMULATION: Would take screenshot: {command}")
-            return BackendObservation(f"Simulated screenshot saved to {filepath}", True)
-            
-        import asyncio
         try:
             # Step 1: Take screenshot
             process = await asyncio.create_subprocess_shell(
@@ -506,14 +554,12 @@ class ScreenshotBackend(ActionBackend):
                 success = process.returncode == 0
             except asyncio.TimeoutError:
                 process.terminate()
-                return BackendObservation("", False, "Screenshot tool timed out after 5 seconds. It may be waiting for interactive input.")
+                return BackendObservation("", False, "Screenshot tool timed out after 5 seconds.")
             
             # Step 2: Copy to clipboard if successful
             if success:
                 clip_cmd = ""
-                if sys.platform == "win32":
-                    clip_cmd = f"powershell -command \"Set-Clipboard -Path '{filepath}'\""
-                elif sys.platform == "darwin":
+                if sys.platform == "darwin":
                     clip_cmd = f"osascript -e 'set the clipboard to (read (POSIX file \"{filepath}\") as JPEG picture)'"
                 else:
                     from arova.core.context import detect_display_server, _command_exists
@@ -780,18 +826,52 @@ class FocusWindowBackend(ActionBackend):
         if not window_name:
             return BackendObservation("", False, "No window_name provided")
         
-        import sys, asyncio, shlex
-        safe_name = shlex.quote(window_name)
-        if sys.platform == "darwin":
-            command = f"osascript -e 'tell application \"{window_name}\" to activate'"
-        elif sys.platform == "win32":
-            command = f"powershell -command \"(New-Object -ComObject WScript.Shell).AppActivate('{window_name}')\""
-        else:
-            command = f"wmctrl -a {safe_name}"
-            
         if simulation_mode:
             return BackendObservation(f"Simulated focusing window: {window_name}", True)
-            
+
+        import sys, asyncio, shlex
+        target_lower = window_name.lower().strip()
+
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                found = False
+
+                def enum_win_callback(hwnd, lparam):
+                    nonlocal found
+                    if user32.IsWindowVisible(hwnd):
+                        length = user32.GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buff = ctypes.create_unicode_buffer(length + 1)
+                            user32.GetWindowTextW(hwnd, buff, length + 1)
+                            if target_lower in buff.value.lower():
+                                user32.ShowWindowAsync(hwnd, 9)  # SW_RESTORE
+                                user32.SetForegroundWindow(hwnd)
+                                found = True
+                                return False
+                    return True
+
+                ENUM_PROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+                user32.EnumWindows(ENUM_PROC(enum_win_callback), 0)
+                if found:
+                    return BackendObservation(f"Focused window '{window_name}' on Windows", True)
+                
+                # Fallback to PowerShell AppActivate
+                ps_proc = await asyncio.create_subprocess_shell(
+                    f'powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate(\'{window_name}\')"'
+                )
+                await ps_proc.communicate()
+                return BackendObservation(f"Activated window '{window_name}' via PowerShell", True)
+            except Exception as e:
+                return BackendObservation("", False, f"Windows focus window failed: {e}")
+
+        elif sys.platform == "darwin":
+            command = f"osascript -e 'tell application \"{window_name}\" to activate'"
+        else:
+            safe_name = shlex.quote(window_name)
+            command = f"wmctrl -a {safe_name}"
+
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -803,6 +883,7 @@ class FocusWindowBackend(ActionBackend):
             
             # For Linux, try hyprctl if wmctrl fails
             if not success and sys.platform.startswith("linux"):
+                safe_name = shlex.quote(window_name)
                 hypr_cmd = f"hyprctl dispatch focuswindow {safe_name}"
                 process = await asyncio.create_subprocess_shell(hypr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
                 stdout, stderr = await process.communicate()
