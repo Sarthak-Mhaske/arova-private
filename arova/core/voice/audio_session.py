@@ -56,30 +56,73 @@ class MicrophoneSession:
         self._is_capturing = True
         self._capture_generation_id += 1
         
-        def audio_callback(indata, frames, time, status):
-            if not self._is_capturing:
-                return
-            if status:
-                logging.warning(f"Microphone status: {status}")
-            # indata is numpy array, we want raw bytes for webrtcvad/stt
-            # shape is (frames, channels), dtype=int16
-            chunk = indata.tobytes()
-            self.push_chunk(chunk, 16000)
-
         try:
             import sounddevice as sd
-            self._stream = sd.InputStream(
-                samplerate=16000,
-                channels=1,
-                dtype='int16',
-                blocksize=480, # 30ms at 16kHz for WebRTC VAD (and >400 for openwakeword)
-                callback=audio_callback
-            )
+            import numpy as np
+
+            # Query default input device to see supported channels & samplerate
+            device_info = sd.query_devices(kind='input')
+            native_rate = int(device_info.get('default_samplerate', 16000))
+            max_input_channels = int(device_info.get('max_input_channels', 1))
+            target_rate = 16000
+
+            def audio_callback(indata, frames, time_info, status):
+                if not self._is_capturing:
+                    return
+                if status:
+                    logging.debug(f"Microphone status: {status}")
+                
+                try:
+                    # Convert to mono if multi-channel
+                    if indata.ndim > 1 and indata.shape[1] > 1:
+                        mono_data = indata.mean(axis=1).astype(np.int16)
+                    else:
+                        mono_data = indata.flatten().astype(np.int16)
+
+                    # Resample to 16000Hz if device rate differs
+                    if native_rate != target_rate and len(mono_data) > 0:
+                        num_target_samples = int(len(mono_data) * target_rate / native_rate)
+                        if num_target_samples > 0:
+                            indices = np.linspace(0, len(mono_data) - 1, num_target_samples)
+                            resampled = np.interp(indices, np.arange(len(mono_data)), mono_data).astype(np.int16)
+                            chunk = resampled.tobytes()
+                        else:
+                            chunk = mono_data.tobytes()
+                    else:
+                        chunk = mono_data.tobytes()
+
+                    self.push_chunk(chunk, target_rate)
+                except Exception as cb_err:
+                    logging.debug(f"audio_callback processing error: {cb_err}")
+
+            # Try opening at 16000Hz first; if driver errors, fall back to native_rate
+            stream = None
+            try:
+                stream = sd.InputStream(
+                    samplerate=16000,
+                    channels=1,
+                    dtype='int16',
+                    blocksize=480,
+                    callback=audio_callback
+                )
+                native_rate = 16000
+            except Exception as e_16k:
+                logging.info(f"MicrophoneSession: 16kHz direct open fallback ({e_16k}). Opening with hardware native rate ({native_rate}Hz, {max_input_channels}ch)...")
+                channels = max(1, min(max_input_channels, 2))
+                block_size = max(480, int(native_rate * 0.03))
+                stream = sd.InputStream(
+                    samplerate=native_rate,
+                    channels=channels,
+                    dtype='int16',
+                    blocksize=block_size,
+                    callback=audio_callback
+                )
+
+            self._stream = stream
             self._stream.start()
-            logging.info(f"MicrophoneSession: hardware capture started (gen {self._capture_generation_id}).")
+            logging.info(f"MicrophoneSession: hardware capture active (rate={native_rate}Hz, target={target_rate}Hz, gen={self._capture_generation_id}).")
         except Exception as e:
             logging.warning(f"MicrophoneSession: sounddevice unavailable ({e}); running in audio-disabled mode.")
-            logging.error(f"Failed to start hardware capture: {e}")
             self._is_capturing = False
         
     def _stop_capture(self):

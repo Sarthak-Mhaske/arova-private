@@ -86,6 +86,32 @@ export const TopAnchors: React.FC = () => {
         <span className="dot"></span> {dayName} · {timeStr}
       </div>
 
+      {/* Global Shortcut Summon Trigger Badge */}
+      <button 
+        className="anchor"
+        onClick={() => openSurface('command_palette')}
+        style={{ 
+          background: 'var(--glass-1)', 
+          border: '1px solid var(--hairline-2)', 
+          cursor: 'pointer', 
+          fontFamily: 'inherit', 
+          fontSize: '12px', 
+          color: 'var(--ink-2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '5px 10px',
+          borderRadius: '999px',
+          transition: 'all 0.2s ease'
+        }}
+        title="Press Ctrl+Space (or ⌘+Space) to summon Command Palette"
+      >
+        <span style={{ fontSize: '11px', color: 'var(--accent-amber)', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: 'rgba(217, 119, 6, 0.15)', border: '1px solid rgba(217, 119, 6, 0.25)' }}>
+          {typeof navigator !== 'undefined' && (navigator.platform?.toUpperCase().includes('MAC') || navigator.userAgent?.includes('Mac')) ? '⌘ Space' : 'Ctrl Space'}
+        </span>
+        <span style={{ fontWeight: 500 }}>Command</span>
+      </button>
+
       {/* Status Anchor */}
       <button 
         className={`anchor ${atmosphere === 'daylight' ? 'cyan' : 'sage'}`} 

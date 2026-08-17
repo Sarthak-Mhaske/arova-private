@@ -89,6 +89,10 @@ else
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Arova requires microphone access for voice queries, wake word detection, and ambient audio interaction.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Arova uses speech recognition to convert voice commands into cognitive actions.</string>
 </dict>
 </plist>
 EOF
