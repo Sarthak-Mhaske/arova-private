@@ -10,6 +10,8 @@ import { AwarenessSurface } from './AwarenessSurface';
 import { CommandPaletteSurface } from './CommandPaletteSurface';
 import { SessionTimelineSurface } from './SessionTimelineSurface';
 import { DeveloperModeSurface } from './DeveloperModeSurface';
+import { AgentsSurface } from './AgentsSurface';
+import { PlansSurface } from './PlansSurface';
 import { SettingsLayout } from '../../surfaces/settings/SettingsLayout';
 import { sheetEnter, scrimEnter, easeSpring, easeSoft } from '../../motion';
 import { WorkHubSurface } from './WorkHubSurface';
@@ -121,8 +123,8 @@ export const EmergentSurface: React.FC = () => {
             {activeSurface === 'command_palette' && <CommandPaletteSurface />}
             {activeSurface === 'session_timeline' && <SessionTimelineSurface />}
             {(activeSurface === 'developer_mode' || activeSurface === 'diagnostics' || activeSurface === 'runtime') && <DeveloperModeSurface />}
-            {activeSurface === 'agents' && <ThreadsSurface />}
-            {activeSurface === 'plans' && <WorkspaceSurface />}
+            {activeSurface === 'agents' && <AgentsSurface />}
+            {activeSurface === 'plans' && <PlansSurface />}
 
             {(activeSurface === 'settings' || activeSurface === 'system') && <SettingsLayout />}
           </MDiv>

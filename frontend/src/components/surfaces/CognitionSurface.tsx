@@ -3,11 +3,14 @@ import { useCognitionState, useSurfaceState } from '../../state';
 import { socket } from '../../runtime/socket';
 
 const PROVIDER_MODEL_NAMES: Record<string, string> = {
-  gemini: 'Gemini 2.5 Pro (Google AI)',
-  openai: 'GPT-5 (OpenAI)',
-  anthropic: 'Claude Sonnet 4 (Anthropic)',
-  groq: 'Groq Llama 3.3 (Groq)',
-  ollama: 'Ollama (Local)'
+  groq: 'Qwen 3.6 / Llama 3.3 (Groq LPU)',
+  openai: 'GPT-4o / o3-mini (OpenAI)',
+  gemini: 'Gemini 2.0 Flash / Pro (Google AI)',
+  anthropic: 'Claude 3.7 Sonnet (Anthropic)',
+  ollama: 'Qwen 2.5 Coder 32B (Local Ollama)',
+  lmstudio: 'LM Studio (Local)',
+  openrouter: 'Frontier Swarm (OpenRouter)',
+  mock: 'Local Simulation Engine'
 };
 
 export const CognitionSurface: React.FC = () => {

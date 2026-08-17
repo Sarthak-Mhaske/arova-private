@@ -268,99 +268,104 @@ class ModelRegistry:
         """
         self._candidates["groq"] = [
             ModelCandidate(
+                id="qwen-3.6-27b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=140, cost_per_1k_tokens=0.25, selection_reason=["High throughput Qwen 3.6 frontier reasoning model on Groq LPU"]
+            ),
+            ModelCandidate(
+                id="qwen-2.5-coder-32b", provider="groq", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=180, cost_per_1k_tokens=0.30, selection_reason=["High capacity Groq Qwen coding specialist model"]
+            ),
+            ModelCandidate(
                 id="llama-3.3-70b-versatile", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=300, cost_per_1k_tokens=0.59, selection_reason=["High capacity 70k TPM Groq versatile model"]
+                latency_ms=260, cost_per_1k_tokens=0.59, selection_reason=["High capacity 70k TPM Groq versatile model"]
             ),
             ModelCandidate(
                 id="llama-3.1-8b-instant", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=120, cost_per_1k_tokens=0.08, selection_reason=["High capacity 30k TPM Groq instant model"]
-            ),
-            ModelCandidate(
-                id="groq/compound", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=250, cost_per_1k_tokens=0.20, selection_reason=["High capacity 70k TPM Groq compound model"]
-            ),
-            ModelCandidate(
-                id="groq/compound-mini", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=180, cost_per_1k_tokens=0.10, selection_reason=["High capacity 70k TPM Groq mini model"]
+                latency_ms=90, cost_per_1k_tokens=0.08, selection_reason=["Ultra low latency instant Groq model"]
             )
         ]
         self._candidates["openai"] = [
             ModelCandidate(
-                id="gpt-5.6-terra", provider="openai", context_window=128000,
+                id="gpt-4o", provider="openai", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=850, cost_per_1k_tokens=2.50, selection_reason=["Baseline OpenAI reasoning model"]
+                latency_ms=450, cost_per_1k_tokens=2.50, selection_reason=["Baseline OpenAI multimodal flagship model"]
             ),
             ModelCandidate(
-                id="gpt-5.6-luna", provider="openai", context_window=128000,
-                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=450, cost_per_1k_tokens=0.15, selection_reason=["Baseline OpenAI fast model"]
+                id="o3-mini", provider="openai", context_window=200000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=650, cost_per_1k_tokens=1.10, selection_reason=["Baseline OpenAI fast reasoning model"]
             ),
             ModelCandidate(
-                id="gpt-5.4-mini", provider="openai", context_window=128000,
+                id="gpt-4o-mini", provider="openai", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=250, cost_per_1k_tokens=0.05, selection_reason=["Baseline OpenAI mini model"]
+                latency_ms=220, cost_per_1k_tokens=0.15, selection_reason=["Baseline OpenAI fast lightweight model"]
             )
         ]
         self._candidates["ollama"] = [
+            ModelCandidate(
+                id="qwen2.5-coder:32b", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=1100, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Qwen reasoning and coding model"]
+            ),
             ModelCandidate(
                 id="llama3.3", provider="ollama", context_window=128000,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
                 latency_ms=1200, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Llama 3.3 model"]
             ),
             ModelCandidate(
-                id="qwen2.5-coder:32b", provider="ollama", context_window=32768,
+                id="deepseek-r1:32b", provider="ollama", context_window=65536,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=1600, cost_per_1k_tokens=0.0, selection_reason=["Baseline local Qwen reasoning and coding model"]
+                latency_ms=1400, cost_per_1k_tokens=0.0, selection_reason=["Baseline local DeepSeek R1 reasoning model"]
             )
         ]
         self._candidates["anthropic"] = [
             ModelCandidate(
-                id="claude-opus-5", provider="anthropic", context_window=1000000,
+                id="claude-3-7-sonnet", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=850, cost_per_1k_tokens=5.00, selection_reason=["Baseline Anthropic frontier reasoning model"]
+                latency_ms=600, cost_per_1k_tokens=3.00, selection_reason=["Baseline Anthropic frontier hybrid reasoning model"]
             ),
             ModelCandidate(
-                id="claude-sonnet-5", provider="anthropic", context_window=1000000,
+                id="claude-3-5-sonnet", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=650, cost_per_1k_tokens=2.00, selection_reason=["Baseline Anthropic coding and reasoning model"]
+                latency_ms=550, cost_per_1k_tokens=3.00, selection_reason=["Baseline Anthropic coding and reasoning model"]
             ),
             ModelCandidate(
-                id="claude-haiku-4.5", provider="anthropic", context_window=200000,
+                id="claude-3-5-haiku", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=350, cost_per_1k_tokens=1.00, selection_reason=["Baseline Anthropic fast chat model"]
+                latency_ms=250, cost_per_1k_tokens=0.80, selection_reason=["Baseline Anthropic fast chat model"]
             )
         ]
         self._candidates["gemini"] = [
             ModelCandidate(
-                id="gemini-3.5-flash", provider="gemini", context_window=2000000,
+                id="gemini-2.0-flash", provider="gemini", context_window=1000000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=750, cost_per_1k_tokens=1.25, selection_reason=["Baseline Google Gemini most intelligent model"]
+                latency_ms=260, cost_per_1k_tokens=0.10, selection_reason=["Baseline Google Gemini 2.0 real-time flagship model"]
             ),
             ModelCandidate(
-                id="gemini-3.6-flash", provider="gemini", context_window=2000000,
-                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=300, cost_per_1k_tokens=0.07, selection_reason=["Baseline Google Gemini fast chat model"]
+                id="gemini-2.0-pro-exp", provider="gemini", context_window=2000000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=750, cost_per_1k_tokens=1.25, selection_reason=["Baseline Google Gemini frontier reasoning model"]
             )
         ]
         self._candidates["openrouter"] = [
             ModelCandidate(
-                id="openrouter/auto", provider="openrouter", context_window=2000000,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=500, cost_per_1k_tokens=1.00, selection_reason=["Baseline OpenRouter auto-routing meta-model"]
-            ),
-            ModelCandidate(
-                id="mistralai/mistral-large", provider="openrouter", context_window=128000,
+                id="qwen/qwen-2.5-coder-32b-instruct", provider="openrouter", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=450, cost_per_1k_tokens=2.00, selection_reason=["Baseline OpenRouter Mistral Large model"]
+                latency_ms=350, cost_per_1k_tokens=0.20, selection_reason=["OpenRouter Qwen coder reasoning model"]
             ),
             ModelCandidate(
-                id="anthropic/claude-sonnet-5", provider="openrouter", context_window=1000000,
+                id="deepseek/deepseek-r1", provider="openrouter", context_window=128000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=650, cost_per_1k_tokens=0.55, selection_reason=["OpenRouter DeepSeek R1 reasoning model"]
+            ),
+            ModelCandidate(
+                id="anthropic/claude-3.7-sonnet", provider="openrouter", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=650, cost_per_1k_tokens=2.00, selection_reason=["Baseline OpenRouter Claude coding model"]
+                latency_ms=500, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter Claude 3.7 Sonnet model"]
             )
         ]
 

@@ -448,11 +448,11 @@ export const SettingsLayout: React.FC = () => {
                   saveConfig({ ...config, preferred_provider: val });
                 }}
               >
-                <option value="groq" style={{ background: '#1a1714', color: '#f5eedb' }}>Groq (Llama 3.3 70B - Fast Cloud)</option>
-                <option value="gemini" style={{ background: '#1a1714', color: '#f5eedb' }}>Google AI (Gemini 2.5 Pro)</option>
-                <option value="openai" style={{ background: '#1a1714', color: '#f5eedb' }}>OpenAI (GPT-4o / GPT-5)</option>
+                <option value="groq" style={{ background: '#1a1714', color: '#f5eedb' }}>Groq LPU (Qwen 3.6 / Llama 3.3 - Fast Cloud)</option>
+                <option value="gemini" style={{ background: '#1a1714', color: '#f5eedb' }}>Google AI (Gemini 2.0 Flash / Pro)</option>
                 <option value="anthropic" style={{ background: '#1a1714', color: '#f5eedb' }}>Anthropic (Claude 3.7 Sonnet)</option>
-                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local Offline)</option>
+                <option value="openai" style={{ background: '#1a1714', color: '#f5eedb' }}>OpenAI (GPT-4o / o3-mini)</option>
+                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local - Qwen 2.5 Coder / Llama 3.3)</option>
               </select>
             </div>
 
@@ -489,11 +489,11 @@ export const SettingsLayout: React.FC = () => {
             {/* Providers List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {[
-                { id: 'groq', name: 'Groq (Llama 3.3)', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
-                { id: 'gemini', name: 'Google AI (Gemini)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
-                { id: 'openai', name: 'OpenAI (GPT-4o)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
-                { id: 'anthropic', name: 'Anthropic (Claude)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
-                { id: 'ollama', name: 'Ollama (Local)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434', directUrl: 'https://ollama.com/download' }
+                { id: 'groq', name: 'Groq (Qwen 3.6 & Llama 3.3)', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
+                { id: 'gemini', name: 'Google AI (Gemini 2.0)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
+                { id: 'anthropic', name: 'Anthropic (Claude 3.7)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
+                { id: 'openai', name: 'OpenAI (GPT-4o & o3-mini)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
+                { id: 'ollama', name: 'Ollama (Local Qwen / Llama)', icon: 'ollama', isLocal: true, placeholder: 'http://localhost:11434', directUrl: 'https://ollama.com/download' }
               ].map(p => {
                 const status = getModelStatus(p.id);
                 const isConnected = status === 'connected';
