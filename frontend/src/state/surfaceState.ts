@@ -2,9 +2,8 @@ import { create } from 'zustand';
 
 export type SurfaceType = 
   | 'presence' | 'work'
-  | 'cognition' | 'threads' | 'memory' | 'plans' | 'timeline'
-  | 'environment' | 'context' | 'workspace' | 'attention' | 'awareness'
-  | 'runtime' | 'agents' | 'calibration' | 'diagnostics'
+  | 'cognition' | 'threads' | 'memory' | 'timeline'
+  | 'environment' | 'workspace' | 'awareness'
   | 'settings' 
   | 'command_palette'
   | 'session_timeline'

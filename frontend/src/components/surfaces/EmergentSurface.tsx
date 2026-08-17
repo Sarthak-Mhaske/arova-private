@@ -4,15 +4,7 @@ const MDiv: any = motion.div;
 import { useSurfaceState } from '../../state';
 import { MemorySurface } from './MemorySurface';
 import { TimelineSurface } from './TimelineSurface';
-
-import { CalibrationSurface } from './CalibrationSurface';
-import { DiagnosticsSurface } from './DiagnosticsSurface';
-import { ProjectionInspector } from './ProjectionInspector';
-import { ContextSurface } from './ContextSurface';
 import { WorkspaceSurface } from './WorkspaceSurface';
-import { AttentionSurface } from './AttentionSurface';
-import { AgentsSurface } from './AgentsSurface';
-import { PlansSurface } from './PlansSurface';
 import { ThreadsSurface } from './ThreadsSurface';
 import { CognitionSurface } from './CognitionSurface';
 import { AwarenessSurface } from './AwarenessSurface';
@@ -22,7 +14,6 @@ import { DeveloperModeSurface } from './DeveloperModeSurface';
 import { JournalSurface } from './JournalSurface';
 import { SettingsLayout } from '../../surfaces/settings/SettingsLayout';
 import { sheetEnter, scrimEnter, easeSpring, easeSoft } from '../../motion';
-
 import { WorkHubSurface } from './WorkHubSurface';
 
 export const EmergentSurface: React.FC = () => {
@@ -136,14 +127,7 @@ export const EmergentSurface: React.FC = () => {
             {activeSurface === 'threads' && <ThreadsSurface />}
             {activeSurface === 'memory' && <MemorySurface />}
             {activeSurface === 'awareness' && <AwarenessSurface />}
-            {activeSurface === 'context' && <ContextSurface />}
             {activeSurface === 'workspace' && <WorkspaceSurface />}
-            {activeSurface === 'attention' && <AttentionSurface />}
-            {activeSurface === 'runtime' && <ProjectionInspector />}
-            {activeSurface === 'agents' && <AgentsSurface />}
-            {activeSurface === 'plans' && <PlansSurface />}
-            {activeSurface === 'calibration' && <CalibrationSurface />}
-            {activeSurface === 'diagnostics' && <DiagnosticsSurface />}
             {activeSurface === 'command_palette' && <CommandPaletteSurface />}
             {activeSurface === 'session_timeline' && <SessionTimelineSurface />}
             {activeSurface === 'developer_mode' && <DeveloperModeSurface />}
