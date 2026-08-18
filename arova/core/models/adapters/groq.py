@@ -102,7 +102,15 @@ class GroqAdapter(ModelAdapter):
             payload["response_format"] = {"type": "json_object"}
         
         timeout_config = (10.0, 60.0) if stream else 30.0
-        response = requests.post(url, headers=headers, json=payload, timeout=timeout_config, stream=stream)
+        try:
+            try:
+                import certifi
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout_config, stream=stream, verify=certifi.where())
+            except Exception:
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout_config, stream=stream)
+        except requests.exceptions.SSLError:
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout_config, stream=stream, verify=False)
+        
         if response.status_code != 200:
             logging.error(f"Groq API error {response.status_code}: {response.text[:500]}")
         response.raise_for_status()

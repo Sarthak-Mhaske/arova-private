@@ -127,15 +127,15 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [provider, setProvider] = useState<'groq' | 'openai' | 'gemini' | 'anthropic' | 'ollama'>('groq');
   const [apiKey, setApiKey] = useState('');
   const [ollamaHost, setOllamaHost] = useState('');
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testError, setTestError] = useState<string | null>(null);
-
   const [theme, setTheme] = useState<'nocturne' | 'daylight'>('nocturne');
   const [autostart, setAutostart] = useState(true);
 
   // Live Audio Meter Simulation for mic testing
   const [micActivity, setMicActivity] = useState(0);
   const micIntervalRef = useRef<any>(null);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testLatency, setTestLatency] = useState<number | null>(null);
 
   useEffect(() => {
     if (step === 3 && permissions.voice_audio) {
@@ -158,9 +158,11 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
         const isSuccess = Boolean(ev.success || ev.result?.success);
         if (isSuccess) {
           setTestStatus('success');
+          setTestLatency(ev.result?.latency_ms || null);
           setTestError(null);
         } else {
           setTestStatus('error');
+          setTestLatency(null);
           const errMsg = ev.error || ev.result?.error || 'Connection failed. Please check your API key.';
           setTestError(errMsg);
         }
@@ -675,10 +677,12 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
                   </button>
 
                   {testStatus === 'success' && (
-                    <span style={{ fontSize: '12px', color: 'var(--accent-sage, #16a34a)', fontWeight: 600 }}>✓ Verified connected</span>
+                    <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ✓ Connected {testLatency ? `· ${testLatency}ms latency` : ''}
+                    </span>
                   )}
                   {testStatus === 'error' && (
-                    <span style={{ fontSize: '12px', color: '#e57373' }}>{testError}</span>
+                    <span style={{ fontSize: '12px', color: '#f87171', maxWidth: '300px', textAlign: 'right' }}>{testError}</span>
                   )}
                 </div>
               </div>

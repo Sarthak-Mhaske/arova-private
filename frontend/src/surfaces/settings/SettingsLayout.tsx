@@ -144,6 +144,24 @@ const SettingsStyles = () => (
   `}</style>
 );
 
+interface ProviderItem {
+  id: string;
+  name: string;
+  icon: string;
+  placeholder: string;
+  directUrl: string;
+  isLocal?: boolean;
+}
+
+const PROVIDER_LIST: ProviderItem[] = [
+  { id: 'groq', name: 'Groq (LPU Ultra-Fast)', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
+  { id: 'gemini', name: 'Google AI (Gemini 3.1 Pro & 3.7 Flash)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
+  { id: 'anthropic', name: 'Anthropic (Claude Sonnet 5 & Fable 5)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
+  { id: 'openai', name: 'OpenAI (GPT-5.6 Sol & o3)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
+  { id: 'openrouter', name: 'OpenRouter (Multi-Provider Gateway)', icon: 'openrouter', placeholder: 'sk-or-...', directUrl: 'https://openrouter.ai/keys' },
+  { id: 'ollama', name: 'Ollama (Local On-Device Models)', icon: 'ollama', isLocal: true, placeholder: 'http://127.0.0.1:11434', directUrl: 'https://ollama.com/download' }
+];
+
 export const SettingsLayout: React.FC = () => {
   const { closeSurface } = useSurfaceState();
   const { policy, hidden } = useAwarenessState();
@@ -165,10 +183,10 @@ export const SettingsLayout: React.FC = () => {
     ollama: { host: '' }
   });
 
-  const [draftKeys, setDraftKeys] = useState({ groq: '', openai: '', gemini: '', anthropic: '', ollamaHost: '' });
+  const [draftKeys, setDraftKeys] = useState({ groq: '', openai: '', gemini: '', anthropic: '', openrouter: '', ollamaHost: '' });
   const [diag, setDiag] = useState<any>(null);
 
-  const [testResult, setTestResult] = useState<{ req_id: string; success: boolean; latency_ms?: number; error?: string } | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { testing?: boolean; success?: boolean; latency_ms?: number; error?: string; context_limit?: string }>>({});
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
   const handleToggleAutostart = (enabled: boolean) => {
@@ -231,14 +249,25 @@ export const SettingsLayout: React.FC = () => {
             anthropic: ev.providers?.anthropic?.api_keys?.[0] || d.anthropic || '',
             openai: ev.providers?.openai?.api_keys?.[0] || d.openai || '',
             groq: ev.providers?.groq?.api_keys?.[0] || d.groq || '',
+            openrouter: ev.providers?.openrouter?.api_keys?.[0] || d.openrouter || '',
             ollamaHost: ev.providers?.ollama?.host || d.ollamaHost || '',
           }));
         }
       } else if (ev.type === 'config.autostart_status') {
         if (ev.enabled !== undefined) setAutostartEnabled(ev.enabled);
       } else if (ev.type === 'provider.test_result') {
-        const flat = { req_id: ev.req_id, ...ev.result };
-        setTestResult(flat);
+        const pId = (ev.provider || ev.req_id || '').toLowerCase();
+        const isSuccess = Boolean(ev.success || ev.result?.success);
+        setTestResults(prev => ({
+          ...prev,
+          [pId]: {
+            testing: false,
+            success: isSuccess,
+            latency_ms: ev.result?.latency_ms,
+            context_limit: ev.result?.context_limit,
+            error: isSuccess ? undefined : (ev.error || ev.result?.error || 'Connection failed')
+          }
+        }));
       } else if (ev.type === 'diagnostics.sync') {
         setDiag(ev.data);
       }
@@ -266,10 +295,12 @@ export const SettingsLayout: React.FC = () => {
     }
     setProviders(newProviders);
     socket.sendEvent({ type: 'config.update_request', providers: newProviders });
-    setSaveStatus('Saving & testing...');
+    
+    // Mark provider as testing with real-time UI indicator
+    setTestResults(prev => ({ ...prev, [providerId]: { testing: true } }));
+    setSaveStatus(`Testing ${providerId.toUpperCase()} connection & latency...`);
+
     setTimeout(() => {
-      setSaveStatus(null);
-      setTestResult(null);
       socket.sendEvent({
         type: 'provider.test',
         provider: providerId,
@@ -277,19 +308,23 @@ export const SettingsLayout: React.FC = () => {
         host: providerId === 'ollama' ? draftKeys.ollamaHost.trim() : undefined,
         req_id: providerId
       });
-    }, 400);
+      setTimeout(() => setSaveStatus(null), 3000);
+    }, 200);
   };
 
-  const getModelStatus = (id: string) => {
-    if (testResult && testResult.req_id === id) {
-      return testResult.success ? 'connected' : 'error';
+  const getModelStatus = (id: string): 'connected' | 'testing' | 'error' | 'configured' | 'missing_key' => {
+    const test = testResults[id];
+    if (test) {
+      if (test.testing) return 'testing';
+      if (test.success) return 'connected';
+      if (test.error) return 'error';
     }
     if (id === 'ollama') {
       const host = (draftKeys as any).ollamaHost || (providers as any).ollama?.host;
-      return host ? 'connected' : 'missing_key';
+      return host ? 'configured' : 'missing_key';
     }
     const key = (draftKeys as any)[id] || (providers as any)[id]?.api_keys?.[0];
-    return key ? 'connected' : 'missing_key';
+    return key ? 'configured' : 'missing_key';
   };
 
   const toggleAwarenessLayer = (layer: string, current: boolean) => {
@@ -477,37 +512,38 @@ export const SettingsLayout: React.FC = () => {
               </label>
             </div>
 
-            {/* Providers Counter */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', padding: '0 4px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)' }}>Connected Model Providers</div>
-              <div style={{ fontSize: '13px', display: 'flex', gap: '12px' }}>
-                <span style={{ color: '#4caf50', fontWeight: 500 }}>
-                  {[ 'gemini', 'openai', 'groq', 'anthropic', 'ollama' ].filter(id => getModelStatus(id) === 'connected').length} Connected
+            {/* Routing Strategy Card */}
+            <div style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', padding: '20px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px' }}>Autonomous Engine Routing</div>
+              <div style={{ fontSize: '13px', color: 'var(--ink-3)', marginBottom: '14px' }}>
+                Arova continuously health-checks active models and routes tasks dynamically to minimize latency and ensure zero downtime.
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px' }}>
+                <span style={{ color: '#4caf50', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4caf50' }} />
+                  {PROVIDER_LIST.filter(p => getModelStatus(p.id) === 'connected').length} Active &amp; Verified
                 </span>
                 <span style={{ color: 'var(--ink-3)' }}>|</span>
                 <span style={{ color: '#ff9800', fontWeight: 500 }}>
-                  {[ 'gemini', 'openai', 'groq', 'anthropic', 'ollama' ].filter(id => getModelStatus(id) !== 'connected').length} Not Configured
+                  {PROVIDER_LIST.filter(p => getModelStatus(p.id) !== 'connected').length} Needs Setup / Testing
                 </span>
               </div>
             </div>
 
             {/* Providers List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {[
-                { id: 'groq', name: 'Groq (GPT OSS 120B & Qwen 3.6)', icon: 'groq', placeholder: 'gsk_...', directUrl: 'https://console.groq.com/keys' },
-                { id: 'gemini', name: 'Google AI (Gemini 3.1 Pro & 3.7 Flash)', icon: 'google', placeholder: 'AIzaSy...', directUrl: 'https://aistudio.google.com/app/apikey' },
-                { id: 'anthropic', name: 'Anthropic (Claude Sonnet 5 & Fable 5)', icon: 'anthropic', placeholder: 'sk-ant-...', directUrl: 'https://console.anthropic.com/settings/keys' },
-                { id: 'openai', name: 'OpenAI (GPT-5.6 Sol & o3)', icon: 'openai', placeholder: 'sk-...', directUrl: 'https://platform.openai.com/api-keys' },
-                { id: 'ollama', name: 'Ollama (Local GPT OSS & Qwen 3)', icon: 'ollama', isLocal: true, placeholder: 'http://127.0.0.1:11434 (optional)', directUrl: 'https://ollama.com/download' }
-              ].map(p => {
+              {PROVIDER_LIST.map(p => {
                 const status = getModelStatus(p.id);
+                const test = testResults[p.id];
                 const isConnected = status === 'connected';
+                const isTesting = status === 'testing';
                 const isExpanded = (draftKeys as any)[`expanded_${p.id}`];
 
                 return (
-                  <div key={p.id} style={{ background: 'var(--glass-1)', border: '1px solid var(--hairline-2)', borderRadius: '14px', overflow: 'hidden' }}>
+                  <div key={p.id} style={{ background: 'var(--glass-1)', border: isConnected ? '1px solid rgba(74,222,128,0.25)' : status === 'error' ? '1px solid rgba(248,113,113,0.3)' : '1px solid var(--hairline-2)', borderRadius: '14px', overflow: 'hidden' }}>
                     <div style={{ padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '240px' }}>
                         <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--hairline-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {p.icon === 'google' && (
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -532,6 +568,9 @@ export const SettingsLayout: React.FC = () => {
                           {p.icon === 'groq' && (
                             <span style={{ fontWeight: 900, fontSize: '18px', color: '#f4511e' }}>G</span>
                           )}
+                          {p.icon === 'openrouter' && (
+                            <span style={{ fontWeight: 800, fontSize: '16px', color: '#38bdf8' }}>OR</span>
+                          )}
                           {p.icon === 'ollama' && (
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.8">
                               <circle cx="12" cy="12" r="8"/>
@@ -543,25 +582,57 @@ export const SettingsLayout: React.FC = () => {
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)' }}>{p.name}</div>
-                          <div style={{ fontSize: '12px', fontWeight: 500, color: isConnected ? '#4caf50' : '#ff9800', marginTop: '2px' }}>
-                            {isConnected ? 'Connected' : 'Not Set'}
-                          </div>
+                          
+                          {/* Real-Time Live Status & Latency Feedback */}
+                          {isTesting ? (
+                            <div style={{ fontSize: '12px', color: '#38bdf8', marginTop: '3px', fontWeight: 500 }}>
+                              ⚡ Pinging API &amp; measuring latency...
+                            </div>
+                          ) : isConnected && test?.latency_ms !== undefined ? (
+                            <div style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>✓ Connected</span>
+                              <span style={{ background: 'rgba(74,222,128,0.12)', padding: '1px 6px', borderRadius: '4px', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80' }}>
+                                ⚡ {test.latency_ms} ms
+                              </span>
+                              {test.context_limit && <span style={{ color: '#86efac' }}>· {test.context_limit} context</span>}
+                            </div>
+                          ) : status === 'error' && test?.error ? (
+                            <div style={{ fontSize: '12px', color: '#f87171', marginTop: '3px', fontWeight: 500, maxWidth: '400px' }}>
+                              ✗ {test.error}
+                            </div>
+                          ) : status === 'configured' ? (
+                            <div style={{ fontSize: '12px', color: '#fbbf24', marginTop: '3px', fontWeight: 500 }}>
+                              Configured · Click Test to verify latency
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '3px' }}>
+                              Not Configured
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <button 
                           className="tune-btn"
-                          style={{ background: isConnected ? 'rgba(255,255,255,0.06)' : 'var(--accent-amber)', color: isConnected ? 'var(--ink)' : '#000', border: isConnected ? '1px solid var(--hairline-2)' : 'none', fontWeight: 600, padding: '6px 14px' }}
+                          disabled={isTesting}
+                          style={{ 
+                            background: isConnected ? 'rgba(74,222,128,0.12)' : 'var(--accent-amber)', 
+                            color: isConnected ? '#4ade80' : '#000', 
+                            border: isConnected ? '1px solid rgba(74,222,128,0.3)' : 'none', 
+                            fontWeight: 600, 
+                            padding: '6px 14px',
+                            cursor: isTesting ? 'wait' : 'pointer'
+                          }}
                           onClick={() => {
-                            if (isConnected) {
+                            if (status === 'configured' || isConnected) {
                               saveAndTestModel(p.id);
                             } else {
                               setDraftKeys((d: any) => ({ ...d, [`expanded_${p.id}`]: true }));
                             }
                           }}
                         >
-                          {isConnected ? 'Test' : 'Connect'}
+                          {isTesting ? 'Testing...' : isConnected ? 'Re-Test' : status === 'configured' ? 'Test' : 'Connect'}
                         </button>
                         <button 
                           style={{ background: 'none', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
@@ -598,9 +669,17 @@ export const SettingsLayout: React.FC = () => {
                           }}
                           placeholder={p.placeholder} 
                         />
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                          <button className="tune-btn primary" onClick={() => saveAndTestModel(p.id)}>
-                            Save &amp; Test Connection
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                          <div>
+                            {test?.error && (
+                              <span style={{ fontSize: '12px', color: '#f87171' }}>✗ {test.error}</span>
+                            )}
+                            {test?.success && test?.latency_ms !== undefined && (
+                              <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600 }}>✓ Verified connected in {test.latency_ms} ms</span>
+                            )}
+                          </div>
+                          <button className="tune-btn primary" disabled={isTesting} onClick={() => saveAndTestModel(p.id)}>
+                            {isTesting ? 'Testing...' : 'Save & Test Connection'}
                           </button>
                         </div>
                       </div>

@@ -9,10 +9,10 @@ hiddenimports = [
     'arova.daemon', 'arova.core.cognition.workspace_manager', 
     'arova.core.projection.projector', 'numpy', 'scipy', 'sklearn', 'websockets',
     'edge_tts', 'sounddevice', '_cffi_backend', 'psutil', 'PIL', 'yaml', 'pydantic',
-    'requests', 'urllib3'
+    'requests', 'urllib3', 'certifi', 'aiohttp', 'ssl'
 ]
 
-for pkg in ['arova', 'openwakeword', 'sounddevice', 'edge_tts', 'psutil', 'PIL', 'websockets', 'pydantic', 'requests']:
+for pkg in ['arova', 'openwakeword', 'sounddevice', 'edge_tts', 'psutil', 'PIL', 'websockets', 'pydantic', 'requests', 'certifi', 'aiohttp']:
     try:
         tmp_ret = collect_all(pkg)
         datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

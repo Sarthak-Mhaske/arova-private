@@ -69,7 +69,9 @@ class AnthropicProvider(CognitiveProvider):
                 payload["system"] = system_prompt
 
             try:
-                async with aiohttp.ClientSession() as session:
+                from arova.core.providers.network_utils import get_aiohttp_connector
+                connector = get_aiohttp_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
                         if resp.status == 200:
                             data = await resp.json()
@@ -121,7 +123,9 @@ class AnthropicProvider(CognitiveProvider):
                 payload["system"] = system_prompt
 
             try:
-                async with aiohttp.ClientSession() as session:
+                from arova.core.providers.network_utils import get_aiohttp_connector
+                connector = get_aiohttp_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
                         if resp.status != 200:
                             err = await resp.text()

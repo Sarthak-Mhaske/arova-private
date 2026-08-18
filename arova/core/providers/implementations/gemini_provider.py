@@ -83,7 +83,9 @@ class GeminiProvider(CognitiveProvider):
             }
 
             try:
-                async with aiohttp.ClientSession() as session:
+                from arova.core.providers.network_utils import get_aiohttp_connector
+                connector = get_aiohttp_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.post(url, json=payload, timeout=30.0) as resp:
                         if resp.status == 200:
                             data = await resp.json()
@@ -131,7 +133,9 @@ class GeminiProvider(CognitiveProvider):
             payload = {"contents": contents, "generationConfig": {"maxOutputTokens": max_tokens}}
 
             try:
-                async with aiohttp.ClientSession() as session:
+                from arova.core.providers.network_utils import get_aiohttp_connector
+                connector = get_aiohttp_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.post(url, json=payload, timeout=30.0) as resp:
                         if resp.status != 200:
                             err = await resp.text()

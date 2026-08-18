@@ -62,7 +62,9 @@ class OpenAIProvider(CognitiveProvider):
             }
             
             try:
-                async with aiohttp.ClientSession() as session:
+                from arova.core.providers.network_utils import get_aiohttp_connector
+                connector = get_aiohttp_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
                         if resp.status == 200:
                             data = await resp.json()
@@ -101,7 +103,7 @@ class OpenAIProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("openai", [])
         ]
         if not models_to_try:
-            models_to_try = ["gpt-4o-mini", "gpt-4o"]
+            models_to_try = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-4o", "gpt-4o-mini"]
 
         last_err = None
         for current_model in models_to_try:
@@ -123,7 +125,9 @@ class OpenAIProvider(CognitiveProvider):
             }
     
             try:
-                async with aiohttp.ClientSession() as session:
+                from arova.core.providers.network_utils import get_aiohttp_connector
+                connector = get_aiohttp_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
                         if resp.status == 200:
                             # Connection succeeded, we can read chunks
