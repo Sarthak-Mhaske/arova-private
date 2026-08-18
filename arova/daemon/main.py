@@ -329,9 +329,25 @@ class ArovaDaemon:
             asyncio.create_task(self._handle_discovery())
         elif payload.get("type") == "provider.test":
             provider_id = payload.get("provider")
-            api_key = payload.get("api_key")
+            api_key = payload.get("api_key", "")
             host = payload.get("host", "")
             req_id = payload.get("req_id")
+            
+            # Fallback: if api_key is empty, read from saved providers config
+            if not api_key and provider_id != "ollama":
+                from arova.core.config.manager import get_config_manager
+                saved = get_config_manager().load_providers()
+                saved_keys = saved.get(provider_id, {}).get("api_keys", [])
+                if saved_keys and saved_keys[0]:
+                    api_key = saved_keys[0]
+                    logging.info(f"Main: provider.test using saved key for {provider_id} (frontend sent empty)")
+            
+            if not host and provider_id == "ollama":
+                from arova.core.config.manager import get_config_manager
+                saved = get_config_manager().load_providers()
+                host = saved.get("ollama", {}).get("host", "")
+            
+            logging.info(f"Main: provider.test dispatched for {provider_id}, req_id={req_id}, has_key={bool(api_key)}, host='{host}'")
             asyncio.create_task(self._handle_provider_test(provider_id, api_key, host, req_id))
         elif payload.get("type") == "config.get_request":
             from arova.core.config.manager import get_config_manager
@@ -1081,16 +1097,27 @@ class ArovaDaemon:
         })
         
     async def _handle_provider_test(self, provider_id: str, api_key: str, host: str, req_id: str):
-        from arova.core.config.discovery import ProviderDiscovery
-        result = await ProviderDiscovery.test_provider_connection(provider_id, api_key, host)
-        self.ws_manager.broadcast({
-            "type": "provider.test_result",
-            "req_id": req_id,
-            "provider": provider_id,
-            "success": result.get("success", False),
-            "result": result,
-            "error": result.get("error")
-        })
+        logging.info(f"Main: _handle_provider_test called for provider={provider_id}, req_id={req_id}, api_key={'***' + api_key[-4:] if api_key and len(api_key) > 4 else '(empty)'}")
+        try:
+            from arova.core.config.discovery import ProviderDiscovery
+            result = await ProviderDiscovery.test_provider_connection(provider_id, api_key, host)
+            logging.info(f"Main: provider test result for {provider_id}: success={result.get('success')}, latency={result.get('latency_ms')}ms")
+        except Exception as e:
+            logging.error(f"Main: _handle_provider_test CRASHED for {provider_id}: {e}", exc_info=True)
+            result = {"success": False, "error": f"Internal test error: {e}"}
+        
+        try:
+            self.ws_manager.broadcast({
+                "type": "provider.test_result",
+                "req_id": req_id,
+                "provider": provider_id,
+                "success": result.get("success", False),
+                "result": result,
+                "error": result.get("error")
+            })
+            logging.info(f"Main: provider.test_result broadcast sent for {provider_id} (clients={len(self.ws_manager.clients)})")
+        except Exception as e:
+            logging.error(f"Main: Failed to broadcast provider.test_result for {provider_id}: {e}", exc_info=True)
 
     def _cleanup_orphaned_daemon_processes(self, port: int = 8765):
         """Clean up any dangling socket files or orphaned daemon processes holding port 8765."""

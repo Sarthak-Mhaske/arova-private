@@ -258,6 +258,8 @@ export const SettingsLayout: React.FC = () => {
       } else if (ev.type === 'provider.test_result') {
         const pId = (ev.provider || ev.req_id || '').toLowerCase();
         const isSuccess = Boolean(ev.success || ev.result?.success);
+        console.log(`[Settings] provider.test_result received for ${pId}: success=${isSuccess}, latency=${ev.result?.latency_ms}ms, error=${ev.error || ev.result?.error || 'none'}`);
+        setSaveStatus(null);
         setTestResults(prev => ({
           ...prev,
           [pId]: {

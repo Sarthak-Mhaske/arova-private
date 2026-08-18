@@ -16,6 +16,7 @@ class RuntimeSocket {
   private readonly maxBackoff = 2500;
   private isIntentionalDisconnect = false;
   private hasEverConnected = false;
+  private pendingQueue: any[] = [];
 
   public connected = false;
 
@@ -79,6 +80,20 @@ class RuntimeSocket {
         status: 'connected',
         source: 'local_socket'
       });
+
+      // Flush any queued messages that were sent while connecting
+      if (this.pendingQueue.length > 0) {
+        feLog(`[runtime] Flushing ${this.pendingQueue.length} queued events to daemon`);
+        const queue = [...this.pendingQueue];
+        this.pendingQueue = [];
+        queue.forEach(item => {
+          try {
+            this.ws?.send(JSON.stringify(item));
+          } catch (e) {
+            feLog(`[runtime] Failed to flush queued item: ${e}`);
+          }
+        });
+      }
 
       // Request session history to hydrate the UI
       this.sendEvent({ type: 'session.sync_request' });
@@ -185,7 +200,13 @@ class RuntimeSocket {
       feLog(`[runtime] WebSocket.send() executing for: ${payload.type}`);
       this.ws.send(JSON.stringify(payload));
     } else {
-      feLog(`[runtime] Cannot send event ${payload.type}, socket readyState is ${this.ws?.readyState}`);
+      feLog(`[runtime] Socket not ready (state=${this.ws?.readyState}), queueing event: ${payload.type}`);
+      if (this.pendingQueue.length < 50) {
+        this.pendingQueue.push(payload);
+      }
+      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+        this.connect();
+      }
     }
   }
 }

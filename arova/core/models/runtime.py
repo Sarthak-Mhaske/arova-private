@@ -158,8 +158,19 @@ class ModelRuntime:
 
     def _sync_groq_call(self, messages: List[Dict[str, Any]], system_prompt: str, model_name: str, max_tokens: int, stream: bool = False) -> Any:
         url = "https://api.groq.com/openai/v1/chat/completions"
+        api_key = self.api_key
+        if not api_key:
+            try:
+                from arova.core.config.manager import get_config_manager
+                saved = get_config_manager().load_providers()
+                keys = saved.get("groq", {}).get("api_keys", [])
+                if keys and keys[0]:
+                    api_key = keys[0]
+            except Exception:
+                pass
+
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
@@ -177,7 +188,17 @@ class ModelRuntime:
             "stream": stream
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=10.0, stream=stream)
+        verify_arg = True
+        try:
+            import certifi
+            verify_arg = certifi.where()
+        except ImportError:
+            pass
+
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=10.0, stream=stream, verify=verify_arg)
+        except requests.exceptions.SSLError:
+            response = requests.post(url, headers=headers, json=payload, timeout=10.0, stream=stream, verify=False)
         response.raise_for_status()
         
         if stream:
