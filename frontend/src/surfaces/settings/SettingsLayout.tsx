@@ -286,30 +286,49 @@ export const SettingsLayout: React.FC = () => {
 
   const saveAndTestModel = (providerId: string) => {
     let newProviders = { ...providers };
-    const rawKey = (draftKeys as any)[providerId] || '';
+    const rawKey = (draftKeys as any)[providerId] || (providers as any)[providerId]?.api_keys?.[0] || '';
     const cleanKey = rawKey.trim().replace(/^['"]|['"]$/g, '');
+    const cleanHost = (draftKeys.ollamaHost || (providers as any).ollama?.host || '').trim();
+
     if (providerId === 'ollama') {
-      newProviders = { ...providers, ollama: { host: (draftKeys.ollamaHost || '').trim() } };
+      newProviders = { ...providers, ollama: { host: cleanHost } };
     } else {
-      (newProviders as any)[providerId] = { api_keys: [cleanKey] };
+      (newProviders as any)[providerId] = { api_keys: cleanKey ? [cleanKey] : [] };
     }
     setProviders(newProviders);
     socket.sendEvent({ type: 'config.update_request', providers: newProviders });
     
     // Mark provider as testing with real-time UI indicator
     setTestResults(prev => ({ ...prev, [providerId]: { testing: true } }));
-    setSaveStatus(`Testing ${providerId.toUpperCase()} connection & latency...`);
+    setSaveStatus(`Testing ${providerId.toUpperCase()} connection...`);
+
+    // Safety timeout to prevent getting stuck if network drops
+    setTimeout(() => {
+      setTestResults(prev => {
+        if (prev[providerId]?.testing) {
+          return {
+            ...prev,
+            [providerId]: {
+              testing: false,
+              success: false,
+              error: 'Connection timed out. Check network or API key.'
+            }
+          };
+        }
+        return prev;
+      });
+      setSaveStatus(null);
+    }, 8000);
 
     setTimeout(() => {
       socket.sendEvent({
         type: 'provider.test',
         provider: providerId,
         api_key: cleanKey,
-        host: providerId === 'ollama' ? draftKeys.ollamaHost.trim() : undefined,
+        host: providerId === 'ollama' ? cleanHost : undefined,
         req_id: providerId
       });
-      setTimeout(() => setSaveStatus(null), 3000);
-    }, 200);
+    }, 150);
   };
 
   const getModelStatus = (id: string): 'connected' | 'testing' | 'error' | 'configured' | 'missing_key' => {
@@ -585,28 +604,30 @@ export const SettingsLayout: React.FC = () => {
                           
                           {/* Real-Time Live Status & Latency Feedback */}
                           {isTesting ? (
-                            <div style={{ fontSize: '12px', color: '#38bdf8', marginTop: '3px', fontWeight: 500 }}>
-                              ⚡ Pinging API &amp; measuring latency...
+                            <div style={{ fontSize: '12px', color: '#60a5fa', marginTop: '3px', fontWeight: 500 }}>
+                              Connecting...
                             </div>
                           ) : isConnected && test?.latency_ms !== undefined ? (
                             <div style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span>✓ Connected</span>
+                              <span>Connected</span>
                               <span style={{ background: 'rgba(74,222,128,0.12)', padding: '1px 6px', borderRadius: '4px', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80' }}>
-                                ⚡ {test.latency_ms} ms
+                                {test.latency_ms} ms
                               </span>
-                              {test.context_limit && <span style={{ color: '#86efac' }}>· {test.context_limit} context</span>}
+                              {test.context_limit && <span style={{ color: '#86efac' }}>· {test.context_limit}</span>}
                             </div>
+                          ) : status === 'connected' ? (
+                            <div style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600, marginTop: '3px' }}>Connected</div>
                           ) : status === 'error' && test?.error ? (
                             <div style={{ fontSize: '12px', color: '#f87171', marginTop: '3px', fontWeight: 500, maxWidth: '400px' }}>
-                              ✗ {test.error}
+                              {test.error}
                             </div>
                           ) : status === 'configured' ? (
                             <div style={{ fontSize: '12px', color: '#fbbf24', marginTop: '3px', fontWeight: 500 }}>
-                              Configured · Click Test to verify latency
+                              Configured — click Test to verify
                             </div>
                           ) : (
                             <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '3px' }}>
-                              Not Configured
+                              Not configured
                             </div>
                           )}
                         </div>
@@ -672,10 +693,10 @@ export const SettingsLayout: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
                           <div>
                             {test?.error && (
-                              <span style={{ fontSize: '12px', color: '#f87171' }}>✗ {test.error}</span>
+                              <span style={{ fontSize: '12px', color: '#f87171' }}>{test.error}</span>
                             )}
                             {test?.success && test?.latency_ms !== undefined && (
-                              <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600 }}>✓ Verified connected in {test.latency_ms} ms</span>
+                              <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600 }}>Connected in {test.latency_ms} ms</span>
                             )}
                           </div>
                           <button className="tune-btn primary" disabled={isTesting} onClick={() => saveAndTestModel(p.id)}>
