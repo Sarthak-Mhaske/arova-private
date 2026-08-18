@@ -34,7 +34,13 @@ class GeminiProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
-        models_to_try = [model] if model else ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite-preview-02-05"]
+        from arova.core.models.registry import get_model_registry
+        registry = get_model_registry()
+        models_to_try = [model] if model else [
+            c.id for c in registry._candidates.get("gemini", [])
+        ]
+        if not models_to_try:
+            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
 
         # Gemini expects contents: [{parts: [{text: ...}]}] format
         contents = []
@@ -102,7 +108,13 @@ class GeminiProvider(CognitiveProvider):
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
-        models_to_try = [model] if model else ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite-preview-02-05"]
+        from arova.core.models.registry import get_model_registry
+        registry = get_model_registry()
+        models_to_try = [model] if model else [
+            c.id for c in registry._candidates.get("gemini", [])
+        ]
+        if not models_to_try:
+            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
 
         contents = []
         if system_prompt:

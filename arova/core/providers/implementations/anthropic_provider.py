@@ -34,9 +34,14 @@ class AnthropicProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
+        registry = get_model_registry()
         models_to_try = [model] if model else [
-            "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"
+            c.id for c in registry._candidates.get("anthropic", [])
         ]
+        if not models_to_try:
+            models_to_try = [
+                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"
+            ]
 
         headers = {
             "x-api-key": self.api_key,
@@ -87,9 +92,14 @@ class AnthropicProvider(CognitiveProvider):
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
+        registry = get_model_registry()
         models_to_try = [model] if model else [
-            "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"
+            c.id for c in registry._candidates.get("anthropic", [])
         ]
+        if not models_to_try:
+            models_to_try = [
+                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"
+            ]
 
         headers = {
             "x-api-key": self.api_key,

@@ -13,21 +13,53 @@ interface ModelOption {
 }
 
 const MODEL_OPTIONS: ModelOption[] = [
-  // Fast & Coding (Groq LPU)
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Fast versatile reasoning and code generation', tag: 'Fast / Code' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Sub-second conversation and quick questions', tag: 'Sub-Second' },
-  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Complex math proofing and algorithmic logic on LPU', tag: 'Math / Logic' },
-  { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Balanced multilingual mixture-of-experts reasoning', tag: 'Balanced' },
-  
-  // Deep Frontier Reasoning
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Fast hybrid reasoning with large context window', tag: 'Fast Hybrid' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: '2M token full repo context analysis and deep reasoning', tag: '2M Context' },
-  { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship multimodal intelligence and architecture', tag: 'Flagship' },
+  // ── OpenAI (Frontier Intelligence & Active Reasoning) ──
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship enterprise decision-making, creative writing and massive multimodal assets', tag: 'Flagship' },
+  { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Balanced consumer-facing frontier intelligence at a sustainable price point', tag: 'Frontier' },
+  { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'High-volume text sorting, classification, and customer service taggers', tag: 'Fast' },
+  { id: 'o3', name: 'OpenAI o3', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Active test-time compute chains for competitive coding, math proofing and science', tag: 'Deep Math / Code' },
+  { id: 'o3-pro', name: 'OpenAI o3-Pro', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship reasoning engine for complex algebraic and multi-step validation', tag: 'Pro Reasoning' },
+  { id: 'o4-mini', name: 'OpenAI o4-mini', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'High-speed autonomous agent orchestration and continuous code refactoring', tag: 'Agent / Code' },
+  { id: 'gpt-oss-120b', name: 'GPT-OSS-120B', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Open-weight Apache 2.0 frontier enterprise model', tag: 'Open Weights' },
+  { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Flagship multimodal intelligence, vision, and system control', tag: 'Multimodal' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', providerKey: 'openai', category: 'frontier', goodAt: 'Fast cost-effective reasoning for everyday tasks', tag: 'Efficient' },
+
+  // ── Anthropic (Software Engineering & Autonomous Strategy) ──
+  { id: 'claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Multi-step autonomous business strategies, technical auditing, and risk forecasting', tag: 'Strategy / Audit' },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Standard software engineering extensions, heavy markdown docs, and daily programming', tag: 'Code & Docs' },
+  { id: 'claude-opus-4.8', name: 'Claude Opus 4.8', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Deep multi-document research using its 1M token context window', tag: '1M Context' },
+  { id: 'claude-mythos-5', name: 'Claude Mythos 5', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Experimental sandbox reasoning pipelines and elite corporate data analytics', tag: 'Sandbox Reasoning' },
   { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Software engineering, multi-file diffs and rich markdown', tag: 'Code Specialist' },
   { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', providerKey: 'anthropic', category: 'frontier', goodAt: 'Balanced coding and analysis with strong reasoning', tag: 'Balanced' },
-  
-  // Local & Private
+
+  // ── Google Gemini (Multimodal & Expansive Context) ──
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Reviewing massive active code repos or hours of video via 2M token context', tag: '2M Context' },
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Rapid developer feedback loops, fast live chat interfaces, and low-latency translation', tag: 'Ultra-Fast' },
+  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Affordable foundation layer for automated content filtering pipelines', tag: 'Fast Filter' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Massive web scraping operations, data indexing, and text classification at low cost', tag: 'Low Cost' },
+  { id: 'gemini-3.1-flash-image', name: 'Gemini 3.1 Flash Image', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'On-the-fly video summaries, automatic graphic formatting, and batch thumbnail creations', tag: 'Vision / Video' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: 'Fast hybrid reasoning with large context window', tag: 'Fast Hybrid' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google AI', providerKey: 'gemini', category: 'frontier', goodAt: '2M token full repo context analysis and deep reasoning', tag: '2M Context' },
+
+  // ── Groq (Ultra-High Speed LPU Inference) ──
+  { id: 'openai/gpt-oss-120b', name: 'GPT-OSS-120B (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Blazing-fast execution of open-source OpenAI workflows and sub-second tools', tag: 'LPU Frontier' },
+  { id: 'openai/gpt-oss-20b', name: 'GPT-OSS-20B (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Instant sub-second API tool execution and open-source workflows on LPU', tag: 'Sub-Second' },
+  { id: 'qwen-3.6-27b', name: 'Qwen 3.6 27B (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Rapid multilingual conversion, structured JSON output, and code snippet creation', tag: 'Multilingual' },
+  { id: 'qwen-3-32b', name: 'Qwen 3 32B (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Ultra-fast structured code generation and programmatic reasoning on LPU', tag: 'Fast Code' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Complex agentic workflows requiring fast, repeated round-trips for live reasoning', tag: 'Agent Workflows' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Ultra-fast live chatbot responses and conversational interfaces under sub-second budget', tag: 'Sub-Second' },
+  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek-R1 (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Sub-second execution of math logic, structural coding steps, and open reasoning', tag: 'Math / Reasoning' },
+  { id: 'mixtral-8x22b', name: 'Mixtral 8x22B (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Executing European language logic and processing structured corporate database commands', tag: 'MoE Enterprise' },
+  { id: 'mistral-nemo', name: 'Mistral NeMo (Groq)', provider: 'Groq LPU', providerKey: 'groq', category: 'fast', goodAt: 'Fast multilingual logic and compact reasoning on Groq LPU', tag: 'Fast MoE' },
+
+  // ── Ollama (Local, On-Device & 100% Private) ──
+  { id: 'qwen3.8', name: 'Qwen 3.8 (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Offline programming support, internal code completion, and private script writing', tag: 'Offline Code' },
+  { id: 'qwen3.6', name: 'Qwen 3.6 (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Dense and MoE local coding specialist without network connectivity', tag: 'Dense MoE' },
+  { id: 'gemma4:31b', name: 'Gemma 4 31B (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Local complex agent chains and multi-step offline reasoning scenarios', tag: 'Offline Reasoning' },
+  { id: 'gemma4:26b', name: 'Gemma 4 26B (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Efficient on-device agent chains and local reasoning on consumer hardware', tag: 'Efficient Local' },
+  { id: 'deepseek-r1:671b', name: 'DeepSeek-R1 (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Total private data isolation for mathematical proofing and sensitive local information', tag: 'Private Math' },
+  { id: 'nemotron-3.5-lightning:30b', name: 'Nemotron 3.5 Lightning (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Background system agents monitoring local machine states and executing auto fixes', tag: 'System Agent' },
+  { id: 'meta-muse-glimmer:30b', name: 'Meta Muse Glimmer (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Local offline document reading, image descriptions, and edge-device visual processing', tag: 'Edge Vision' },
   { id: 'llama3.3', name: 'Llama 3.3 (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: '100% private on-device open weights', tag: 'Private' },
   { id: 'qwen2.5-coder', name: 'Qwen 2.5 Coder (Local)', provider: 'Ollama', providerKey: 'ollama', category: 'local', goodAt: 'Local offline coding without cloud connectivity', tag: 'Offline Code' }
 ];
