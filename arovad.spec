@@ -7,12 +7,16 @@ hiddenimports = [
     'arova', 'arova.core', 'arova.core.voice', 'arova.core.cognition', 
     'arova.core.ambience', 'arova.core.automation', 'arova.core.platform', 
     'arova.daemon', 'arova.core.cognition.workspace_manager', 
-    'arova.core.projection.projector', 'numpy', 'scipy', 'sklearn', 'websockets',
+    'arova.core.projection.projector', 'arova.core.providers',
+    'arova.core.providers.implementations', 'arova.core.providers.network_utils',
+    'arova.core.config.discovery', 'arova.core.config.manager',
+    'arova.core.models', 'arova.core.models.adapters', 'arova.core.models.registry',
+    'numpy', 'scipy', 'sklearn', 'websockets',
     'edge_tts', 'sounddevice', '_cffi_backend', 'psutil', 'PIL', 'yaml', 'pydantic',
     'requests', 'urllib3', 'certifi', 'aiohttp', 'ssl'
 ]
 
-for pkg in ['arova', 'openwakeword', 'sounddevice', 'edge_tts', 'psutil', 'PIL', 'websockets', 'pydantic', 'requests', 'certifi', 'aiohttp']:
+for pkg in ['arova', 'openwakeword', 'sounddevice', 'edge_tts', 'psutil', 'PIL', 'websockets', 'pydantic', 'requests', 'certifi', 'aiohttp', 'urllib3']:
     try:
         tmp_ret = collect_all(pkg)
         datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

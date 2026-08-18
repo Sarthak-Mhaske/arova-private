@@ -36,7 +36,7 @@ class OpenRouterProvider(CognitiveProvider):
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
         models_to_try = [model] if model else [
-            "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "openai/gpt-4o-mini"
+            "openai/gpt-5.6-sol", "anthropic/claude-sonnet-5", "google/gemini-3.1-pro", "google/gemini-3.7-flash", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"
         ]
 
         headers = {
@@ -84,7 +84,7 @@ class OpenRouterProvider(CognitiveProvider):
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
         models_to_try = [model] if model else [
-            "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "openai/gpt-4o-mini"
+            "openai/gpt-5.6-sol", "anthropic/claude-sonnet-5", "google/gemini-3.1-pro", "google/gemini-3.7-flash", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"
         ]
 
         headers = {

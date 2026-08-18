@@ -40,7 +40,7 @@ class GeminiProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("gemini", [])
         ]
         if not models_to_try:
-            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-image"]
 
         # Gemini expects contents: [{parts: [{text: ...}]}] format
         contents = []
@@ -116,7 +116,7 @@ class GeminiProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("gemini", [])
         ]
         if not models_to_try:
-            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-image"]
 
         contents = []
         if system_prompt:

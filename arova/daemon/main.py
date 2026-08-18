@@ -1,11 +1,26 @@
+import os
+import sys
+
+# Configure SSL certificate bundles for PyInstaller standalone bundles across Windows, macOS, and Linux
+try:
+    import certifi
+    ca_path = certifi.where()
+    if ca_path and os.path.exists(ca_path):
+        if not os.environ.get("SSL_CERT_FILE"):
+            os.environ["SSL_CERT_FILE"] = ca_path
+        if not os.environ.get("REQUESTS_CA_BUNDLE"):
+            os.environ["REQUESTS_CA_BUNDLE"] = ca_path
+except Exception:
+    pass
+
 import multiprocessing
 multiprocessing.freeze_support()
 
 import asyncio
-import sys
 import logging
 import uuid
 import time
+import traceback
 from dataclasses import dataclass
 from arova.core.runtime import RuntimeContainer
 from arova.core.ipc.uds import UnixSocketTransport
@@ -13,9 +28,6 @@ from arova.core.bridge.websocket_manager import WebSocketManager
 from arova.core.bridge.runtime_events import RuntimeEventMapper
 from arova.core.cognition.ledger import InvestigationLedger
 from arova.core.cognition.investigator import ProactiveInvestigator
-
-import os
-import traceback
 
 def _setup_daemon_logging():
     if hasattr(sys.stdout, "reconfigure"):

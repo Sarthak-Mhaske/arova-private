@@ -559,11 +559,11 @@ export const OnboardingModal: React.FC<OnboardingProps> = ({ onComplete }) => {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
                 {[
-                  { id: 'groq', name: 'Groq', tag: 'Fastest 70B' },
-                  { id: 'openai', name: 'OpenAI', tag: 'GPT-4o' },
-                  { id: 'gemini', name: 'Gemini', tag: '2.0 Flash' },
-                  { id: 'anthropic', name: 'Claude', tag: '3.5 Sonnet' },
-                  { id: 'ollama', name: 'Ollama', tag: 'Local Offline' }
+                  { id: 'groq', name: 'Groq', tag: 'GPT OSS / LPU' },
+                  { id: 'openai', name: 'OpenAI', tag: 'GPT-5.6 Sol / o3' },
+                  { id: 'gemini', name: 'Gemini', tag: '3.1 Pro / 3.7' },
+                  { id: 'anthropic', name: 'Claude', tag: 'Sonnet 5 / Fable' },
+                  { id: 'ollama', name: 'Ollama', tag: 'Qwen / Gemma 4' }
                 ].map(p => (
                   <button
                     key={p.id}

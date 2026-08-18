@@ -513,7 +513,7 @@ export const SettingsLayout: React.FC = () => {
                 <option value="gemini" style={{ background: '#1a1714', color: '#f5eedb' }}>Google AI (Gemini 3.1 Pro / 3.7 Flash)</option>
                 <option value="anthropic" style={{ background: '#1a1714', color: '#f5eedb' }}>Anthropic (Claude Sonnet 5 / Fable 5)</option>
                 <option value="openai" style={{ background: '#1a1714', color: '#f5eedb' }}>OpenAI (GPT-5.6 Sol / o3 / o4-mini)</option>
-                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local - GPT OSS 120B / Qwen 3)</option>
+                <option value="ollama" style={{ background: '#1a1714', color: '#f5eedb' }}>Ollama (Local - Qwen 3.8 / Gemma 4 / DeepSeek-R1)</option>
               </select>
             </div>
 

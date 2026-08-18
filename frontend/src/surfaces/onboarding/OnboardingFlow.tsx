@@ -105,11 +105,11 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '1.8rem' }}>
             {[
-              { id: 'gemini', title: 'Gemini 2.5 Pro', desc: 'Recommended' },
-              { id: 'anthropic', title: 'Claude Sonnet 4', desc: 'Reasoning' },
-              { id: 'openai', title: 'GPT-5', desc: 'Standard' },
-              { id: 'groq', title: 'Groq Llama 3.3', desc: 'Fast Cloud' },
-              { id: 'ollama', title: 'Ollama', desc: 'Local / Free' }
+              { id: 'groq', title: 'Groq (LPU Ultra-Fast)', desc: 'GPT OSS 120B / Qwen 3.6' },
+              { id: 'gemini', title: 'Google AI (Gemini 3.1 & 3.7)', desc: '2M Context Multimodal' },
+              { id: 'openai', title: 'OpenAI (GPT-5.6 Sol & o3)', desc: 'Frontier Intelligence' },
+              { id: 'anthropic', title: 'Anthropic (Sonnet 5 & Fable)', desc: 'Code & Audit Specialist' },
+              { id: 'ollama', title: 'Ollama (On-Device Local)', desc: 'Qwen 3.8 / Gemma 4' }
             ].map(opt => (
               <div 
                 key={opt.id}

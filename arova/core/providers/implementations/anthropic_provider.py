@@ -40,7 +40,7 @@ class AnthropicProvider(CognitiveProvider):
         ]
         if not models_to_try:
             models_to_try = [
-                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"
+                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-mythos-5"
             ]
 
         headers = {
@@ -100,7 +100,7 @@ class AnthropicProvider(CognitiveProvider):
         ]
         if not models_to_try:
             models_to_try = [
-                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"
+                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-mythos-5"
             ]
 
         headers = {

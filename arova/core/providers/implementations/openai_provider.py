@@ -39,7 +39,7 @@ class OpenAIProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("openai", [])
         ]
         if not models_to_try:
-            models_to_try = ["gpt-4o-mini", "gpt-4o"]
+            models_to_try = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "o3", "o4-mini", "gpt-oss-120b"]
         
         last_err = None
         for current_model in models_to_try:
@@ -103,7 +103,7 @@ class OpenAIProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("openai", [])
         ]
         if not models_to_try:
-            models_to_try = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-4o", "gpt-4o-mini"]
+            models_to_try = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "o3", "o4-mini", "gpt-oss-120b"]
 
         last_err = None
         for current_model in models_to_try:
