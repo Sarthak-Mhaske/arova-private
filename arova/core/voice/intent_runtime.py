@@ -11,6 +11,9 @@ from arova.core.models.schema import ReasoningDepth, ReasoningBudget
 from arova.core.cognition.router import CognitiveRouter
 from arova.core.cognition.context import ContextSynthesizer
 from arova.core.cognition.planner import CognitivePlanner
+from arova.core.cognition.buffer import AsyncDeltaBuffer
+from arova.core.time import get_live_temporal_context_prompt
+from arova.core.tools.web_search import strip_emojis
 
 # URLs and named study resources from assistant replies
 _URL_RE = re.compile(r"https?://[^\s\)\]\>\"']+", re.IGNORECASE)
@@ -43,7 +46,7 @@ class IntentRuntime:
                  router: CognitiveRouter, 
                  context_synthesizer: ContextSynthesizer, 
                  planner: CognitivePlanner,
-                 action_planner: Any):
+                 action_planner: Any = None):
         self._event_bus = event_bus
         self._session = session
         self._router = router
@@ -271,7 +274,10 @@ class IntentRuntime:
         try:
             # Phase 2: Trigger memory ghost recall asynchronously before responding
             if hasattr(self._session, "_memory_runtime") and self._session._memory_runtime:
-                await self._session._memory_runtime.recall_ghosts_for_transcript(transcript)
+                try:
+                    await self._session._memory_runtime.recall_ghosts_for_transcript(transcript)
+                except Exception as e:
+                    logging.debug(f"IntentRuntime: memory recall skipped: {e}")
             
             # 1. Update existing turn transcript or start new turn if needed
             if turn_id and self._session.is_authoritative(turn_id):
@@ -279,6 +285,17 @@ class IntentRuntime:
             else:
                 turn = self._session.start_new_turn(transcript)
                 turn_id = turn.turn_id
+
+            if self._event_bus:
+                self._event_bus.emit("timeline", "create", {
+                    "category": "cognition",
+                    "title": f"Prompt: {transcript[:50]}",
+                    "description": transcript,
+                    "source": "user",
+                    "importance": 0.6,
+                    "correlation_id": turn_id,
+                    "metadata": {"vocalize": vocalize, "transcript": transcript}
+                })
 
             # 2. Pre-routing keyword workspace restore check (no LLM needed)
             lower = transcript.lower().strip()
@@ -405,11 +422,10 @@ class IntentRuntime:
                                 elif cap == "search_web" and out:
                                     search_output = out
                                     
-                        from arova.core.tools.web_search import strip_emojis
                         final_msg = ""
                         if info_output:
                             # Preserve the full, detailed rich markdown analysis from vision/file tools for the UI
-                            final_msg = strip_emojis(info_output.strip())
+                            final_msg = info_output.strip()
                         else:
                             # Generate refined LLM response that directly answers the user's prompt & summarizes actions
                             user_home = os.path.expanduser("~")
@@ -499,6 +515,15 @@ class IntentRuntime:
                             "seq": 2
                         })
                         self._event_bus.emit("voice", "TEXT_RESPONSE_GENERATED", {"turn_id": turn_id, "text": final_msg, "actions": actions})
+                        self._event_bus.emit("timeline", "create", {
+                            "category": "routing",
+                            "title": "Executed System Action",
+                            "description": final_msg[:120],
+                            "source": "action_dispatcher",
+                            "importance": 0.7,
+                            "correlation_id": turn_id,
+                            "metadata": {"results": str(results)[:200]}
+                        })
                     if self._session:
                         self._session.add_assistant_message(final_msg)
                     return
@@ -633,7 +658,6 @@ class IntentRuntime:
                     if active_ws and hasattr(active_ws, 'get_workspace_summary_prompt'):
                         workspace_summary = active_ws.get_workspace_summary_prompt()
 
-            from arova.core.time import get_live_temporal_context_prompt
             import time as _time_mod
             last_accessed = None
             if hasattr(self._session, 'get_previous_user_turn_timestamp'):
@@ -702,7 +726,6 @@ class IntentRuntime:
                     "seq": seq
                 })
                 
-            from arova.core.cognition.buffer import AsyncDeltaBuffer
             buffer = AsyncDeltaBuffer(_on_chunk_batch, flush_interval_s=0.05)
             
             # ── DYNAMIC COGNITIVE ROUTING ANALYZER ──
@@ -821,6 +844,16 @@ class IntentRuntime:
                 "vocalize": vocalize,
                 "execution_metadata": exec_meta
             })
+            if full_text and self._event_bus:
+                self._event_bus.emit("timeline", "create", {
+                    "category": "cognition",
+                    "title": "Arova Response",
+                    "description": full_text[:120] + ("..." if len(full_text) > 120 else ""),
+                    "source": "model_runtime",
+                    "importance": 0.5,
+                    "correlation_id": turn_id,
+                    "metadata": {"length": len(full_text)}
+                })
         except Exception as e:
             logging.error(f"IntentRuntime: Error processing transcript: {e}", exc_info=True)
             error_msg = "I encountered an unexpected error while processing that."

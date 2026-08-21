@@ -287,12 +287,6 @@ class RestorePlanner:
             return "antigravity-ide"
         if "cursor" in hint_lower and shutil.which("cursor"):
             return "cursor"
-        # If no explicit hint or generic code requested, prefer Antigravity IDE if present
-        if not app_hint or hint_lower in ("editor", "ide", "code", "code-oss", "vscode", "visual studio code"):
-            if shutil.which("antigravity-ide"):
-                return "antigravity-ide"
-            if shutil.which("antigravity"):
-                return "antigravity"
         if "code-oss" in hint_lower and shutil.which("code-oss"):
             return "code-oss"
         if ("vscode" in hint_lower or "visual studio code" in hint_lower or hint_lower == "code") and shutil.which("code"):
@@ -303,6 +297,12 @@ class RestorePlanner:
             return "zed"
         if "sublime" in hint_lower and shutil.which("subl"):
             return "subl"
+        # If no explicit hint or generic editor/ide requested, prefer Antigravity IDE if present
+        if not app_hint or hint_lower in ("editor", "ide"):
+            if shutil.which("antigravity-ide"):
+                return "antigravity-ide"
+            if shutil.which("antigravity"):
+                return "antigravity"
         return app_hint or "antigravity-ide"
 
     def _get_preferred_app_for_file(self, file_path: str) -> str:

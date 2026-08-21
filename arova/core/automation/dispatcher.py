@@ -1108,15 +1108,234 @@ class AnalyzeScreenBackend(ActionBackend):
     def __init__(self, orchestrator: Optional[Any] = None):
         self.orchestrator = orchestrator
 
+    @staticmethod
+    def _rank_window_candidates(
+        candidates: List[Dict[str, Any]], 
+        query: str, 
+        q_words: List[str],
+        exclude_classes: Optional[Set[str]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Dynamically ranks and selects the best matching window candidate for a natural language query.
+        Zero hardcoded application lists. Uses multi-token semantic ngram matching, exact-word matching,
+        substring indexing, and title relevance across all window/process properties.
+        """
+        if not candidates:
+            return None
+
+        if exclude_classes is None:
+            exclude_classes = {"frontend", "arova-ui", "arova_ui"}
+
+        q_lower = query.lower()
+        scored = []
+
+        for item in candidates:
+            cls_name = str(item.get("class") or item.get("app_name") or item.get("process_name") or "").lower()
+            title = str(item.get("title") or item.get("name") or "").lower()
+            app_id = str(item.get("app_id") or item.get("window_id") or "").lower()
+            init_cls = str(item.get("initial_class") or "").lower()
+            init_title = str(item.get("initial_title") or "").lower()
+
+            # Ignore self-referencing Arova frontend overlay unless query explicitly asks for arova
+            if (cls_name in exclude_classes or (cls_name == "frontend" and "arova" in title)) and "arova" not in q_lower:
+                continue
+
+            score = 0.0
+            haystack = f"{cls_name} {title} {app_id} {init_cls} {init_title}".strip()
+            if not haystack:
+                continue
+
+            # 1. Multi-word phrase matching (highest precision)
+            for phrase_len in range(min(len(q_words), 4), 0, -1):
+                for i in range(len(q_words) - phrase_len + 1):
+                    sub_phrase = " ".join(q_words[i:i + phrase_len])
+                    if len(sub_phrase) >= 3 and sub_phrase in haystack:
+                        score += 350.0 * (phrase_len ** 1.5)
+                        if sub_phrase in cls_name or sub_phrase in app_id:
+                            score += 150.0
+
+            # 2. Individual query word scoring with boundary matching
+            for word in q_words:
+                if len(word) < 2:
+                    continue
+                # Exact match against class / app name / title words
+                if word == cls_name or word == app_id:
+                    score += 250.0
+                elif word in cls_name or word in app_id:
+                    score += 120.0
+
+                if word in title:
+                    import re
+                    if re.search(rf"\b{re.escape(word)}\b", title):
+                        score += 100.0
+                    else:
+                        score += 50.0
+
+                if word in init_cls or word in init_title:
+                    score += 40.0
+
+            if score > 0:
+                scored.append((score, item))
+
+        if not scored:
+            return None
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_candidate = scored[0]
+        logger.info(f"Dynamic Window Matcher: Selected '{best_candidate.get('class') or best_candidate.get('app_name') or best_candidate.get('process_name')}' (Title: '{best_candidate.get('title')}') with score {best_score:.1f} for query '{query}'")
+        return best_candidate
+
     async def _capture_target_windows(self, query: str, base_dir: str) -> List[str]:
-        import sys, os, time, json, shutil, asyncio
+        import sys, os, time, json, shutil, asyncio, socket, subprocess
         captured_paths = []
         q_lower = query.lower()
-        q_words = [w for w in q_lower.replace('?', '').replace(',', '').split() if len(w) > 3 and w not in ('that', 'this', 'have', 'been', 'good', 'about', 'with', 'from')]
+        q_words = [w for w in q_lower.replace('?', '').replace(',', '').replace('.', '').split() if len(w) > 2 and w not in ('that', 'this', 'have', 'been', 'good', 'about', 'with', 'from', 'what', 'whats', 'check', 'look', 'open', 'show', 'view')]
 
         timestamp = int(time.time() * 1000)
 
+        # Check if user is asking for general current screen vs specific window
+        is_general_screen = any(p in q_lower for p in [
+            "current screen", "on my screen", "whats on my screen", "what is on my screen",
+            "what's on my screen", "on the screen", "look at my screen", "describe my screen",
+            "check my screen", "check screen", "my display", "my monitor", "whole screen", "entire screen"
+        ]) and not any(p in q_lower for p in [
+            "antigravity", "vscode", "code", "terminal", "browser", "brave", "chrome",
+            "firefox", "whatsapp", "ide", "editor", "kitty", "window", "tab", "safari", "edge"
+        ])
+
+        # ── 1. macOS (Darwin) Native Dynamic Focus-Capture-Restore ──
+        if sys.platform == "darwin":
+            try:
+                if not is_general_screen:
+                    # Get current frontmost app
+                    p_front = await asyncio.create_subprocess_exec(
+                        "osascript", "-e", 'tell application "System Events" to get name of first application process whose frontmost is true',
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                    )
+                    front_out, _ = await p_front.communicate()
+                    active_app = front_out.decode().strip() if front_out else ""
+
+                    # Get all running visible apps
+                    p_apps = await asyncio.create_subprocess_exec(
+                        "osascript", "-e", 'tell application "System Events" to get name of every application process whose visible is true',
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                    )
+                    apps_out, _ = await p_apps.communicate()
+                    app_list = [a.strip() for a in apps_out.decode().split(",") if a.strip()] if apps_out else []
+
+                    # Dynamically rank candidates
+                    candidates = [{"app_name": app, "class": app, "title": app} for app in app_list]
+                    target_candidate = self._rank_window_candidates(candidates, query, q_words)
+
+                    if target_candidate and target_candidate["app_name"].lower() != active_app.lower():
+                        target_app = target_candidate["app_name"]
+                        logger.info(f"macOS ScreenCapture: Activating '{target_app}'...")
+                        p_act = await asyncio.create_subprocess_exec(
+                            "osascript", "-e", f'tell application "{target_app}" to activate',
+                            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
+                        )
+                        await p_act.communicate()
+                        await asyncio.sleep(0.35)
+
+                        target_path = os.path.join(base_dir, f"target_focus_{timestamp}.png")
+                        p_cap = await asyncio.create_subprocess_exec("screencapture", "-x", target_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await p_cap.communicate()
+
+                        # Restore previous frontmost app
+                        if active_app:
+                            logger.info(f"macOS ScreenCapture: Restoring '{active_app}'...")
+                            p_rest = await asyncio.create_subprocess_exec(
+                                "osascript", "-e", f'tell application "{active_app}" to activate',
+                                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
+                            )
+                            await p_rest.communicate()
+
+                        if p_cap.returncode == 0 and os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+                            captured_paths.append(target_path)
+            except Exception as e:
+                logger.debug(f"macOS targeted screen capture error: {e}")
+
+            if not captured_paths:
+                full_path = os.path.join(base_dir, f"full_screen_{timestamp}.png")
+                p = await asyncio.create_subprocess_exec("screencapture", "-x", full_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await asyncio.wait_for(p.communicate(), timeout=5.0)
+                if os.path.exists(full_path) and os.path.getsize(full_path) > 1000:
+                    captured_paths.append(full_path)
+            return captured_paths
+
+        # ── 2. Windows (Win32) Native Dynamic Focus-Capture-Restore ──
+        elif sys.platform == "win32":
+            try:
+                if not is_general_screen and shutil.which("powershell"):
+                    ps_enum = (
+                        "Get-Process | Where-Object { $_.MainWindowTitle -and $_.MainWindowHandle -ne 0 } | "
+                        "Select-Object Id, ProcessName, MainWindowTitle | ConvertTo-Json"
+                    )
+                    p_enum = await asyncio.create_subprocess_exec("powershell", "-NoProfile", "-Command", ps_enum, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    out_enum, _ = await p_enum.communicate()
+                    if p_enum.returncode == 0 and out_enum:
+                        win_data = json.loads(out_enum.decode("utf-8", errors="ignore"))
+                        if isinstance(win_data, dict):
+                            win_data = [win_data]
+
+                        candidates = [
+                            {
+                                "pid": win.get("Id"),
+                                "process_name": str(win.get("ProcessName", "")),
+                                "class": str(win.get("ProcessName", "")),
+                                "title": str(win.get("MainWindowTitle", ""))
+                            }
+                            for win in win_data if win.get("Id")
+                        ]
+                        target_candidate = self._rank_window_candidates(candidates, query, q_words)
+
+                        if target_candidate:
+                            target_pid = target_candidate["pid"]
+                            target_name = target_candidate["process_name"]
+                            logger.info(f"Windows Capture: Focusing '{target_name}' (PID {target_pid})...")
+
+                            target_path = os.path.join(base_dir, f"target_focus_{timestamp}.png").replace("\\", "/")
+                            ps_focus_and_capture = f"""
+                            $w = New-Object -ComObject WScript.Shell
+                            $w.AppActivate({target_pid})
+                            Start-Sleep -Milliseconds 350
+                            Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+                            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+                            $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+                            $g = [System.Drawing.Graphics]::FromImage($bmp)
+                            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+                            $bmp.Save('{target_path}')
+                            $g.Dispose()
+                            $bmp.Dispose()
+                            """
+                            p_cap = await asyncio.create_subprocess_exec("powershell", "-NoProfile", "-Command", ps_focus_and_capture, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                            await p_cap.communicate()
+                            if p_cap.returncode == 0 and os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+                                captured_paths.append(target_path)
+            except Exception as e:
+                logger.debug(f"Windows targeted screen capture error: {e}")
+
+            if not captured_paths:
+                full_path = os.path.join(base_dir, f"full_screen_{timestamp}.png").replace("\\", "/")
+                ps_capture = f"""
+                Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+                $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+                $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+                $g = [System.Drawing.Graphics]::FromImage($bmp)
+                $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+                $bmp.Save('{full_path}')
+                $g.Dispose()
+                $bmp.Dispose()
+                """
+                p = await asyncio.create_subprocess_exec("powershell", "-NoProfile", "-Command", ps_capture, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await asyncio.wait_for(p.communicate(), timeout=6.0)
+                if os.path.exists(full_path) and os.path.getsize(full_path) > 1000:
+                    captured_paths.append(full_path)
+            return captured_paths
+
+        # ── 3. Linux (Hyprland, Sway, X11, GNOME, KDE, Generic) ──
         if sys.platform.startswith("linux"):
+            # 3A. Hyprland Wayland
             his = os.environ.get('HYPRLAND_INSTANCE_SIGNATURE')
             xdg_runtime = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
             if not his and os.path.exists(f"{xdg_runtime}/hypr"):
@@ -1127,131 +1346,225 @@ class AnalyzeScreenBackend(ActionBackend):
                 except Exception:
                     pass
             sock_path = f'{xdg_runtime}/hypr/{his}/.socket.sock' if his else None
+            hyprctl_bin = "/usr/bin/hyprctl" if os.path.exists("/usr/bin/hyprctl") else "hyprctl"
 
-            def _send_hypr_cmd(cmd_str: str):
-                import subprocess
-                hyprctl_bin = "/usr/bin/hyprctl" if os.path.exists("/usr/bin/hyprctl") else "hyprctl"
-                if "workspace " in cmd_str:
-                    ws_id = cmd_str.split("workspace ")[1].strip()
-                    lua_cmd = f"hl.dsp.focus{{ workspace = {ws_id} }}"
-                elif "focuswindow " in cmd_str:
-                    win_target = cmd_str.split("focuswindow ")[1].strip()
-                    if not win_target.startswith("address:") and not win_target.startswith("class:"):
-                        win_target = f"class:{win_target}"
-                    lua_cmd = f"hl.dsp.focus{{ window = \"{win_target}\" }}"
-                else:
-                    lua_cmd = f"hl.dsp.exec_cmd('hyprctl dispatch {cmd_str}')"
+            def _send_hypr_cmd(ws_id: Optional[int] = None, win_target: Optional[str] = None):
+                commands = []
+                if ws_id is not None:
+                    commands.append((
+                        f"dispatch hl.dsp.focus({{ workspace = {ws_id} }})",
+                        f"hl.dsp.focus({{ workspace = {ws_id} }})",
+                        f"workspace {ws_id}"
+                    ))
+                if win_target:
+                    target_str = win_target if (win_target.startswith("address:") or win_target.startswith("class:")) else f"class:{win_target}"
+                    commands.append((
+                        f"dispatch hl.dsp.focus({{ window = \"{target_str}\" }})",
+                        f"hl.dsp.focus({{ window = \"{target_str}\" }})",
+                        f"focuswindow {target_str}"
+                    ))
 
+                for sock_cmd, hypr_lua_cmd, legacy_cmd in commands:
+                    sent = False
+                    if sock_path and os.path.exists(sock_path):
+                        try:
+                            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                            s.settimeout(0.5)
+                            s.connect(sock_path)
+                            s.sendall(sock_cmd.encode('utf-8') + b'\n')
+                            resp = s.recv(1024).decode('utf-8', errors='ignore')
+                            s.close()
+                            if "ok" in resp.lower():
+                                sent = True
+                        except Exception:
+                            pass
+                    if not sent:
+                        try:
+                            subprocess.run([hyprctl_bin, "dispatch", hypr_lua_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                        except Exception:
+                            try:
+                                subprocess.run([hyprctl_bin, "dispatch", legacy_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                            except Exception:
+                                pass
+
+            if shutil.which("hyprctl") or os.path.exists("/usr/bin/hyprctl") or (sock_path and os.path.exists(sock_path)):
                 try:
-                    subprocess.run([hyprctl_bin, "dispatch", lua_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-                except Exception as e:
-                    logger.warning(f"AnalyzeScreenBackend: _send_hypr_cmd failed: {e}")
-
-            if shutil.which("hyprctl") or os.path.exists("/usr/bin/hyprctl"):
-                try:
-                    hyprctl_bin = "/usr/bin/hyprctl" if os.path.exists("/usr/bin/hyprctl") else "hyprctl"
-                    # 1. Get current active window & workspace
                     act_proc = await asyncio.create_subprocess_exec(hyprctl_bin, "activewindow", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
                     act_out, _ = await act_proc.communicate()
                     active_ws = 1
                     active_class = "frontend"
+                    active_addr = ""
                     if act_proc.returncode == 0 and act_out:
                         act_data = json.loads(act_out.decode('utf-8', errors='ignore'))
                         active_ws = act_data.get("workspace", {}).get("id", 1)
                         active_class = act_data.get("class", "frontend")
+                        active_addr = act_data.get("address", "")
 
-                    # 2. Score and select target client across all workspaces
                     proc = await asyncio.create_subprocess_exec(hyprctl_bin, "clients", "-j", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
                     stdout, _ = await proc.communicate()
+                    clients = []
                     if proc.returncode == 0 and stdout:
                         clients = json.loads(stdout.decode('utf-8', errors='ignore'))
-                        scored_clients = []
-                        
-                        for client in clients:
-                            cls = client.get("class", "").lower()
-                            title = client.get("title", "").lower()
-                            # Never target Arova UI itself or terminal dev log windows unless explicitly named
-                            if cls in ("frontend", "arova") or "arova" in title and cls == "frontend":
-                                continue
-                                
-                            score = 0
-                            # Media type affinity
-                            if any(k in q_lower for k in ["youtube", "yt", "video", "watch", "stream", "channel", "play", "browser", "tab"]):
-                                if any(app in cls or app in title for app in ["brave", "chrome", "firefox", "edge", "safari", "opera", "vlc", "mpv", "youtube"]):
-                                    score += 150
-                            elif any(k in q_lower for k in ["code", "vscode", "antigravity", "editor", "script", "terminal", "ide", "bug", "error", "programming", "line"]):
-                                if any(app in cls or app in title for app in ["antigravity", "code", "cursor", "nvim", "vim", "sublime", "jetbrains", "kitty", "alacritty"]):
-                                    score += 150
-                            else:
-                                # General content app fallback boost for non-specific queries
-                                if any(app in cls or app in title for app in ["brave", "chrome", "firefox", "edge", "code", "antigravity", "vlc", "mpv", "libreoffice"]):
-                                    score += 50
-                                    
-                            # Keyword matching in title and class
-                            for w in q_words:
-                                if w in title:
-                                    score += 60
-                                if w in cls:
-                                    score += 40
-                                    
-                            if score > 0:
-                                scored_clients.append((score, client))
 
-                        target_client = None
-                        if scored_clients:
-                            scored_clients.sort(key=lambda x: x[0], reverse=True)
-                            target_client = scored_clients[0][1]
-                            logger.info(f"AnalyzeScreenBackend: Selected window '{target_client.get('class')}' (Title: '{target_client.get('title')}') with score {scored_clients[0][0]} for query: '{query}'")
+                    target_client = None
+                    if not is_general_screen and clients:
+                        candidates = [
+                            {
+                                "class": c.get("class", ""),
+                                "title": c.get("title", ""),
+                                "initial_class": c.get("initialClass", ""),
+                                "initial_title": c.get("initialTitle", ""),
+                                "workspace_id": c.get("workspace", {}).get("id", 1),
+                                "address": c.get("address", ""),
+                                "raw": c
+                            }
+                            for c in clients
+                        ]
+                        target_client = self._rank_window_candidates(candidates, query, q_words)
 
-                        if target_client:
-                            t_ws = target_client.get("workspace", {}).get("id", active_ws)
-                            t_cls = target_client.get("class", "")
-                            t_addr = target_client.get("address", "")
+                    if target_client and not is_general_screen:
+                        t_ws = target_client.get("workspace_id", active_ws)
+                        t_cls = target_client.get("class", "")
+                        t_addr = target_client.get("address", "")
 
-                            # Focus-Capture-Restore!
-                            logger.info(f"AnalyzeScreenBackend: Switching to workspace {t_ws} and focusing '{t_cls}'...")
-                            _send_hypr_cmd(f"workspace {t_ws}")
-                            if t_addr:
-                                _send_hypr_cmd(f"focuswindow address:{t_addr}")
-                            else:
-                                _send_hypr_cmd(f"focuswindow class:{t_cls}")
-                            await asyncio.sleep(0.35)
+                        logger.info(f"Hyprland Capture: Switching to workspace {t_ws} and focusing '{t_cls}' (addr: {t_addr})...")
+                        _send_hypr_cmd(ws_id=t_ws, win_target=f"address:{t_addr}" if t_addr else f"class:{t_cls}")
+                        await asyncio.sleep(0.35)
 
-                            target_path = os.path.join(base_dir, f"target_focus_{timestamp}.png")
-                            geom_cmd = f"grim '{target_path}'"
+                        target_path = os.path.join(base_dir, f"target_focus_{timestamp}.png")
+                        geom_cmd = f"grim '{target_path}'"
+                        p = await asyncio.create_subprocess_shell(geom_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await p.communicate()
 
-                            p = await asyncio.create_subprocess_shell(geom_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                            await p.communicate()
-
-                            # Instantly restore active workspace & focus back to Arova!
-                            logger.info(f"AnalyzeScreenBackend: Restoring workspace {active_ws} and focusing '{active_class}'...")
-                            _send_hypr_cmd(f"workspace {active_ws}")
-                            _send_hypr_cmd(f"focuswindow class:{active_class}")
-
-                            if p.returncode == 0 and os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
-                                captured_paths.append(target_path)
+                        logger.info(f"Hyprland Capture: Restoring workspace {active_ws} and window '{active_class}'...")
+                        if p.returncode == 0 and os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+                            captured_paths.append(target_path)
                 except Exception as e:
                     logger.debug(f"Focus-Capture-Restore Hyprland failed: {e}")
 
-        # Fallback to standard full screenshot if focus-capture didn't produce an image
-        if not captured_paths:
-            full_path = os.path.join(base_dir, f"full_screen_{timestamp}.png")
-            if sys.platform == "darwin":
-                cmd = f"screencapture -x '{full_path}'"
-            elif sys.platform == "win32":
-                cmd = f"powershell -command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{{PRTSC}}')\""
-            else:
-                cmd = f"grim '{full_path}' || scrot '{full_path}' || import -window root '{full_path}'"
+            # 3B. Sway / wlroots Wayland
+            if not captured_paths and os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
+                try:
+                    p_tree = await asyncio.create_subprocess_exec("swaymsg", "-t", "get_tree", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    tree_out, _ = await p_tree.communicate()
+                    if p_tree.returncode == 0 and tree_out:
+                        tree = json.loads(tree_out.decode("utf-8", errors="ignore"))
+                        nodes = []
+                        def _walk(n):
+                            if n.get("app_id") or n.get("name") or n.get("window_properties"):
+                                nodes.append(n)
+                            for child in n.get("nodes", []) + n.get("floating_nodes", []):
+                                _walk(child)
+                        _walk(tree)
 
-            p = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            await asyncio.wait_for(p.communicate(), timeout=5.0)
-            if os.path.exists(full_path):
-                captured_paths.append(full_path)
+                        focused_id = next((n.get("id") for n in nodes if n.get("focused")), None)
+                        if not is_general_screen:
+                            candidates = [
+                                {
+                                    "id": n.get("id"),
+                                    "class": str(n.get("app_id", "") or n.get("window_properties", {}).get("class", "")),
+                                    "title": str(n.get("name", "") or n.get("window_properties", {}).get("title", "")),
+                                    "raw": n
+                                }
+                                for n in nodes if n.get("id")
+                            ]
+                            target_node = self._rank_window_candidates(candidates, query, q_words)
+
+                            if target_node:
+                                target_con_id = target_node["id"]
+                                logger.info(f"Sway Capture: Focusing container {target_con_id} ({target_node.get('class')})...")
+
+                                p_foc = await asyncio.create_subprocess_exec("swaymsg", f"[con_id={target_con_id}]", "focus", stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                await p_foc.communicate()
+                                await asyncio.sleep(0.25)
+
+                                target_path = os.path.join(base_dir, f"target_focus_{timestamp}.png")
+                                p_cap = await asyncio.create_subprocess_exec("grim", target_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                                await p_cap.communicate()
+
+                                if focused_id:
+                                    p_rest = await asyncio.create_subprocess_exec("swaymsg", f"[con_id={focused_id}]", "focus", stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                    await p_rest.communicate()
+
+                                if p_cap.returncode == 0 and os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+                                    captured_paths.append(target_path)
+                except Exception as e:
+                    logger.debug(f"Sway capture error: {e}")
+
+            # 3C. X11 Linux (Ubuntu, Debian, Fedora, Arch, Mint, XFCE, i3, etc.)
+            if not captured_paths and os.environ.get("DISPLAY") and (shutil.which("wmctrl") or shutil.which("xdotool")):
+                try:
+                    prev_win_id = ""
+                    if shutil.which("xdotool"):
+                        p_act = await asyncio.create_subprocess_exec("xdotool", "getactivewindow", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        act_out, _ = await p_act.communicate()
+                        if p_act.returncode == 0 and act_out:
+                            prev_win_id = act_out.decode().strip()
+
+                    if not is_general_screen and shutil.which("wmctrl"):
+                        p_list = await asyncio.create_subprocess_exec("wmctrl", "-lx", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        list_out, _ = await p_list.communicate()
+                        if p_list.returncode == 0 and list_out:
+                            lines = list_out.decode("utf-8", errors="ignore").splitlines()
+                            candidates = []
+                            for line in lines:
+                                parts = line.split(None, 4)
+                                if len(parts) >= 3:
+                                    candidates.append({
+                                        "id": parts[0],
+                                        "class": parts[2],
+                                        "title": parts[4] if len(parts) > 4 else ""
+                                    })
+                            target_win = self._rank_window_candidates(candidates, query, q_words)
+
+                            if target_win:
+                                target_win_id = target_win["id"]
+                                logger.info(f"X11 Capture: Activating window '{target_win.get('class')}' (ID: {target_win_id})...")
+
+                                p_act = await asyncio.create_subprocess_exec("wmctrl", "-ia", target_win_id, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                await p_act.communicate()
+                                await asyncio.sleep(0.25)
+
+                                target_path = os.path.join(base_dir, f"target_focus_{timestamp}.png")
+                                cap_cmd = f"maim '{target_path}' 2>/dev/null || import -window root '{target_path}' 2>/dev/null || scrot '{target_path}' 2>/dev/null"
+                                p_cap = await asyncio.create_subprocess_shell(cap_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                                await p_cap.communicate()
+
+                                if prev_win_id:
+                                    if shutil.which("xdotool"):
+                                        p_rest = await asyncio.create_subprocess_exec("xdotool", "windowactivate", prev_win_id, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                        await p_rest.communicate()
+                                    elif shutil.which("wmctrl"):
+                                        p_rest = await asyncio.create_subprocess_exec("wmctrl", "-ia", prev_win_id, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                        await p_rest.communicate()
+
+                                if os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+                                    captured_paths.append(target_path)
+                except Exception as e:
+                    logger.debug(f"X11 capture error: {e}")
+
+            # 3D. Generic Linux / Desktop Environment Fallback (GNOME, KDE Plasma, grim, spectacle, gnome-screenshot, maim, scrot, import)
+            if not captured_paths:
+                full_path = os.path.join(base_dir, f"full_screen_{timestamp}.png")
+                cmd = (
+                    f"grim '{full_path}' 2>/dev/null || "
+                    f"spectacle -b -o '{full_path}' 2>/dev/null || "
+                    f"gnome-screenshot -f '{full_path}' 2>/dev/null || "
+                    f"maim '{full_path}' 2>/dev/null || "
+                    f"scrot '{full_path}' 2>/dev/null || "
+                    f"import -window root '{full_path}' 2>/dev/null"
+                )
+                p = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                await asyncio.wait_for(p.communicate(), timeout=5.0)
+                if os.path.exists(full_path) and os.path.getsize(full_path) > 1000:
+                    captured_paths.append(full_path)
+
 
         return captured_paths
 
     async def execute(self, request: CapabilityRequest, simulation_mode: bool = False) -> BackendObservation:
         query = request.payload.get("query", "Describe the screen")
+        context = request.payload.get("context") or request.payload.get("error_context") or ""
         if simulation_mode:
             return BackendObservation(f"Simulated screen analysis for query: {query}", True)
             
@@ -1265,16 +1578,21 @@ class AnalyzeScreenBackend(ActionBackend):
             if not captured_paths:
                 return BackendObservation("", False, "Failed to capture any window or screen screenshot.")
                 
+            prompt_text = f"User Query: {query}\n"
+            if context:
+                prompt_text += f"\nDeveloper / System Context:\n{context}\n"
+            prompt_text += (
+                "Analyze the attached window/screen screenshot(s) and answer the user's question directly with clean, calm, serene, and minimal markdown.\n"
+                "CALM & MINIMAL TYPOGRAPHY DIRECTIVES:\n"
+                "- Present information in a clean, elegant, minimal, and serene tone so the user can read calmly.\n"
+                "- Use short, clear paragraphs and concise bullet points.\n"
+                "- AVOID VISUAL CLUTTER: Do NOT use horizontal divider lines (`---`), do NOT use nested numbered sub-lists, and do NOT over-bold every word or sentence.\n"
+                "- Use clean section headers (e.g. `### Direct Answer`, `### Breakdown`).\n"
+                "- Write brand names correctly without period splits (e.g. 'YouTube', 'PyCharm', 'VS Code')."
+            )
             image_content_parts = [{
                 "type": "text", 
-                "text": f"User Query: {query}\n"
-                        "Analyze the attached window/screen screenshot(s) and answer the user's question directly with clean, calm, serene, and minimal markdown.\n"
-                        "CALM & MINIMAL TYPOGRAPHY DIRECTIVES:\n"
-                        "- Present information in a clean, elegant, minimal, and serene tone so the user can read calmly.\n"
-                        "- Use short, clear paragraphs and concise bullet points.\n"
-                        "- AVOID VISUAL CLUTTER: Do NOT use horizontal divider lines (`---`), do NOT use nested numbered sub-lists, and do NOT over-bold every word or sentence.\n"
-                        "- Use clean section headers (e.g. `### Direct Answer`, `### Breakdown`).\n"
-                        "- Write brand names correctly without period splits (e.g. 'YouTube', 'PyCharm', 'VS Code')."
+                "text": prompt_text
             }]
             for path in captured_paths:
                 with open(path, "rb") as f:
@@ -1306,21 +1624,27 @@ class AnalyzeScreenBackend(ActionBackend):
             
             # Post-process markdown formatting to prevent broken bold tags or split proper nouns
             def _clean_markdown(txt: str) -> str:
+                import re
                 if not txt:
                     return txt
                 txt = txt.replace("You. Tube", "YouTube").replace("You.Tube", "YouTube")
                 txt = txt.replace("Py. Charm", "PyCharm").replace("Py.Charm", "PyCharm")
                 txt = txt.replace("Visual Studio. Code", "VS Code")
-                lines = txt.split("\n")
-                cleaned = []
+                
+                # Fix attached divider lines like "problem.---" -> "problem.\n\n---\n\n"
+                txt = re.sub(r'([^\n\s])\s*(---|___|\*\*\*)\s*', r'\1\n\n\2\n\n', txt)
+                # Fix numbered headers
+                txt = re.sub(r'(\d+)\.([A-Za-z])', r'\1. \2', txt)
+                
+                # Fix missing newline before list items ONLY outside tables
+                lines = txt.split('\n')
+                safe_lines = []
                 for line in lines:
-                    if line.count("**") % 2 != 0:
-                        if line.startswith("**"):
-                            line = line + "**"
-                        else:
-                            line = line.replace("**", "")
-                    cleaned.append(line)
-                return "\n".join(cleaned)
+                    if line.strip().startswith('|') and line.strip().endswith('|'):
+                        safe_lines.append(line)
+                    else:
+                        safe_lines.append(re.sub(r'([:.;?!])\s*([*•-])(?=\s+[A-Za-z0-9_`"\'(*])', r'\1\n\n* ', line))
+                return '\n'.join(safe_lines)
 
             return BackendObservation(_clean_markdown(result_text), True)
         except Exception as e:

@@ -40,7 +40,7 @@ class GeminiProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("gemini", [])
         ]
         if not models_to_try:
-            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-image"]
+            models_to_try = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash-lite"]
 
         # Gemini expects contents: [{parts: [{text: ...}]}] format
         contents = []
@@ -86,7 +86,7 @@ class GeminiProvider(CognitiveProvider):
                 from arova.core.providers.network_utils import get_aiohttp_connector
                 connector = get_aiohttp_connector()
                 async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(url, json=payload, timeout=30.0) as resp:
+                    async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             latency = (time.time() - t0) * 1000
@@ -116,7 +116,7 @@ class GeminiProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("gemini", [])
         ]
         if not models_to_try:
-            models_to_try = ["gemini-3.1-pro", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-image"]
+            models_to_try = ["gemini-3.5-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash-lite"]
 
         contents = []
         if system_prompt:
@@ -136,7 +136,7 @@ class GeminiProvider(CognitiveProvider):
                 from arova.core.providers.network_utils import get_aiohttp_connector
                 connector = get_aiohttp_connector()
                 async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(url, json=payload, timeout=30.0) as resp:
+                    async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                         if resp.status != 200:
                             err = await resp.text()
                             logger.warning(f"Gemini stream {current_model} returned {resp.status}. Trying next model...")
@@ -172,7 +172,7 @@ class GeminiProvider(CognitiveProvider):
         try:
             url = f"{self.base_url}?key={self.api_key}"
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=5.0) as resp:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         latency = (time.time() - t0) * 1000
                         self.health.record_success(latency)

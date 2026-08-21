@@ -15,9 +15,15 @@ class Evidence:
     
     def fingerprint(self) -> str:
         """Create a deterministic fingerprint to enforce cooldowns on identical issues."""
+        raw_sig = ""
+        if isinstance(self.raw_data, dict):
+            raw_sig = self.raw_data.get("error_signature") or self.raw_data.get("window_title") or self.raw_data.get("active_app") or ""
+            if "terminal_last_output" in self.raw_data and self.raw_data["terminal_last_output"]:
+                raw_sig += "_" + self.raw_data["terminal_last_output"][:60]
         fingerprint_data = {
             "trigger": self.trigger_signal,
-            "context": sorted(self.context_keys)
+            "context": sorted(self.context_keys),
+            "sig": raw_sig
         }
         return hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True).encode()).hexdigest()
 
@@ -45,9 +51,9 @@ class InvestigationLedger:
     Internal ledger for tracking proactive interventions. 
     Crucial for debugging, measuring false positives, and enforcing evidence-based cooldowns.
     """
-    def __init__(self):
+    def __init__(self, cooldown_duration: int = 300):
         self.entries: List[LedgerEntry] = []
-        self.cooldown_duration = 1800  # 30 minutes
+        self.cooldown_duration = cooldown_duration  # 5 minutes default
         
     def append_record(self, trigger: str, need_score: float, opp_score: float, route: str, evidence: Evidence, outcome: str):
         entry = LedgerEntry(

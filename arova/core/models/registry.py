@@ -275,187 +275,167 @@ class ModelRegistry:
             ModelCandidate(
                 id="openai/gpt-oss-20b", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=60, cost_per_1k_tokens=0.10, selection_reason=["OpenAI GPT-OSS-20B on Groq LPU for instant tool execution"]
+                latency_ms=60, cost_per_1k_tokens=0.10, selection_reason=["OpenAI GPT-OSS-20B on Groq LPU for instant conversational execution"]
             ),
             ModelCandidate(
-                id="qwen-3.6-27b", provider="groq", context_window=32768,
+                id="qwen/qwen3.6-27b", provider="groq", context_window=32768,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
                 latency_ms=110, cost_per_1k_tokens=0.25, selection_reason=["Qwen 3.6 27B on Groq LPU for rapid multilingual JSON and code snippets"]
             ),
             ModelCandidate(
-                id="qwen-3-32b", provider="groq", context_window=32768,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=130, cost_per_1k_tokens=0.30, selection_reason=["Qwen 3 32B on Groq LPU for fast structured code generation"]
-            ),
-            ModelCandidate(
-                id="llama-3.3-70b-versatile", provider="groq", context_window=131072,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=220, cost_per_1k_tokens=0.59, selection_reason=["Fast, high-quality reasoning and daily conversational intelligence on Groq LPU"]
-            ),
-            ModelCandidate(
-                id="llama-3.1-8b-instant", provider="groq", context_window=131072,
+                id="groq/compound-mini", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=70, cost_per_1k_tokens=0.08, selection_reason=["Ultra-fast sub-second conversational interface on Groq LPU"]
+                latency_ms=60, cost_per_1k_tokens=0.08, selection_reason=["Groq Compound Mini for ultra-fast lightweight conversational inference"]
             ),
             ModelCandidate(
-                id="deepseek-r1-distill-llama-70b", provider="groq", context_window=131072,
+                id="groq/compound", provider="groq", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=280, cost_per_1k_tokens=0.75, selection_reason=["Sub-second math logic, structural coding, and deep reasoning on Groq LPU"]
-            ),
-            ModelCandidate(
-                id="mixtral-8x22b", provider="groq", context_window=65536,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=240, cost_per_1k_tokens=0.60, selection_reason=["Mixtral 8x22B on Groq LPU for European languages and structured database commands"]
-            ),
-            ModelCandidate(
-                id="mistral-nemo", provider="groq", context_window=128000,
-                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=90, cost_per_1k_tokens=0.15, selection_reason=["Mistral NeMo on Groq LPU for fast multilingual logic"]
+                latency_ms=130, cost_per_1k_tokens=0.30, selection_reason=["Groq Compound for fast structured code generation and tool use"]
             )
         ]
         self._candidates["openai"] = [
             ModelCandidate(
-                id="gpt-5.6-sol", provider="openai", context_window=128000,
+                id="gpt-4o", provider="openai", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=400, cost_per_1k_tokens=3.00, selection_reason=["Flagship GPT-5.6 Sol for enterprise decision-making, creative intelligence and massive multimodal assets"]
+                latency_ms=350, cost_per_1k_tokens=2.50, selection_reason=["Flagship GPT-4o for multimodal understanding, tools, and high-intelligence reasoning"]
             ),
             ModelCandidate(
-                id="gpt-5.6-terra", provider="openai", context_window=128000,
+                id="gpt-4o-mini", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
+                latency_ms=150, cost_per_1k_tokens=0.15, selection_reason=["Fast, lightweight, affordable everyday assistant model"]
+            ),
+            ModelCandidate(
+                id="o3-mini", provider="openai", context_window=200000,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=450, cost_per_1k_tokens=1.10, selection_reason=["OpenAI o3-mini high-speed reasoning model for coding and math"]
+            ),
+            ModelCandidate(
+                id="o1", provider="openai", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=300, cost_per_1k_tokens=1.50, selection_reason=["GPT-5.6 Terra for balanced frontier intelligence at sustainable pricing"]
+                latency_ms=750, cost_per_1k_tokens=15.00, selection_reason=["OpenAI o1 flagship reasoning engine for complex validation"]
             ),
             ModelCandidate(
-                id="gpt-5.6-luna", provider="openai", context_window=128000,
-                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=150, cost_per_1k_tokens=0.20, selection_reason=["GPT-5.6 Luna for high-volume text sorting, classification, and customer service"]
+                id="o1-mini", provider="openai", context_window=128000,
+                supports_tools=False, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=250, cost_per_1k_tokens=1.10, selection_reason=["OpenAI o1-mini fast reasoning model"]
             ),
             ModelCandidate(
-                id="o3", provider="openai", context_window=200000,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=650, cost_per_1k_tokens=2.00, selection_reason=["OpenAI o3 with active test-time compute for competitive coding, math proofing and science"]
-            ),
-            ModelCandidate(
-                id="o3-pro", provider="openai", context_window=200000,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=800, cost_per_1k_tokens=4.00, selection_reason=["OpenAI o3-Pro flagship reasoning engine for complex algebraic and multi-step validation"]
-            ),
-            ModelCandidate(
-                id="o4-mini", provider="openai", context_window=128000,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=180, cost_per_1k_tokens=0.50, selection_reason=["OpenAI o4-mini for high-speed autonomous agent orchestration and iterative code refactoring"]
-            ),
-            ModelCandidate(
-                id="gpt-oss-120b", provider="openai", context_window=128000,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=350, cost_per_1k_tokens=0.60, selection_reason=["Open-weight Apache 2.0 frontier GPT-OSS-120B model"]
+                id="gpt-4-turbo", provider="openai", context_window=128000,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=450, cost_per_1k_tokens=10.00, selection_reason=["GPT-4 Turbo with vision and function calling"]
             )
         ]
         self._candidates["anthropic"] = [
             ModelCandidate(
-                id="claude-fable-5", provider="anthropic", context_window=200000,
+                id="claude-3-7-sonnet-20250219", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=550, cost_per_1k_tokens=5.00, selection_reason=["Claude Fable 5 for multi-step autonomous business strategies, technical auditing, and risk forecasting"]
+                latency_ms=400, cost_per_1k_tokens=3.00, selection_reason=["Claude 3.7 Sonnet hybrid reasoning and frontier software engineering"]
             ),
             ModelCandidate(
-                id="claude-sonnet-5", provider="anthropic", context_window=200000,
+                id="claude-3-5-sonnet-20241022", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=420, cost_per_1k_tokens=3.00, selection_reason=["Claude Sonnet 5 for software engineering, documentation generation, and daily programming assistance"]
+                latency_ms=380, cost_per_1k_tokens=3.00, selection_reason=["Claude 3.5 Sonnet premier coding, complex workflow automation, and multimodal analysis"]
             ),
             ModelCandidate(
-                id="claude-opus-4.8", provider="anthropic", context_window=1000000,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=750, cost_per_1k_tokens=12.00, selection_reason=["Claude Opus 4.8 with 1M context window for deep multi-document research"]
+                id="claude-3-5-haiku-20241022", provider="anthropic", context_window=200000,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=140, cost_per_1k_tokens=0.80, selection_reason=["Claude 3.5 Haiku ultra-fast sub-second agent and conversational inference"]
             ),
             ModelCandidate(
-                id="claude-mythos-5", provider="anthropic", context_window=200000,
+                id="claude-3-opus-20240229", provider="anthropic", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=600, cost_per_1k_tokens=8.00, selection_reason=["Claude Mythos 5 for experimental sandbox reasoning pipelines and elite corporate data analytics"]
+                latency_ms=700, cost_per_1k_tokens=15.00, selection_reason=["Claude 3 Opus deep multi-document research and analysis"]
             )
         ]
         self._candidates["gemini"] = [
             ModelCandidate(
-                id="gemini-3.1-pro", provider="gemini", context_window=2000000,
+                id="gemini-2.5-flash", provider="gemini", context_window=1048576,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=450, cost_per_1k_tokens=1.25, selection_reason=["Gemini 3.1 Pro with 2M token context for massive repositories and video multimodal analysis"]
+                latency_ms=150, cost_per_1k_tokens=0.15, selection_reason=["Gemini 2.5 Flash — ultra-fast, stable workhorse with 1M context"]
             ),
             ModelCandidate(
-                id="gemini-3.7-flash", provider="gemini", context_window=1000000,
+                id="gemini-2.5-pro", provider="gemini", context_window=1048576,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=150, cost_per_1k_tokens=0.09, selection_reason=["Gemini 3.7 Flash for rapid developer feedback loops, fast live chat, and low-latency data translation"]
+                latency_ms=450, cost_per_1k_tokens=1.25, selection_reason=["Gemini 2.5 Pro for deep reasoning and long-context analysis"]
             ),
             ModelCandidate(
-                id="gemini-3.6-flash", provider="gemini", context_window=1000000,
-                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=160, cost_per_1k_tokens=0.08, selection_reason=["Gemini 3.6 Flash for affordable automated content filtering and conversational tasks"]
-            ),
-            ModelCandidate(
-                id="gemini-3.5-flash-lite", provider="gemini", context_window=1000000,
+                id="gemini-2.5-flash-lite", provider="gemini", context_window=1048576,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=100, cost_per_1k_tokens=0.025, selection_reason=["Gemini 3.5 Flash-Lite for massive web scraping operations, data indexing, and text classification"]
+                latency_ms=100, cost_per_1k_tokens=0.025, selection_reason=["Gemini 2.5 Flash-Lite for ultra-fast lightweight classification"]
             ),
             ModelCandidate(
-                id="gemini-3.1-flash-image", provider="gemini", context_window=1000000,
-                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=200, cost_per_1k_tokens=0.15, selection_reason=["Gemini 3.1 Flash Image (Nano Banana 2) for on-the-fly video summaries and batch thumbnail formatting"]
+                id="gemini-3.7-flash", provider="gemini", context_window=1048576,
+                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
+                latency_ms=160, cost_per_1k_tokens=0.08, selection_reason=["Gemini 3.7 Flash for frontier reasoning"]
             )
         ]
         self._candidates["ollama"] = [
             ModelCandidate(
-                id="qwen3.8", provider="ollama", context_window=65536,
+                id="llama3.3:latest", provider="ollama", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=800, cost_per_1k_tokens=0.0, selection_reason=["Local Qwen 3.8 for offline programming support and private script writing"]
+                latency_ms=800, cost_per_1k_tokens=0.0, selection_reason=["Local Llama 3.3 70B for powerful offline intelligence and coding"]
             ),
             ModelCandidate(
-                id="qwen3.6", provider="ollama", context_window=32768,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=700, cost_per_1k_tokens=0.0, selection_reason=["Local Qwen 3.6 dense and MoE local coding specialist"]
-            ),
-            ModelCandidate(
-                id="gemma4:31b", provider="ollama", context_window=65536,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=950, cost_per_1k_tokens=0.0, selection_reason=["Local Gemma 4 31B for complex agent chains and multi-step offline reasoning"]
-            ),
-            ModelCandidate(
-                id="gemma4:26b", provider="ollama", context_window=32768,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=750, cost_per_1k_tokens=0.0, selection_reason=["Local Gemma 4 26B MoE for efficient on-device reasoning"]
-            ),
-            ModelCandidate(
-                id="deepseek-r1:671b", provider="ollama", context_window=128000,
-                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
-                latency_ms=1600, cost_per_1k_tokens=0.0, selection_reason=["Local DeepSeek-R1 671B for private data isolation and mathematical proofing"]
-            ),
-            ModelCandidate(
-                id="nemotron-3.5-lightning:30b", provider="ollama", context_window=32768,
+                id="llama3.2:latest", provider="ollama", context_window=131072,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=600, cost_per_1k_tokens=0.0, selection_reason=["Local NVIDIA Nemotron 3.5 Lightning 30B background system monitor and auto-fixes"]
+                latency_ms=300, cost_per_1k_tokens=0.0, selection_reason=["Local Llama 3.2 lightweight fast conversational model"]
             ),
             ModelCandidate(
-                id="meta-muse-glimmer:30b", provider="ollama", context_window=32768,
-                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
-                latency_ms=700, cost_per_1k_tokens=0.0, selection_reason=["Local Meta Muse Glimmer 30B for offline document reading and edge visual processing"]
+                id="llama3.1:latest", provider="ollama", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=450, cost_per_1k_tokens=0.0, selection_reason=["Local Llama 3.1 versatile multi-lingual model"]
+            ),
+            ModelCandidate(
+                id="deepseek-r1:7b", provider="ollama", context_window=65536,
+                supports_tools=False, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=600, cost_per_1k_tokens=0.0, selection_reason=["Local DeepSeek-R1 7B for private math and step-by-step logic"]
+            ),
+            ModelCandidate(
+                id="deepseek-r1:8b", provider="ollama", context_window=65536,
+                supports_tools=False, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=650, cost_per_1k_tokens=0.0, selection_reason=["Local DeepSeek-R1 8B reasoning model"]
+            ),
+            ModelCandidate(
+                id="qwen2.5-coder:latest", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=450, cost_per_1k_tokens=0.0, selection_reason=["Local Qwen 2.5 Coder for code generation and debugging"]
+            ),
+            ModelCandidate(
+                id="qwen2.5:latest", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=400, cost_per_1k_tokens=0.0, selection_reason=["Local Qwen 2.5 multilingual assistant"]
+            ),
+            ModelCandidate(
+                id="mistral:latest", provider="ollama", context_window=32768,
+                supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
+                latency_ms=350, cost_per_1k_tokens=0.0, selection_reason=["Local Mistral 7B fast assistant"]
             )
         ]
         self._candidates["openrouter"] = [
             ModelCandidate(
-                id="openai/gpt-5.6-sol", provider="openrouter", context_window=128000,
+                id="anthropic/claude-3.7-sonnet", provider="openrouter", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=450, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter GPT-5.6 Sol frontier model"]
+                latency_ms=400, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter Claude 3.7 Sonnet flagship hybrid reasoning"]
             ),
             ModelCandidate(
-                id="anthropic/claude-sonnet-5", provider="openrouter", context_window=200000,
+                id="anthropic/claude-3.5-sonnet", provider="openrouter", context_window=200000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=420, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter Claude Sonnet 5 model"]
+                latency_ms=380, cost_per_1k_tokens=3.00, selection_reason=["OpenRouter Claude 3.5 Sonnet frontier coding and vision"]
             ),
             ModelCandidate(
-                id="google/gemini-3.1-pro", provider="openrouter", context_window=2000000,
+                id="openai/gpt-4o", provider="openrouter", context_window=128000,
                 supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=450, cost_per_1k_tokens=1.25, selection_reason=["OpenRouter Gemini 3.1 Pro 2M model"]
+                latency_ms=350, cost_per_1k_tokens=2.50, selection_reason=["OpenRouter OpenAI GPT-4o multimodal model"]
             ),
             ModelCandidate(
-                id="google/gemini-3.7-flash", provider="openrouter", context_window=1000000,
-                supports_tools=True, supports_images=True, supports_reasoning=True, supports_json=True,
-                latency_ms=150, cost_per_1k_tokens=0.09, selection_reason=["OpenRouter Gemini 3.7 Flash model"]
+                id="openai/gpt-4o-mini", provider="openrouter", context_window=128000,
+                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
+                latency_ms=150, cost_per_1k_tokens=0.15, selection_reason=["OpenRouter OpenAI GPT-4o-mini fast everyday model"]
+            ),
+            ModelCandidate(
+                id="meta-llama/llama-3.3-70b-instruct", provider="openrouter", context_window=131072,
+                supports_tools=True, supports_images=False, supports_reasoning=True, supports_json=True,
+                latency_ms=250, cost_per_1k_tokens=0.40, selection_reason=["OpenRouter Llama 3.3 70B instruct model"]
             ),
             ModelCandidate(
                 id="deepseek/deepseek-r1", provider="openrouter", context_window=128000,
@@ -463,9 +443,14 @@ class ModelRegistry:
                 latency_ms=650, cost_per_1k_tokens=0.55, selection_reason=["OpenRouter DeepSeek R1 reasoning model"]
             ),
             ModelCandidate(
-                id="meta-llama/llama-3.3-70b-instruct", provider="openrouter", context_window=131072,
+                id="deepseek/deepseek-chat", provider="openrouter", context_window=65536,
                 supports_tools=True, supports_images=False, supports_reasoning=False, supports_json=True,
-                latency_ms=300, cost_per_1k_tokens=0.40, selection_reason=["OpenRouter Llama 3.3 70B instruct model"]
+                latency_ms=220, cost_per_1k_tokens=0.14, selection_reason=["OpenRouter DeepSeek V3 general model"]
+            ),
+            ModelCandidate(
+                id="google/gemini-2.0-flash-001", provider="openrouter", context_window=1000000,
+                supports_tools=True, supports_images=True, supports_reasoning=False, supports_json=True,
+                latency_ms=150, cost_per_1k_tokens=0.10, selection_reason=["OpenRouter Gemini 2.0 Flash 1M model"]
             )
         ]
 

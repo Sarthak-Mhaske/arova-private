@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './design-system/index.css';
+import 'katex/dist/katex.min.css';
 import { invoke } from '@tauri-apps/api/core';
 
 if (typeof window !== 'undefined') {

@@ -1087,18 +1087,6 @@ class ArovaDaemon:
             "entries": entries
         })
 
-    async def _handle_timeline_query(self, payload: dict):
-        req_id = payload.get("req_id", "")
-        limit = payload.get("limit", 50)
-        before = payload.get("before")
-        events = await self.runtime.timeline.get_timeline(limit=limit, before_timestamp=before)
-        
-        self.ws_manager.broadcast({
-            "type": "timeline.query_response",
-            "req_id": req_id,
-            "events": events
-        })
-
     async def _handle_discovery(self):
         from arova.core.config.discovery import ProviderDiscovery
         result = await ProviderDiscovery.run_discovery()
@@ -1266,6 +1254,10 @@ class ArovaDaemon:
                     "listening": enabled
                 })
             self.runtime.voice_loop._on_mic_state = _mic_state_callback
+        if hasattr(self.runtime, 'action_dispatcher') and self.runtime.action_dispatcher:
+            self.proactive_investigator.dispatcher = self.runtime.action_dispatcher
+        if hasattr(self.runtime, 'model_runtime') and self.runtime.model_runtime:
+            self.proactive_investigator.orchestrator = self.runtime.model_runtime
 
         logging.info("Arova Daemon is running.")
         
@@ -1278,15 +1270,27 @@ class ArovaDaemon:
 
     async def _handle_timeline_query(self, payload: dict):
         req_id = payload.get("req_id", "")
-        limit = payload.get("limit", 50)
-        events = await self.runtime.timeline.get_timeline(limit=limit)
-        time_insights = self.runtime.timeline.get_time_insights()
+        filter_str = payload.get("filter", "all")
+        query_text = payload.get("query", "")
+        limit = payload.get("limit", 0)  # 0 = return all events, no artificial cap
+        
+        events = []
+        time_insights = {}
+        total_stored = 0
+        # Use timeline_store (property alias) first, fall back to timeline directly
+        tl = getattr(self.runtime, 'timeline_store', None) or getattr(self.runtime, 'timeline', None)
+        if tl:
+            events = tl.query_events(filter_type=filter_str, query=query_text, limit=limit)
+            time_insights = tl.get_time_insights()
+            total_stored = tl.get_total_stored() if hasattr(tl, 'get_total_stored') else len(events)
+            
         self.ws_manager.broadcast({
             "v": 1,
             "type": "timeline.query_response",
             "req_id": req_id,
             "events": events,
-            "time_insights": time_insights
+            "time_insights": time_insights,
+            "total_stored": total_stored
         })
 
     async def _proactive_loop(self):
@@ -1295,7 +1299,7 @@ class ArovaDaemon:
         last_eval_signature = None
         
         while True:
-            await asyncio.sleep(15)  # Check every 15 seconds
+            await asyncio.sleep(10)  # Check every 10 seconds
             
             # Fetch real ambient context telemetry
             ambient_ctx = getattr(getattr(self.runtime, 'ambient_observer', None), 'current_context', None)
@@ -1309,11 +1313,18 @@ class ArovaDaemon:
                     "playing_media": ambient_ctx.playing_media
                 })
             
-            # Skip redundant heavy evaluation if app, window, and media are completely unchanged
+            # Add active workspace details if available
+            if hasattr(self.runtime, 'workspace_manager') and self.runtime.workspace_manager:
+                active_ws = self.runtime.workspace_manager.get_active_workspace()
+                if active_ws:
+                    telemetry["workspace_name"] = active_ws.title
+                    telemetry["workspace_path"] = str(active_ws.root_path)
+
             current_signature = (
                 telemetry.get("active_app"),
                 telemetry.get("window_title"),
                 telemetry.get("playing_media"),
+                telemetry.get("terminal_last_output", "")[:50],
                 len(telemetry.get("open_windows") or [])
             )
             
@@ -1323,27 +1334,39 @@ class ArovaDaemon:
             last_eval_signature = current_signature
             
             try:
-                completed_work = self.proactive_investigator.evaluate_and_investigate(telemetry)
+                completed_work = await self.proactive_investigator.evaluate_and_investigate(telemetry)
                 if completed_work:
-                    # Silent surface to UI
-                    logging.info(f"Proactive Loop generated work: {completed_work.summary}")
+                    logging.info(f"Proactive Loop generated work: {completed_work.title} - {completed_work.summary[:80]}")
+                    
+                    item_payload = {
+                        "type": "surfacing",
+                        "kind": "proactive_investigation",
+                        "from": "AROVA · EYES ON",
+                        "lede": completed_work.title,
+                        "paragraphs": [
+                            completed_work.summary,
+                        ],
+                        "actions": [
+                            {
+                                "label": action.get("label", "Apply Fix"),
+                                "eventType": action.get("eventType", "user.message"),
+                                "eventPayload": action.get("eventPayload", {"text": f"help resolve {completed_work.title}", "vocalize": True}),
+                                "primary": action.get("primary", True)
+                            }
+                            for action in completed_work.suggested_actions
+                        ] + [{"label": "Dismiss", "clientAction": "dismiss"}]
+                    }
+                    
                     if self.runtime and self.runtime.event_bus:
-                        self.runtime.event_bus.emit("cognition", "surfacing_push", {
-                            "type": "surfacing",
-                            "kind": "proactive_investigation",
-                            "from": "AROVA · INVESTIGATION",
-                            "lede": completed_work.title,
-                            "paragraphs": [
-                                f"**Summary**: {completed_work.summary}",
-                                f"**Evidence**: {len(completed_work.evidence.context_keys)} signals analyzed"
-                            ],
-                            "actions": [
-                                {"label": action.get("label", "Review"), "eventType": "investigation.review", "primary": True}
-                                for action in completed_work.suggested_actions
-                            ] + [{"label": "Dismiss", "clientAction": "dismiss"}]
+                        self.runtime.event_bus.emit("cognition", "surfacing_push", item_payload)
+                        
+                    if self.ws_manager:
+                        self.ws_manager.broadcast({
+                            "type": "cognition.surfacing_push",
+                            "item": item_payload
                         })
             except Exception as e:
-                logging.error(f"Error in proactive loop: {e}")
+                logging.error(f"Error in proactive loop: {e}", exc_info=True)
 
     async def _handle_planner_get_plans(self):
         from arova.core.plan_store import get_plans, save_plan

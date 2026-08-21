@@ -57,8 +57,12 @@ else
     exit 1
 fi
 
-# Copy App Icon
+# Copy App Icon & Uninstaller
 cp -f "$REPO_ROOT/frontend/src-tauri/icons/128x128.png" "$RELEASE_DIR/arova.png"
+if [ -f "$REPO_ROOT/scripts/uninstall.sh" ]; then
+    cp -f "$REPO_ROOT/scripts/uninstall.sh" "$RELEASE_DIR/uninstall.sh"
+    chmod +x "$RELEASE_DIR/uninstall.sh"
+fi
 
 # Generate One-Click Installer script for Arch Linux
 cat << 'EOF' > "$RELEASE_DIR/install.sh"
@@ -107,6 +111,11 @@ if [ -f "$DIR/arova" ]; then
     [ -f "$APP_DIR/resources/arovad" ] && chmod +x "$APP_DIR/resources/arovad"
     [ -f "$APP_DIR/resources/arovad/arovad" ] && chmod +x "$APP_DIR/resources/arovad/arovad"
     ln -sf "$APP_DIR/arova" "$INSTALL_DIR/arova"
+fi
+
+if [ -f "$DIR/uninstall.sh" ]; then
+    cp -f "$DIR/uninstall.sh" "$APP_DIR/uninstall.sh"
+    chmod +x "$APP_DIR/uninstall.sh"
 fi
 
 if [ -f "$DIR/arova.png" ]; then

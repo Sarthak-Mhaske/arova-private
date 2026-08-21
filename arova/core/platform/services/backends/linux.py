@@ -275,11 +275,12 @@ class LinuxPlatformLauncher(PlatformLauncher):
         intent = RestoreIntent("source_file", Capability.OPEN_FILE, resource_path=path, metadata={"line": line, "col": col})
         fname = os.path.basename(path)
 
-        # Prefer native editor binaries on PATH first
-        exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("code") or shutil.which("code-oss") or shutil.which("cursor")
-        if exec_bin:
-            friendly = "Antigravity IDE" if "antigravity" in exec_bin else "VS Code" if "code" in exec_bin else "Editor"
-            app = ApplicationEntry(app_id="editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
+        # Prefer native editor binaries on PATH first only if app is not explicitly provided
+        if not app:
+            exec_bin = shutil.which("antigravity-ide") or shutil.which("antigravity") or shutil.which("code") or shutil.which("code-oss") or shutil.which("cursor")
+            if exec_bin:
+                friendly = "Antigravity IDE" if "antigravity" in exec_bin else "VS Code" if "code" in exec_bin else "Editor"
+                app = ApplicationEntry(app_id="editor", name=friendly, executable=exec_bin, exec_template=f"{exec_bin} %f", installed=True)
 
         if app and app.executable and shutil.which(app.executable):
             cmd = [app.executable]

@@ -40,7 +40,7 @@ class AnthropicProvider(CognitiveProvider):
         ]
         if not models_to_try:
             models_to_try = [
-                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-mythos-5"
+                "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"
             ]
 
         headers = {
@@ -72,7 +72,7 @@ class AnthropicProvider(CognitiveProvider):
                 from arova.core.providers.network_utils import get_aiohttp_connector
                 connector = get_aiohttp_connector()
                 async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
+                    async with session.post(self.base_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             latency = (time.time() - t0) * 1000
@@ -100,7 +100,7 @@ class AnthropicProvider(CognitiveProvider):
         ]
         if not models_to_try:
             models_to_try = [
-                "claude-fable-5", "claude-sonnet-5", "claude-opus-4.8", "claude-mythos-5"
+                "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"
             ]
 
         headers = {
@@ -126,7 +126,7 @@ class AnthropicProvider(CognitiveProvider):
                 from arova.core.providers.network_utils import get_aiohttp_connector
                 connector = get_aiohttp_connector()
                 async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(self.base_url, headers=headers, json=payload, timeout=30.0) as resp:
+                    async with session.post(self.base_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status != 200:
                             err = await resp.text()
                             logger.warning(f"Anthropic stream {current_model} returned {resp.status}. Trying next model...")
@@ -161,7 +161,7 @@ class AnthropicProvider(CognitiveProvider):
             headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
             payload = {"model": "claude-3-haiku-20240307", "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]}
             async with aiohttp.ClientSession() as session:
-                async with session.post(self.base_url, headers=headers, json=payload, timeout=5.0) as resp:
+                async with session.post(self.base_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status in (200, 400):  # Even 400 confirms API gateway reachable
                         latency = (time.time() - t0) * 1000
                         self.health.record_success(latency)

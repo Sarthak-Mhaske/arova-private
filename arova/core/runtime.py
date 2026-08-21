@@ -556,6 +556,11 @@ class RuntimeContainer:
         self.event_bus.shutdown(wait=True)
         self.thread_manager.shutdown(wait=True)
         
+    @property
+    def timeline_store(self):
+        """Compatibility alias for self.timeline."""
+        return self.timeline
+
     def get_health_snapshot(self) -> dict:
         return {
             "authoritative_turn_id": self.session.get_authoritative_turn_id(),

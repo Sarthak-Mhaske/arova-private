@@ -39,7 +39,7 @@ class OpenAIProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("openai", [])
         ]
         if not models_to_try:
-            models_to_try = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "o3", "o4-mini", "gpt-oss-120b"]
+            models_to_try = ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1", "o1-mini", "gpt-4-turbo"]
         
         last_err = None
         for current_model in models_to_try:
@@ -65,7 +65,7 @@ class OpenAIProvider(CognitiveProvider):
                 from arova.core.providers.network_utils import get_aiohttp_connector
                 connector = get_aiohttp_connector()
                 async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
+                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             latency = (time.time() - t0) * 1000
@@ -76,21 +76,13 @@ class OpenAIProvider(CognitiveProvider):
                             return ""
                         else:
                             err_text = await resp.text()
-                            err_msg = f"OpenAI API error {resp.status}: {err_text}"
-                            if resp.status == 429:
-                                logger.warning(f"OpenAIProvider: Model {current_model} rate limited. Trying next model...")
-                                last_err = RuntimeError(err_msg)
-                                continue
-                            self.health.record_failure(err_msg)
-                            raise RuntimeError(err_msg)
+                            logger.warning(f"OpenAIProvider: Model {current_model} returned HTTP {resp.status}. Trying next candidate...")
+                            last_err = RuntimeError(f"OpenAI API error {resp.status}: {err_text}")
+                            continue
             except Exception as e:
+                logger.warning(f"OpenAIProvider: Model {current_model} failed ({e}). Trying next candidate...")
                 last_err = e
-                err_str = str(e).lower()
-                if "429" in err_str or "rate limit" in err_str:
-                    logger.warning(f"OpenAIProvider: Model {current_model} rate limited. Trying next model...")
-                    continue
-                # Not a rate limit, abort
-                break
+                continue
                 
         err_msg = str(last_err) if last_err else "All models failed"
         self.health.record_failure(err_msg)
@@ -103,7 +95,7 @@ class OpenAIProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("openai", [])
         ]
         if not models_to_try:
-            models_to_try = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "o3", "o4-mini", "gpt-oss-120b"]
+            models_to_try = ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1", "o1-mini", "gpt-4-turbo"]
 
         last_err = None
         for current_model in models_to_try:
@@ -128,7 +120,7 @@ class OpenAIProvider(CognitiveProvider):
                 from arova.core.providers.network_utils import get_aiohttp_connector
                 connector = get_aiohttp_connector()
                 async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
+                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status == 200:
                             # Connection succeeded, we can read chunks
                             first_chunk_received = False
@@ -154,21 +146,13 @@ class OpenAIProvider(CognitiveProvider):
                             return
                         else:
                             err_text = await resp.text()
-                            err_msg = f"OpenAI API error {resp.status}: {err_text}"
-                            if resp.status == 429:
-                                logger.warning(f"OpenAIProvider: Model {current_model} rate limited during stream. Trying next model...")
-                                last_err = RuntimeError(err_msg)
-                                continue
-                            self.health.record_failure(err_msg)
-                            raise RuntimeError(err_msg)
+                            logger.warning(f"OpenAIProvider: Model {current_model} stream returned HTTP {resp.status}. Trying next candidate...")
+                            last_err = RuntimeError(f"OpenAI API error {resp.status}: {err_text}")
+                            continue
             except Exception as e:
+                logger.warning(f"OpenAIProvider: Model {current_model} stream failed ({e}). Trying next candidate...")
                 last_err = e
-                err_str = str(e).lower()
-                if "429" in err_str or "rate limit" in err_str:
-                    logger.warning(f"OpenAIProvider: Model {current_model} rate limited during stream. Trying next model...")
-                    continue
-                # Not a rate limit, abort
-                break
+                continue
                 
         err_msg = str(last_err) if last_err else "All models failed"
         self.health.record_failure(err_msg)
@@ -184,7 +168,7 @@ class OpenAIProvider(CognitiveProvider):
             "input": text
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.base_url}/embeddings", headers=headers, json=payload, timeout=10.0) as resp:
+            async with session.post(f"{self.base_url}/embeddings", headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return data.get("data", [{}])[0].get("embedding", [])
@@ -195,7 +179,7 @@ class OpenAIProvider(CognitiveProvider):
         try:
             headers = {"Authorization": f"Bearer {self.api_key}"}
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self.base_url}/models", headers=headers, timeout=5.0) as resp:
+                async with session.get(f"{self.base_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         latency = (time.time() - t0) * 1000
                         self.health.record_success(latency)

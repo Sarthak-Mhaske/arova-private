@@ -117,15 +117,23 @@ class CognitiveRouter:
         # Do NOT match casual mentions of "video" or "yt" in conversation.
         # Guard: if the user has negation words ("leaving that video aside"), skip.
         if not has_negation:
-            # High-confidence direct screen analysis phrases
+            # High-confidence direct screen and window analysis phrases
             screen_direct = [
                 "on my screen", "check my screen", "check screen", "analyze screen",
                 "look at my screen", "what is on my screen", "what's on my screen",
-                "video on my screen", "video i am watching", "video playing on my screen",
+                "whats on my screen", "video on my screen", "video i am watching", "video playing on my screen",
+                "check my window", "check window", "look at my window", "analyze window",
+                "check my antigravity", "check antigravity", "check my vscode", "check vscode",
+                "check my code", "look at my code", "check my browser", "check my terminal",
+                "check what's on my screen", "check whats on my screen", "check what is on my screen"
             ]
             if any(w in norm for w in screen_direct):
                 return self._build_fast_graph("Analyze Screen", "analyze_screen", {"query": text})
             
+            # Pattern: "check / look at / analyze [my] [window/antigravity/vscode/code/browser/terminal...]"
+            if re.match(r'^(?:check|look\s+at|analyze|inspect|view|see)\s+(?:what(?:[\'’]s|\s+is)\s+on\s+)?(?:my\s+|the\s+|this\s+)?(?:screen|display|monitor|window|antigravity(?:\s+window|\s+ide)?|vscode(?:\s+window)?|code(?:\s+window)?|browser(?:\s+window)?|brave(?:\s+window)?|chrome(?:\s+window)?|terminal(?:\s+window)?|editor)', norm):
+                return self._build_fast_graph("Analyze Screen", "analyze_screen", {"query": text})
+
             # Pattern: "is the/this video [on my screen] good/worth/..." — direct screen question
             if re.match(r'^(?:is\s+)?(?:the|this)\s+(?:youtube\s+|yt\s+)?video\s+(?:on\s+my\s+screen\s+)?(?:good|worth|useful|helpful|enough)', norm):
                 return self._build_fast_graph("Analyze Screen", "analyze_screen", {"query": text})

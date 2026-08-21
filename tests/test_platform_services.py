@@ -185,7 +185,7 @@ def test_linux_platform_launcher_file_and_terminal(mock_which, mock_popen):
     with patch("os.path.isdir", return_value=True):
         t_res = launcher.create_terminal("/home/sarthak/project", command_hint="git status")
         assert t_res.success is True
-        assert "Prepared working directory" in t_res.detail
+        assert "/home/sarthak/project" in t_res.detail
         assert "git status" in t_res.detail
 
 

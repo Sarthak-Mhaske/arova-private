@@ -22,20 +22,22 @@ class NodeState(Enum):
     CANCELLED = "Cancelled"
     SKIPPED = "Skipped"
 
+import uuid
+
 @dataclass
 class CapabilityRequest:
     """
     Backend-agnostic request to execute an action on a specific capability/backend.
     """
-    id: str
-    action: str  # Human readable name (e.g. "Modify File")
-    capability: str  # Backend target (e.g. "FileBackend", "CommandBackend")
-    payload: Dict[str, Any]  # Action-specific payload
-    expected_observation: str
-    success_criteria: str
-    confidence: float  # 0.0 to 1.0. If < 0.45, requires user approval
-    confidence_reason: str
-    risk_level: RiskLevel
+    capability: str  # Backend target (e.g. "FileBackend", "CommandBackend", "analyze_screen")
+    payload: Dict[str, Any] = field(default_factory=dict)  # Action-specific payload
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    action: str = ""  # Human readable name (e.g. "Modify File")
+    expected_observation: str = ""
+    success_criteria: str = ""
+    confidence: float = 1.0  # 0.0 to 1.0. If < 0.45, requires user approval
+    confidence_reason: str = ""
+    risk_level: RiskLevel = RiskLevel.READ
     state: NodeState = NodeState.QUEUED
     retry_policy: int = 0
     rollback: str = "none"

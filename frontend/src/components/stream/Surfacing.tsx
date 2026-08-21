@@ -8,6 +8,8 @@ import { socket } from '../../runtime/socket';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 const formatMarkdownText = (text: string): string => {
   if (!text) return '';
@@ -27,43 +29,147 @@ const formatMarkdownText = (text: string): string => {
 
   return parts.map((part) => {
     if (part.startsWith('```')) {
-      // Cleanly extract language tag and code body without mangling identifier names (e.g. bash -> bas\nh bug)
       const matchFence = part.match(/^```([a-zA-Z0-9_+-]*)\s*\n?([\s\S]*?)```$/);
       if (matchFence) {
         let lang = matchFence[1].trim() || 'code';
         let rawCode = matchFence[2] || '';
-
-        // If code statement keywords were concatenated on a single line, format into multiline
-        if (!rawCode.includes('\n')) {
-          rawCode = rawCode
-            .replace(/(import\s+[a-zA-Z0-9_]+)(import|from|class|def)/g, '$1\n$2')
-            .replace(/(class\s+[a-zA-Z0-9_]+:)(def|import)/g, '$1\n  $2')
-            .replace(/(def\s+[a-zA-Z0-9_]+\([^)]*\):)([a-zA-Z0-9_.]+=|self\.)/g, '$1\n    $2')
-            .replace(/(self\.[a-zA-Z0-9_.]+\([^)]*\))(def|self\.)/g, '$1\n    $2');
-        }
-
         return `\n\n\`\`\`${lang}\n${rawCode.trim()}\n\`\`\`\n\n`;
       }
+      return part;
     }
 
-    // For non-code prose text:
     let formatted = part;
 
-    // Clean up orphan bold asterisks around URLs & absolute file paths
-    formatted = formatted.replace(/\*\*\s*(https?:\/\/[^\s]+)/g, '$1');
-    formatted = formatted.replace(/(https?:\/\/[^\s*]+)\s*\*\*/g, '$1');
-    formatted = formatted.replace(/\*\*\s*(\/[a-zA-Z0-9_.~/-]+|\~\/[a-zA-Z0-9_.~/-]+)/g, '$1');
-    formatted = formatted.replace(/(\/[a-zA-Z0-9_.~/-]+|\~\/[a-zA-Z0-9_.~/-]+)\s*\*\*/g, '$1');
+    // A. Normalize LaTeX Math blocks:
+    // 1) Clean up single isolated dollar signs on their own lines (e.g. "$\n\n...\n\n$")
+    formatted = formatted.replace(/(?:^|\n)\s*\$\s*\n+([\s\S]*?)\n+\s*\$\s*(?:\n|$)/g, (_, m) => `\n\n$$\n${m.trim()}\n$$\n\n`);
+    // 2) Handle \[ ... \] display math
+    formatted = formatted.replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `\n\n$$\n${m.trim()}\n$$\n\n`);
+    // 3) Handle \( ... \) inline math
+    formatted = formatted.replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => `$${m.trim()}$`);
+    // 4) Handle bare bracket math like [ \text{Position} = N \times \frac{n}{q} ]
+    formatted = formatted.replace(/\[\s*([\s\S]*?\\(?:frac|text|times|sum|int|sqrt)\{[\s\S]*?|[\s\S]*?\\times[\s\S]*?)\s*\]/g, (_, m) => `\n\n$$\n${m.trim()}\n$$\n\n`);
+    // 5) Clean double-wrapped $$ if any occurred
+    formatted = formatted.replace(/\$\$\s*\n*\$\$/g, '$$');
 
-    // Fix LLM quirk where opening bold ** is placed before a newline (e.g. "text.**\n\nTitle**:")
-    formatted = formatted.replace(/\*\*\s*\n+\s*([a-zA-Z0-9\[])/g, '\n\n**$1');
+    // B. Clean angle brackets, malformed markdown links, and trailing html artifacts from URLs
+    formatted = formatted.replace(/<+\s*(\[[^\]]+\]\([^\)]+\))\.?\s*(?:html>?)?/gi, '$1');
+    formatted = formatted.replace(/<+\s*(https?:\/\/[^\s>]+)>+\.?\s*(?:html>?)?/gi, '$1');
+    formatted = formatted.replace(/(https?:\/\/[^\s<>)"\]]+)\.html>/gi, '$1');
+    formatted = formatted.replace(/\]\((https?:\/\/[^\s)]+)\.\s*html[|>]*\)/gi, ']($1)');
+    formatted = formatted.replace(/\]\((https?:\/\/[^\s)]+)\)\.?\s*(?:html>?)?/gi, ']($1)');
 
-    // Process paragraph by paragraph to guarantee ** never leaks across double newlines
+    // C. Clean HTML <br> tags in table cells or text into clean inline bullet marks
+    formatted = formatted.replace(/<br\s*\/?>\s*[*•-]?\s*/gi, ' • ');
+
+    // D. Separate title from attached tables: e.g. "Title 2026| Aspect | Details |" -> "Title 2026\n\n| Aspect | Details |"
+    formatted = formatted.replace(/([^\n|])\s*(\|[^|\n]+\|[^|\n]+\|)/g, '$1\n\n$2');
+
+    // E. Reconstruct collapsed single-line or broken tables into valid GFM tables
+    formatted = formatted.replace(/(?:^|\n)(\|[^|\n]+(?:\|[^|\n]+)+\|[\s\S]*?\|[-: ]+\|[\s\S]*?\|)(?=\s*(?:\n\s*[A-Za-z0-9#*]|\bBottom\s*line\b|$))/gi, (match, tableBlock) => {
+      const rawCells = tableBlock.split('|').map((c: string) => c.trim());
+      const isDelimiter = (s: string) => /^[\s\-:|]+$/.test(s) && s.includes('--');
+
+      const nonEmpties = rawCells.filter((c: string) => c.length > 0);
+      if (nonEmpties.length < 4) return match;
+
+      const headers: string[] = [];
+      let delimStart = -1;
+      for (let i = 0; i < nonEmpties.length; i++) {
+        if (isDelimiter(nonEmpties[i])) {
+          delimStart = i;
+          break;
+        } else {
+          headers.push(nonEmpties[i]);
+        }
+      }
+
+      if (headers.length === 0 || delimStart === -1) return match;
+
+      const numCols = headers.length;
+      const dataTokens: string[] = [];
+      for (let i = delimStart; i < nonEmpties.length; i++) {
+        if (!isDelimiter(nonEmpties[i])) {
+          dataTokens.push(nonEmpties[i]);
+        }
+      }
+
+      const rows: string[] = [];
+      rows.push('| ' + headers.join(' | ') + ' |');
+      rows.push('| ' + Array(numCols).fill('---').join(' | ') + ' |');
+
+      for (let i = 0; i < dataTokens.length; i += numCols) {
+        const row = dataTokens.slice(i, i + numCols);
+        while (row.length < numCols) row.push('');
+        rows.push('| ' + row.join(' | ') + ' |');
+      }
+
+      return '\n\n' + rows.join('\n') + '\n\n';
+    });
+
+    // F. Fix horizontal rules attached to text - EXCLUDE table delimiters (| --- |)
+    formatted = formatted.replace(/^([^\n|]+?)\s*(---|___|\*\*\*)\s*$/gm, (m, text, hr) => {
+      if (text.includes('|')) return m;
+      return `${text.trim()}\n\n${hr}\n`;
+    });
+    formatted = formatted.replace(/([^\n|\s])\s*(---|___|\*\*\*)\s*(?=[^\n|\s])/g, (m, prefix, hr) => {
+      if (prefix === '|') return m;
+      return `${prefix}\n\n${hr}\n\n`;
+    });
+
+    // G. Fix numbered lists and headings (e.g. "2.Common Sources" -> "2. Common Sources")
+    formatted = formatted.replace(/(\d+)\.([A-Za-z])/g, '$1. $2');
+    formatted = formatted.replace(/([^\n])\s*(\d+)\.\s+([A-Z])/g, '$1\n\n$2. $3');
+
+    // H. Fix inline bullet list asterisks ONLY outside of tables
+    const rawLines = formatted.split('\n');
+    const tableSafeLines = rawLines.map(line => {
+      if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+        return line;
+      }
+      return line.replace(/([:.;?!])\s*([*•-])(?=\s+[A-Za-z0-9_`"'(\[])/g, '$1\n\n* ');
+    });
+    formatted = tableSafeLines.join('\n');
+
+    // I. Fix headers glued to previous sentence (e.g. "text.# Header" -> "text.\n\n# Header")
+    formatted = formatted.replace(/([^\n])\s*(#{1,6})\s+([A-Za-z0-9])/g, '$1\n\n$2 $3');
+
+    // J. Fix punctuation glued directly to uppercase words
+    formatted = formatted.replace(/([a-z0-9])([.!?])([A-Z])/g, '$1$2 $3');
+
+    // K. Fix "Bottom line..." glued words
+    formatted = formatted.replace(/\bBottom line([A-Za-z])/g, 'Bottom line: $1');
+    formatted = formatted.replace(/([^\n])\s*(\bBottom line\b)/g, '$1\n\n**$2**');
+
+    // L. Fix small-LLM glued words
+    const gluedPairs = [
+      ['open', 'with'], ['open', 'in'], ['open', 'no'],
+      ['these', 'is'], ['this', 'is'], ['exact', 'error'],
+      ['any', 'red'], ['console', 'output'], ['but', 'sometimes'],
+      ['can', 'you'], ['show', 'me'], ['there', 'are'],
+      ['which', 'of'], ['paste', 'the'], ['below', 'is'],
+      ['status', 'bar'], ['error', 'markers'], ['execution', 'output'],
+      ['still', 'seeing'], ['who', 'is'], ['that', 'are'], ['which', 'are'],
+      ['is', 'expected'], ['are', 'expected'], ['is', 'scheduled'],
+      ['is', 'serving'], ['is', 'meant'], ['has', 'announced'],
+      ['need', 'to'], ['plan', 'to'], ['schools', 'to'], ['remain', 'closed'],
+      ['political', 'and'], ['markets', 'and'], ['weddings', 'and'],
+      ['water', 'supply'], ['medical', 'stores'], ['though', 'passengers'],
+      ['especially', 'on'], ['expressed', 'support'], ['services', 'are'],
+      ['outside', 'the'], ['other', 'essential'], ['and', 'other'],
+      ['and', 'most'], ['is', 'reportedly'], ['the', 'group'], ['who', 'is']
+    ];
+    for (const [w1, w2] of gluedPairs) {
+      const reg = new RegExp(`\\b${w1}${w2}\\b`, 'gi');
+      formatted = formatted.replace(reg, `${w1} ${w2}`);
+    }
+
+    // M. Fix unclosed bold asterisks across paragraphs
     const paragraphs = formatted.split(/\n\n+/);
     const cleanedParagraphs = paragraphs.map(p => {
       let pClean = p.trim();
-      const boldCount = (pClean.match(/\*\*/g) || []).length;
-      if (boldCount % 2 !== 0) {
+      const boldMatches = pClean.match(/\*\*/g) || [];
+      if (boldMatches.length % 2 !== 0) {
         if (pClean.startsWith('**')) {
           pClean = pClean.slice(2).trim();
         } else if (pClean.endsWith('**')) {
@@ -75,16 +181,40 @@ const formatMarkdownText = (text: string): string => {
       return pClean;
     });
 
-    formatted = cleanedParagraphs.join('\n\n');
-
-    // Fix missing newlines before list items safely without breaking version strings like "1.8b" or "llama-1-8b"
-    formatted = formatted.replace(/([:.;])\s*(\d+)\.\s+(\*{2}[^*]+\*{2}|[A-Z][a-z]+)/g, '$1\n\n$2. $3');
-
-    // Fix period followed directly by Capital letter ("down.To" -> "down. To") without breaking URLs
-    formatted = formatted.replace(/([a-z0-9]{3,})\.([A-Z][a-z])/g, '$1. $2');
-
-    return formatted;
+    return cleanedParagraphs.join('\n\n');
   }).join('');
+};
+
+const getCleanLinkLabel = (children: React.ReactNode, href?: string): string => {
+  let rawText = '';
+  if (typeof children === 'string') {
+    rawText = children;
+  } else if (Array.isArray(children)) {
+    rawText = children.map(c => {
+      if (typeof c === 'string') return c;
+      if (c && typeof c === 'object' && 'props' in c && c.props.children) {
+        return typeof c.props.children === 'string' ? c.props.children : '';
+      }
+      return '';
+    }).join('');
+  }
+  
+  let target = (rawText || '').trim() || href || '';
+  target = target.replace(/^[<(\[]+/, '').replace(/[>)\].|\s]+$/, '').trim();
+  
+  if (/^https?:\/\//i.test(target) || /^www\./i.test(target) || /^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(target)) {
+    try {
+      const cleanUrl = target.replace(/^[<(\[]+/, '').replace(/[>)\].|\s]+$/, '').replace(/\s+/g, '');
+      const parsed = new URL(cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`);
+      let host = parsed.hostname.replace(/^www\./, '');
+      if (host) return host;
+    } catch {
+      const m = target.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+      if (m && m[1]) return m[1].replace(/\s+/g, '');
+    }
+  }
+
+  return rawText || href || 'Source';
 };
 
 const CopyCodeButton: React.FC<{ code: string }> = ({ code }) => {
@@ -199,8 +329,25 @@ export const Surfacing: React.FC<{ item: SurfacingItem }> = ({ item }) => {
       {item.paragraphs.map((p, i) => (
         <div key={i} style={{ wordBreak: 'break-word' }}>
           <ReactMarkdown 
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
             components={{
+              h1({ children }) {
+                return <h1 style={{ fontSize: '22px', fontWeight: 600, marginTop: '28px', marginBottom: '12px', color: 'var(--ink-1)', letterSpacing: '-0.015em' }}>{children}</h1>;
+              },
+
+              h2({ children }) {
+                return <h2 style={{ fontSize: '18px', fontWeight: 600, marginTop: '24px', marginBottom: '10px', color: 'var(--ink-1)', letterSpacing: '-0.01em' }}>{children}</h2>;
+              },
+              h3({ children }) {
+                return <h3 style={{ fontSize: '15.5px', fontWeight: 600, marginTop: '20px', marginBottom: '8px', color: 'var(--ink-1)' }}>{children}</h3>;
+              },
+              h4({ children }) {
+                return <h4 style={{ fontSize: '14px', fontWeight: 600, marginTop: '16px', marginBottom: '6px', color: 'var(--ink-1)' }}>{children}</h4>;
+              },
+              hr() {
+                return <hr style={{ border: 'none', borderTop: '1px solid var(--hairline-2)', margin: '24px 0' }} />;
+              },
               a({ href, children }) {
                 const handleClick = (e: React.MouseEvent) => {
                   e.preventDefault();
@@ -211,29 +358,59 @@ export const Surfacing: React.FC<{ item: SurfacingItem }> = ({ item }) => {
                     vocalize: false
                   });
                 };
+                const label = getCleanLinkLabel(children, href);
                 return (
                   <a 
                     href={href} 
                     onClick={handleClick}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer' }}
+                    className="surfacing-link-pill"
+                    title={href}
                   >
-                    {children}
+                    <span className="link-icon">↗</span>
+                    <span className="link-label">{label}</span>
                   </a>
                 );
               },
               p({ children }) {
-                return <p style={{ marginBottom: '14px', lineHeight: '1.65', color: 'var(--ink-2)' }}>{children}</p>;
+                return <p style={{ marginBottom: '14px', lineHeight: '1.7', color: 'var(--ink-2)', fontSize: '15px' }}>{children}</p>;
               },
               ol({ children }) {
-                return <ol style={{ marginLeft: '24px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>{children}</ol>;
+                return <ol style={{ paddingLeft: '22px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>{children}</ol>;
               },
               ul({ children }) {
-                return <ul style={{ marginLeft: '24px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>{children}</ul>;
+                return <ul style={{ paddingLeft: '22px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>{children}</ul>;
               },
               li({ children }) {
-                return <li style={{ color: 'var(--ink-2)', lineHeight: '1.6' }}>{children}</li>;
+                return <li style={{ color: 'var(--ink-2)', lineHeight: '1.65', fontSize: '14.5px' }}>{children}</li>;
+              },
+              strong({ children }) {
+                return <strong style={{ color: 'var(--ink-1)', fontWeight: 600 }}>{children}</strong>;
+              },
+              table({ children }) {
+                return (
+                  <div style={{ width: '100%', overflowX: 'auto', margin: '20px 0', borderRadius: '10px', border: '1px solid var(--hairline-2)', background: 'var(--glass-1)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px', lineHeight: '1.6' }}>
+                      {children}
+                    </table>
+                  </div>
+                );
+              },
+              thead({ children }) {
+                return <thead style={{ background: 'rgba(255, 255, 255, 0.05)', borderBottom: '1px solid var(--hairline-2)' }}>{children}</thead>;
+              },
+              tbody({ children }) {
+                return <tbody>{children}</tbody>;
+              },
+              tr({ children }) {
+                return <tr style={{ borderBottom: '1px solid var(--hairline-2)' }}>{children}</tr>;
+              },
+              th({ children }) {
+                return <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--ink-1)', fontSize: '13px', letterSpacing: '0.01em' }}>{children}</th>;
+              },
+              td({ children }) {
+                return <td style={{ padding: '10px 14px', color: 'var(--ink-2)', fontSize: '13.5px', verticalAlign: 'top' }}>{children}</td>;
               },
               code({ node, inline, className, children, ...props }: any) {
                 const match = /language-(\w+)/.exec(className || '');
@@ -266,6 +443,7 @@ export const Surfacing: React.FC<{ item: SurfacingItem }> = ({ item }) => {
           </ReactMarkdown>
         </div>
       ))}
+
       {item.actions && item.actions.length > 0 && (
         <div className="actions-inline">
           {item.actions.map((act, i) => (

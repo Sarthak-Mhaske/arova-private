@@ -219,10 +219,18 @@ class MemoryStorage:
             return await loop.run_in_executor(self._executor, self._sync_fetch, query, params)
 
     def _sync_execute(self, query: str, params: tuple):
+        if self._conn is None:
+            self._conn = self._connect_and_migrate()
+        if not self._conn:
+            return
         self._conn.execute(query, params)
         self._conn.commit()
 
     def _sync_execute_transaction(self, queries: List[tuple[str, tuple]]):
+        if self._conn is None:
+            self._conn = self._connect_and_migrate()
+        if not self._conn:
+            return
         try:
             for q, p in queries:
                 self._conn.execute(q, p)
@@ -232,9 +240,17 @@ class MemoryStorage:
             raise
 
     def _sync_fetch(self, query: str, params: tuple) -> List[sqlite3.Row]:
+        if self._conn is None:
+            self._conn = self._connect_and_migrate()
+        if not self._conn:
+            return []
         cur = self._conn.execute(query, params)
         return cur.fetchall()
 
     def close(self):
         if self._conn:
-            self._conn.close()
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None

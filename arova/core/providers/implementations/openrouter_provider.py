@@ -35,9 +35,14 @@ class OpenRouterProvider(CognitiveProvider):
 
     async def generate(self, messages: List[Dict[str, Any]], system_prompt: str,
                        model: str = "", max_tokens: int = 1024) -> str:
+        registry = get_model_registry()
         models_to_try = [model] if model else [
-            "openai/gpt-5.6-sol", "anthropic/claude-sonnet-5", "google/gemini-3.1-pro", "google/gemini-3.7-flash", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"
+            c.id for c in registry._candidates.get("openrouter", [])
         ]
+        if not models_to_try:
+            models_to_try = [
+                "anthropic/claude-3.7-sonnet", "anthropic/claude-3.5-sonnet", "openai/gpt-4o", "openai/gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1", "google/gemini-2.0-flash-001"
+            ]
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -61,7 +66,7 @@ class OpenRouterProvider(CognitiveProvider):
 
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
+                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             latency = (time.time() - t0) * 1000
@@ -83,9 +88,14 @@ class OpenRouterProvider(CognitiveProvider):
 
     async def stream(self, messages: List[Dict[str, Any]], system_prompt: str,
                      model: str = "", max_tokens: int = 1024) -> AsyncGenerator[str, None]:
+        registry = get_model_registry()
         models_to_try = [model] if model else [
-            "openai/gpt-5.6-sol", "anthropic/claude-sonnet-5", "google/gemini-3.1-pro", "google/gemini-3.7-flash", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"
+            c.id for c in registry._candidates.get("openrouter", [])
         ]
+        if not models_to_try:
+            models_to_try = [
+                "anthropic/claude-3.7-sonnet", "anthropic/claude-3.5-sonnet", "openai/gpt-4o", "openai/gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1", "google/gemini-2.0-flash-001"
+            ]
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -110,7 +120,7 @@ class OpenRouterProvider(CognitiveProvider):
 
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=30.0) as resp:
+                    async with session.post(f"{self.base_url}/chat/completions", headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status != 200:
                             err = await resp.text()
                             logger.warning(f"OpenRouter stream {current_model} returned {resp.status}. Trying next model...")
@@ -144,7 +154,7 @@ class OpenRouterProvider(CognitiveProvider):
         try:
             headers = {"Authorization": f"Bearer {self.api_key}"}
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self.base_url}/models", headers=headers, timeout=5.0) as resp:
+                async with session.get(f"{self.base_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         latency = (time.time() - t0) * 1000
                         self.health.record_success(latency)

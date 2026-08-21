@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import uuid
 from typing import List, Optional, Dict, Any
@@ -14,7 +15,7 @@ class TimelineStore:
     Keeps events loaded in memory and persisted to disk for retrieval across sessions.
     Emits events to the event bus for real-time UI updates.
     """
-    def __init__(self, event_bus, max_hot_events: int = 500):
+    def __init__(self, event_bus, max_hot_events: int = 2000):
         self.event_bus = event_bus
         self.max_hot_events = max_hot_events
         self.events: List[TimelineEvent] = []
@@ -111,12 +112,14 @@ class TimelineStore:
         try:
             data = payload.data if hasattr(payload, 'data') else payload
             if not isinstance(data, dict):
-                data = data.__dict__
+                data = getattr(data, '__dict__', {})
                 
-            if getattr(self, '_loop', None) is not None:
-                asyncio.run_coroutine_threadsafe(self.create_and_emit(**data), self._loop)
+            loop = getattr(self, '_loop', None)
+            if loop is not None and loop.is_running():
+                asyncio.run_coroutine_threadsafe(self.create_and_emit(**data), loop)
             else:
                 # Sync fallback so timeline events are NEVER lost before loop initialization
+                # and are always persisted and broadcast
                 event_id = str(uuid.uuid4())
                 event = TimelineEvent(
                     id=event_id,
@@ -126,12 +129,10 @@ class TimelineStore:
                     source=data.get("source", "system"),
                     importance=data.get("importance", 0.5),
                     correlation_id=data.get("correlation_id"),
-                    metadata=data.get("metadata") or {}
+                    metadata=data.get("metadata") or {},
+                    timestamp=data.get("timestamp", time.time() if "time" in globals() else __import__("time").time())
                 )
-                self.events.insert(0, event)
-                if len(self.events) > self.max_hot_events:
-                    self.events.pop()
-                self._save_events_to_disk()
+                self.append_event(event)
         except Exception as e:
             logger.error(f"Error handling timeline create event: {e}")
 
@@ -165,8 +166,47 @@ class TimelineStore:
                     break
             return results
 
+    def query_events(self, filter_type: str = "all", query: str = "", limit: int = 0) -> List[Dict[str, Any]]:
+        """
+        Synchronous/thread-safe query filter for timeline events used by WebSocket bridge.
+        Supports category filters, importance gates, and full-text search.
+        limit=0 means return all matching events (no cap).
+        """
+        f_type = (filter_type or "all").lower().strip()
+        q_text = (query or "").lower().strip()
+        
+        filtered = []
+        for ev in self.events:
+            # 1. Importance / Category Filter
+            if f_type == "important" and ev.importance < 0.5:
+                continue
+            elif f_type not in ("all", "important", ""):
+                cat = (ev.category or "").lower()
+                src = (ev.source or "").lower()
+                if f_type != cat and f_type not in src:
+                    continue
+
+            # 2. Text Search
+            if q_text:
+                title_match = q_text in (ev.title or "").lower()
+                desc_match = q_text in (ev.description or "").lower()
+                src_match = q_text in (ev.source or "").lower()
+                cat_match = q_text in (ev.category or "").lower()
+                if not (title_match or desc_match or src_match or cat_match):
+                    continue
+
+            filtered.append(asdict(ev))
+            if limit > 0 and len(filtered) >= limit:
+                break
+                
+        return filtered
+
+    def get_total_stored(self) -> int:
+        """Returns the total number of events currently in memory."""
+        return len(self.events)
+
     def append_event(self, event: TimelineEvent):
-        """Synchronously appends and saves a canonical event to timeline."""
+        """Synchronously appends, saves, and broadcasts a canonical event to timeline."""
         self.events.insert(0, event)
         if len(self.events) > self.max_hot_events:
             self.events.pop()
@@ -175,6 +215,37 @@ class TimelineStore:
             payload = asdict(event)
             self.event_bus.emit("timeline", "TIMELINE_EVENT", {"event": payload})
 
+    def record_event(self, 
+                     event_type: str = "", 
+                     source: str = "system", 
+                     summary: str = "", 
+                     title: str = "", 
+                     category: str = "environment", 
+                     description: str = "", 
+                     data: Optional[Dict[str, Any]] = None, 
+                     importance: float = 0.5) -> str:
+        """
+        Universal synchronous helper to record an event from any subsystem.
+        """
+        import time
+        event_id = str(uuid.uuid4())
+        event_title = title or summary or f"{event_type.replace('_', ' ').title()}"
+        event_desc = description or summary or event_title
+        
+        event = TimelineEvent(
+            id=event_id,
+            category=category or "environment",
+            title=event_title,
+            description=event_desc,
+            source=source or "system",
+            importance=importance,
+            correlation_id=None,
+            metadata=data or {},
+            timestamp=time.time()
+        )
+        self.append_event(event)
+        return event_id
+
     async def create_and_emit(self, 
                               category: str, 
                               title: str, 
@@ -182,10 +253,12 @@ class TimelineStore:
                               source: str, 
                               importance: float = 0.5,
                               correlation_id: Optional[str] = None,
-                              metadata: Optional[Dict[str, Any]] = None) -> str:
+                              metadata: Optional[Dict[str, Any]] = None,
+                              timestamp: Optional[float] = None) -> str:
         """
         Convenience method to construct and emit an event.
         """
+        import time
         event_id = str(uuid.uuid4())
         event = TimelineEvent(
             id=event_id,
@@ -195,7 +268,8 @@ class TimelineStore:
             source=source,
             importance=importance,
             correlation_id=correlation_id,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            timestamp=timestamp or time.time()
         )
         await self.emit(event)
         return event_id
@@ -217,14 +291,15 @@ class TimelineStore:
             src = (ev.source or "").lower()
             cat = (ev.category or "").lower()
             title = (ev.title or "").lower()
+            desc = (ev.description or "").lower()
 
             sources_count[src] = sources_count.get(src, 0) + 1
 
-            if any(k in src or k in title for k in ["code", "antigravity", "cursor", "ide"]):
+            if any(k in src or k in title or k in desc for k in ["code", "antigravity", "cursor", "ide", "vscode", "editor", "python", "typescript", "git"]):
                 categories["coding"] += 1
-            elif any(k in src or k in title for k in ["kitty", "terminal", "alacritty", "bash"]):
+            elif any(k in src or k in title or k in desc for k in ["kitty", "terminal", "alacritty", "bash", "zsh", "powershell", "cmd", "cli"]):
                 categories["terminal"] += 1
-            elif any(k in src or k in title for k in ["brave", "chrome", "firefox", "search", "youtube"]):
+            elif any(k in src or k in title or k in desc for k in ["brave", "chrome", "firefox", "search", "youtube", "web", "edge"]):
                 categories["browsing"] += 1
             else:
                 categories["system"] += 1
@@ -232,7 +307,7 @@ class TimelineStore:
         total_evs = sum(categories.values()) or 1
         breakdown = {k: round((v / total_evs) * 100) for k, v in categories.items()}
 
-        active_minutes = min(len(today_events) * 2, 480) # estimated focus minutes based on signal density
+        active_minutes = min(max(len(today_events) * 2, 5 if today_events else 0), 480) # estimated focus minutes based on signal density
         hours = active_minutes // 60
         mins = active_minutes % 60
         time_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"

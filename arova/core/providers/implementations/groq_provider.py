@@ -34,7 +34,9 @@ class GroqProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("groq", [])
         ]
         if not models_to_try:
-            models_to_try = ["llama-3.3-70b-versatile"]
+            models_to_try = [
+                "groq/compound-mini", "groq/compound", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "deepseek-r1-distill-llama-70b"
+            ]
 
         last_err = None
         for current_model in models_to_try:
@@ -59,7 +61,9 @@ class GroqProvider(CognitiveProvider):
             c.id for c in registry._candidates.get("groq", [])
         ]
         if not models_to_try:
-            models_to_try = ["llama-3.3-70b-versatile"]
+            models_to_try = [
+                "groq/compound-mini", "groq/compound", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "deepseek-r1-distill-llama-70b"
+            ]
 
         streamed_text = ""
         last_err = None
